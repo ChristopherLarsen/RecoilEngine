@@ -1158,9 +1158,11 @@ bool CGroundMoveType::FollowPath(int thread)
 				Square((goalRadius + extraRadius)                             );
 			const float spdGoalDistSq = Square(currentSpeed * 1.05f);
 
-			atGoal |= (curGoalDistSq <= minGoalDistSq);
-			atGoal |= ((curGoalDistSq <= spdGoalDistSq) && !reversing && (ffd.dot(goalPos - opos) > 0.0f && ffd.dot(goalPos - (opos + ovel)) <= 0.0f));
-			atGoal |= ((curGoalDistSq <= spdGoalDistSq) &&  reversing && (ffd.dot(goalPos - opos) < 0.0f && ffd.dot(goalPos - (opos + ovel)) >= 0.0f));
+			bool arrived = (curGoalDistSq <= minGoalDistSq);
+			arrived |= ((curGoalDistSq <= spdGoalDistSq) && !reversing && (ffd.dot(goalPos - opos) > 0.0f && ffd.dot(goalPos - (opos + ovel)) <= 0.0f));
+			arrived |= ((curGoalDistSq <= spdGoalDistSq) &&  reversing && (ffd.dot(goalPos - opos) < 0.0f && ffd.dot(goalPos - (opos + ovel)) >= 0.0f));
+
+			atGoal |= (arrived && ArrivalAllowed());
 
 			atEndOfPath |= atGoal;
 
