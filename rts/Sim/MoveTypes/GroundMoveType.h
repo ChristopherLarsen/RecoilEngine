@@ -18,6 +18,9 @@ class CGroundMoveType : public AMoveType
 {
 	CR_DECLARE_DERIVED(CGroundMoveType)
 
+	// derived ground move types (CSupComGroundMoveType) reuse the path following and collision state
+	friend class CSupComGroundMoveType;
+
 public:
 	CGroundMoveType(CUnit* owner);
 	~CGroundMoveType();
@@ -47,7 +50,7 @@ public:
 
 	// Update the unit's movement according to obsctacle avoidance and path following decisions from UpdateTraversalPlan().
 	// This is should be MT safe.
-	void UpdateUnitPosition();
+	virtual void UpdateUnitPosition();
 
 	// Resolves post UpdateTraversalPlan() and UpdateUnitPosition() tasks that must be carried out in a single
 	// thread.
@@ -149,6 +152,9 @@ public:
 	void SetMtJobId(int _jobId) { jobId = _jobId; }
 
 private:
+	// derived move types may hold the arrival back, e.g. until the unit has come to rest
+	virtual bool ArrivalAllowed() const { return true; }
+
 	float3 GetObstacleAvoidanceDir(const float3& desiredDir);
 	float3 Here() const;
 
@@ -210,7 +216,7 @@ private:
 	void CheckCollisionSkid();
 	void CalcSkidRot();
 
-	void AdjustPosToWaterLine();
+	virtual void AdjustPosToWaterLine();
 	bool UpdateDirectControl();
 	void UpdateOwnerAccelAndHeading();
 	void UpdatePos(const CUnit* unit, const float3&, float3& resultantMove, int thread) const;
