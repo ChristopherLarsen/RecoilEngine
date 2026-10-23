@@ -66,7 +66,12 @@ private:
 	void AdvanceDrive(float dt, float topSpeed, float& v, float& dist) const;
 
 	bool FootprintBlocked(const float3& pos) const;
+	bool DirectLineClear();
+	void SetWaypointDir(const float3& cwp, const float3& opos) override;
 	void UpdateTurnRate();
+
+	/// a step rounded to the float grid around position p
+	static float GridStep(float p, float d);
 
 private:
 	// per-unit values, engine units (elmos, frames, heading units)
@@ -88,4 +93,9 @@ private:
 	bool scBraking = false;      ///< braking committed for the current order
 	bool scStopNow = false;      ///< stop order: brake at once
 	bool scRestart = false;      ///< the last step was blocked
+
+	// direct steering cache
+	float3 directGoal;
+	int directCheckFrame = 0;
+	bool directClear = false;
 };

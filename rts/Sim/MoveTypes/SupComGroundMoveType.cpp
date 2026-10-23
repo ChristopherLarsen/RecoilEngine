@@ -3,6 +3,7 @@
 #include "SupComGroundMoveType.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <limits>
 
@@ -11,6 +12,7 @@
 #include "MoveDefHandler.h"
 #include "MoveMath/MoveMath.h"
 #include "Sim/Misc/GlobalConstants.h"
+#include "Sim/Misc/GlobalSynced.h"
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
@@ -39,10 +41,18 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scStopNow),
 	CR_MEMBER(scRestart),
 
+	CR_MEMBER(directGoal),
+	CR_MEMBER(directCheckFrame),
+	CR_MEMBER(directClear),
+
 	CR_PREALLOC(GetPreallocContainer)
 ))
 
 static constexpr float NO_STOP = std::numeric_limits<float>::infinity();
+
+// direct steering: how far ahead a straight line to the goal is tested, and how often
+static constexpr float DIRECT_MAX_DIST = 128.0f * SQUARE_SIZE;
+static constexpr int DIRECT_CHECK_FRAMES = 8;
 
 static float CustomParam(const UnitDef* ud, const char* key, float def)
 {
@@ -293,8 +303,9 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 
 	const int sx0 = std::clamp(int(x0 / SQUARE_SIZE), 0, mapDims.mapxm1);
 	const int sz0 = std::clamp(int(z0 / SQUARE_SIZE), 0, mapDims.mapym1);
-	const int sx1 = std::clamp(int(std::max(x0, x1 - 1e-3f) / SQUARE_SIZE), 0, mapDims.mapxm1);
-	const int sz1 = std::clamp(int(std::max(z0, z1 - 1e-3f) / SQUARE_SIZE), 0, mapDims.mapym1);
+	// the last square the footprint overlaps; an edge exactly on a square boundary does not enter the next square
+	const int sx1 = std::clamp(std::max(sx0, int(math::ceil(x1 / SQUARE_SIZE)) - 1), 0, mapDims.mapxm1);
+	const int sz1 = std::clamp(std::max(sz0, int(math::ceil(z1 / SQUARE_SIZE)) - 1), 0, mapDims.mapym1);
 
 	for (int sz = sz0; sz <= sz1; sz++) {
 		for (int sx = sx0; sx <= sx1; sx++) {
@@ -304,6 +315,61 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 	}
 
 	return false;
+}
+
+bool CSupComGroundMoveType::DirectLineClear()
+{
+	// re-checked a few times per second, and at once for a new goal
+	if (goalPos.equals(directGoal) && gs->frameNum < directCheckFrame)
+		return directClear;
+
+	directGoal = goalPos;
+	directCheckFrame = gs->frameNum + DIRECT_CHECK_FRAMES;
+	directClear = false;
+
+	const float3 delta = (goalPos - owner->pos) * XZVector;
+	const float len = delta.Length2D();
+
+	if (len > DIRECT_MAX_DIST)
+		return false;
+
+	const MoveDef* md = owner->moveDef;
+	const int thread = ThreadPool::GetThreadNum();
+	const int steps = std::max(1, int(math::ceil(len / (SQUARE_SIZE * 0.5f))));
+
+	for (int i = 1; i <= steps; i++) {
+		const float3 p = owner->pos + delta * (float(i) / steps);
+
+		if (FootprintBlocked(p))
+			return false;
+		if (CMoveMath::IsBlockedStructure(*md, int(p.x / SQUARE_SIZE), int(p.z / SQUARE_SIZE), owner, thread))
+			return false;
+	}
+
+	return (directClear = true);
+}
+
+void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos)
+{
+	// a clear straight line to the goal is driven directly, not through the path's waypoints
+	if (progressState == Active && owner->commandAI->commandQue.size() <= 1 && DirectLineClear()) {
+		CGroundMoveType::SetWaypointDir(goalPos, opos);
+		return;
+	}
+
+	CGroundMoveType::SetWaypointDir(cwp, opos);
+}
+
+float CSupComGroundMoveType::GridStep(float p, float d)
+{
+	// round a step to the float spacing at its start and end, so that the new position is exact and steps of
+	// equal length stay equal once applied
+	const float a = math::fabs(p);
+	const float b = math::fabs(p + d);
+	const float u = std::max(std::nextafter(a, std::numeric_limits<float>::infinity()) - a,
+	                         std::nextafter(b, std::numeric_limits<float>::infinity()) - b);
+
+	return (math::floor(d / u + 0.5f) * u);
 }
 
 void CSupComGroundMoveType::UpdateTurnRate()
@@ -404,7 +470,10 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	float3 moveRequest = flatFrontDir * (dist * scDir);
 
-	if (dist > 0.0f) {
+	moveRequest.x = GridStep(owner->pos.x, moveRequest.x);
+	moveRequest.z = GridStep(owner->pos.z, moveRequest.z);
+
+	if (!moveRequest.same(ZeroVector)) {
 		bool blocked = false;
 
 		if (!positionStuck) {
