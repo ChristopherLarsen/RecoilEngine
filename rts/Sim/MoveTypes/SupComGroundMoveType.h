@@ -102,6 +102,7 @@ private:
 	float footprintX = 0.0f;     ///< elmos, along the unit's right axis
 	float footprintZ = 0.0f;     ///< elmos, along the unit's forward axis
 	bool sinkLower = false;
+	float hoverHeight = 0.0f;    ///< elmos above the corner references (hover units, MOV-010)
 
 	// state
 	float scSpeed = 0.0f;        ///< instantaneous speed along the motion direction (elmos per frame, >= 0)

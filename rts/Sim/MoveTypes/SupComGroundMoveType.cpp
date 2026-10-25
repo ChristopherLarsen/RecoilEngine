@@ -34,6 +34,7 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(footprintX),
 	CR_MEMBER(footprintZ),
 	CR_MEMBER(sinkLower),
+	CR_MEMBER(hoverHeight),
 
 	CR_MEMBER(scSpeed),
 	CR_MEMBER(scPhase),
@@ -103,6 +104,7 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	footprintX = std::max(0.0f, CustomParam(ud, "supcom_footprint_x", md->xsize * SQUARE_SIZE));
 	footprintZ = std::max(0.0f, CustomParam(ud, "supcom_footprint_z", md->zsize * SQUARE_SIZE));
 	sinkLower = (CustomParam(ud, "supcom_sink_lower", 0.0f) != 0.0f);
+	hoverHeight = std::max(0.0f, CustomParam(ud, "supcom_hover_height", 0.0f));
 
 	// submarine: depth in elmos, dive time in seconds
 	submarine = (CustomParam(ud, "supcom_submarine", 0.0f) != 0.0f);
@@ -615,7 +617,9 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 		return;
 	}
 
-	if (owner->FloatOnWater() || footprintX <= 0.0f || footprintZ <= 0.0f) {
+	const bool hover = (owner->moveDef->speedModClass == MoveDef::Hover && hoverHeight > 0.0f);
+
+	if ((owner->FloatOnWater() && !hover) || footprintX <= 0.0f || footprintZ <= 0.0f) {
 		CGroundMoveType::AdjustPosToWaterLine();
 		return;
 	}
@@ -634,7 +638,9 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 	float hMax = hMin;
 
 	for (float3& c: corners) {
+		// hover units: the higher of the terrain and the water surface (height 0) under each corner
 		c.y = CGround::GetHeightReal(c.x, c.z);
+		c.y = hover? std::max(c.y, 0.0f): c.y;
 		hMean += c.y * 0.25f;
 		hMin = std::min(hMin, c.y);
 		hMax = std::max(hMax, c.y);
@@ -642,8 +648,11 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 
 	float height = hMean;
 
-	if (owner->upright || sinkLower)
+	if (hover) {
+		height += hoverHeight;
+	} else if (owner->upright || sinkLower) {
 		height -= uprightSink * (hMax - hMin);
+	}
 
 	owner->Move(UpVector * (height - pos.y), true);
 
