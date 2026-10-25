@@ -44,6 +44,7 @@
 #include "Sim/Misc/CollisionHandler.h"
 #include "Sim/MoveTypes/StrafeAirMoveType.h"
 #include "Sim/MoveTypes/GroundMoveType.h"
+#include "Sim/MoveTypes/SupComGroundMoveType.h"
 #include "Sim/MoveTypes/HoverAirMoveType.h"
 #include "Sim/MoveTypes/ScriptMoveType.h"
 #include "Sim/MoveTypes/StaticMoveType.h"
@@ -6166,6 +6167,13 @@ int LuaSyncedRead::GetUnitMoveTypeData(lua_State* L)
 		LuaPushNamedNumber(L, "requestedSpeed", 0.0f);
 
 		LuaPushNamedNumber(L, "pathFailures", 0);
+
+		if (const auto* scmt = dynamic_cast<const CSupComGroundMoveType*>(groundmt)) {
+			LuaPushNamedString(L, "supcomLayer", scmt->GetLayerName());
+			LuaPushNamedNumber(L, "supcomDepth", scmt->GetDepth());
+			LuaPushNamedBool(L, "supcomSubmerged", scmt->IsSubmergedOrdered());
+			LuaPushNamedBool(L, "supcomDiving", scmt->IsDiving());
+		}
 
 		return 1;
 	}
