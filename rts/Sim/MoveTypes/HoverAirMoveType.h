@@ -10,6 +10,9 @@ struct float4;
 class CHoverAirMoveType: public AAirMoveType
 {
 	CR_DECLARE_DERIVED(CHoverAirMoveType)
+
+	// the continuous-time air move type reuses the heading, collision and state helpers
+	friend class CSupComAirMoveType;
 public:
 	CHoverAirMoveType(CUnit* owner);
 
