@@ -16,6 +16,7 @@
 
 // for amtMemBuffer
 #include "Sim/MoveTypes/GroundMoveType.h"
+#include "Sim/MoveTypes/SupComAirMoveType.h"
 #include "Sim/MoveTypes/SupComGroundMoveType.h"
 
 // for smtMemBuffer
@@ -302,7 +303,7 @@ public:
 	uint8_t usMemBuffer[sizeof(CLuaUnitScript)];
 	// sufficient for the largest AMoveType (CGroundMoveType)
 	// need two buffers since ScriptMoveType might be enabled
-	uint8_t amtMemBuffer[std::max(sizeof(CGroundMoveType), sizeof(CSupComGroundMoveType))];
+	uint8_t amtMemBuffer[std::max({sizeof(CGroundMoveType), sizeof(CSupComGroundMoveType), sizeof(CSupComAirMoveType)})];
 	uint8_t smtMemBuffer[sizeof(CScriptMoveType)];
 	// sufficient for the largest CommandAI type (CBuilderCAI)
 	// knowing the exact CAI object size here is not required;
