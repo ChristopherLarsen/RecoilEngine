@@ -24,7 +24,10 @@ struct UnitDef;
  *    when it reaches the ground;
  *  - an idle aircraft that may land waits `supcom_air_idle_land_delay` seconds, then lowers exponentially
  *    (`supcom_air_land_decay`, per second), optionally holding `supcom_air_land_hold_height` (elmos) for
- *    `supcom_air_land_hold_time` seconds, and lands under 0.1 map units above the ground.
+ *    `supcom_air_land_hold_time` seconds, and lands under 0.1 map units above the ground;
+ *  - attacking, a winged aircraft re-aims at its target's current position every frame and makes passes: it
+ *    overshoots, runs out to `supcom_air_pass_swing` (elmos) and turns back; it banks with its turn rate, up to
+ *    `supcom_air_max_bank` degrees (presentation).
  *
  * Speeds and heights are integrated exactly over each simulation frame.
  */
@@ -41,6 +44,7 @@ public:
 	void StartMoving(float3 pos, float goalRadius) override;
 	void StartMoving(float3 pos, float goalRadius, float speed) override { StartMoving(pos, goalRadius); }
 	void StopMoving(bool callScript = false, bool hardStop = false, bool cancelRaw = false) override;
+	void KeepPointingTo(float3 pos, float distance, bool aggressive) override;
 
 private:
 	enum IdleStage {
@@ -58,6 +62,8 @@ private:
 	float UpdateIdleHeight();
 	float ReferenceHeight(float x, float z) const;
 	void ApplyStep(const float3& step);
+	void UpdateBank(short oldHeading);
+	const CUnit* AttackTarget() const;
 
 	/// a horizontal step rounded towards zero onto the float grid around position p
 	static float GridStepDown(float p, float d);
@@ -75,6 +81,8 @@ private:
 	float landHoldHeight = 0.0f; ///< elmos; 0 no hold
 	float landHoldFrames = 0.0f;
 	float cruiseHeight = 0.0f;   ///< elmos above the reference
+	float passSwing = 0.0f;      ///< elmos; 0 = plain steering (winged)
+	float maxBank = 0.0f;        ///< radians (winged, presentation)
 
 	// state
 	float horSpeed = 0.0f;       ///< horizontal speed (elmos per frame)
@@ -82,5 +90,7 @@ private:
 	int idleFrame = 0;           ///< frame the current idle stage started
 	float idleHeight = 0.0f;     ///< height above the ground when the current lowering stage started
 	bool falling = false;
+	bool passOut = false;        ///< past the target, running out before turning back
+	float lastAimDist = 0.0f;
 	float3 fallVelocity;         ///< elmos per frame
 };

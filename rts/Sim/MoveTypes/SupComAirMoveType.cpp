@@ -13,6 +13,8 @@
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
+#include "Sim/Units/UnitHandler.h"
+#include "Sim/Units/CommandAI/Command.h"
 #include "System/SpringMath.h"
 
 #include "System/Misc/TracyDefs.h"
@@ -30,6 +32,8 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(landHoldHeight),
 	CR_MEMBER(landHoldFrames),
 	CR_MEMBER(cruiseHeight),
+	CR_MEMBER(passSwing),
+	CR_MEMBER(maxBank),
 
 	CR_MEMBER(horSpeed),
 	CR_MEMBER(idleStage),
@@ -37,6 +41,8 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(idleHeight),
 	CR_MEMBER(falling),
 	CR_MEMBER(fallVelocity),
+	CR_MEMBER(passOut),
+	CR_MEMBER(lastAimDist),
 
 	CR_PREALLOC(GetPreallocContainer)
 ))
@@ -84,6 +90,9 @@ CSupComAirMoveType::CSupComAirMoveType(CUnit* owner): CHoverAirMoveType(owner)
 	landHoldHeight = std::max(0.0f, CustomParam(ud, "supcom_air_land_hold_height", 0.0f));
 	landHoldFrames = std::max(0.0f, CustomParam(ud, "supcom_air_land_hold_time", 0.0f)) * GAME_SPEED;
 
+	passSwing = std::max(0.0f, CustomParam(ud, "supcom_air_pass_swing", 0.0f));
+	maxBank = std::max(0.0f, CustomParam(ud, "supcom_air_max_bank", 0.0f)) * math::DEG_TO_RAD;
+
 	// the cruise height exactly as defined (the base class adds a random offset)
 	cruiseHeight = ud->wantedHeight;
 	wantedHeight = cruiseHeight;
@@ -129,7 +138,27 @@ void CSupComAirMoveType::StartMoving(float3 pos, float goalRadius)
 	if (!owner->commandAI->commandQue.empty())
 		idleStage = IDLE_NONE;
 
+	// attacking a unit, the steering target is the unit itself, not the command AI's snapshot of its position
+	if (const CUnit* target = AttackTarget())
+		goalPos = target->pos * XZVector;
+
 	wantedHeight = cruiseHeight;
+}
+
+void CSupComAirMoveType::KeepPointingTo(float3 pos, float distance, bool aggressive)
+{
+	// attack: keep flying at the target (the base class would hold position instead)
+	wantToStop = false;
+	goalPos = pos * XZVector;
+
+	if (const CUnit* target = AttackTarget())
+		goalPos = target->pos * XZVector;
+
+	wantedHeight = cruiseHeight;
+	progressState = AMoveType::Active;
+
+	if (aircraftState == AIRCRAFT_LANDED || aircraftState == AIRCRAFT_LANDING)
+		SetState(AIRCRAFT_TAKEOFF);
 }
 
 void CSupComAirMoveType::StopMoving(bool callScript, bool hardStop, bool cancelRaw)
@@ -200,7 +229,13 @@ bool CSupComAirMoveType::Update()
 	if (aircraftState == AIRCRAFT_LANDED)
 		return true;
 
+	const short oldHeading = owner->heading;
+
 	UpdateHeading();
+
+	if (winged)
+		UpdateBank(oldHeading);
+
 	return HandleCollisions(collide);
 }
 
@@ -220,9 +255,27 @@ void CSupComAirMoveType::UpdateFlight()
 	float3 dir;
 
 	if (winged) {
+		// attacking a unit: aim at its current position, refreshed every frame
+		if (const CUnit* target = AttackTarget())
+			goalPos = target->pos * XZVector;
+
+		const float3 toAim = (goalPos - pos) * XZVector;
+		const float aimDist = toAim.Length2D();
+
+		// passes: overshoot the aim point, run straight out to the swing distance, then turn back
+		if (passSwing > 0.0f) {
+			if (passOut) {
+				passOut = (aimDist < passSwing);
+			} else if (aimDist < passSwing * 0.25f && aimDist > lastAimDist) {
+				passOut = true;
+			}
+		}
+
+		lastAimDist = aimDist;
+
 		// always forwards along the heading, turning towards the goal (round it when idle)
-		if (goalDist > 1.0f)
-			wantedHeading = GetHeadingFromVector(toGoal.x, toGoal.z);
+		if (!passOut && aimDist > 1.0f)
+			wantedHeading = GetHeadingFromVector(toAim.x, toAim.z);
 
 		dir = GetVectorFromHeading(owner->heading);
 		horSpeed = topSpeed - (topSpeed - horSpeed) * math::exp(-riseRate);
@@ -308,6 +361,45 @@ float CSupComAirMoveType::UpdateIdleHeight()
 
 	idleStage = IDLE_LOWER2;
 	return (landHoldHeight * math::exp(-landDecay * (t - tHold - landHoldFrames)));
+}
+
+const CUnit* CSupComAirMoveType::AttackTarget() const
+{
+	// the unit named by the attack order at the front of the queue (not the command AI's last snapshot of it)
+	const auto& queue = owner->commandAI->commandQue;
+
+	if (queue.empty())
+		return nullptr;
+
+	const Command& c = queue.front();
+
+	if (c.GetID() != CMD_ATTACK || c.GetNumParams() != 1)
+		return nullptr;
+
+	const CUnit* target = unitHandler.GetUnit(int(c.GetParam(0)));
+
+	if (target == nullptr || target == owner)
+		return nullptr;
+
+	return target;
+}
+
+void CSupComAirMoveType::UpdateBank(short oldHeading)
+{
+	// bank follows the turn rate, up to the maximum bank at the full turn rate (presentation)
+	const short delta = owner->heading - oldHeading;
+	const float rate = std::clamp(float(delta) / std::max(1.0f, turnRate), -1.0f, 1.0f);
+	const float bank = maxBank * rate;
+
+	const float3 front = GetVectorFromHeading(owner->heading);
+	const float3 right = float3{-front.z, 0.0f, front.x};
+	const float c = math::cos(bank);
+	const float s = math::sin(bank);
+
+	owner->frontdir = front;
+	owner->rightdir = right * c + UpVector * s;
+	owner->updir = UpVector * c - right * s;
+	owner->UpdateMidAndAimPos();
 }
 
 void CSupComAirMoveType::UpdateFall()
