@@ -2,6 +2,7 @@
 
 
 #include "UnitLoader.h"
+#include "Sim/MoveTypes/SupComAirMoveType.h"
 #include "Unit.h"
 #include "UnitDef.h"
 #include "UnitDefHandler.h"
@@ -56,8 +57,9 @@ CCommandAI* CUnitLoader::NewCommandAI(CUnit* u, const UnitDef* ud)
 	if (ud->IsMobileBuilderUnit() || ud->IsStaticBuilderUnit())
 		return (new (u->caiMemBuffer) CBuilderCAI(u));
 
-	// non-hovering fighter or bomber aircraft; coupled to StrafeAirMoveType
-	if (ud->IsStrafingAirUnit())
+	// non-hovering fighter or bomber aircraft; coupled to StrafeAirMoveType (supcom_air aircraft use
+	// CSupComAirMoveType, a CHoverAirMoveType, and take the mobile command AI below)
+	if (ud->IsStrafingAirUnit() && !CSupComAirMoveType::IsWantedBy(ud))
 		return (new (u->caiMemBuffer) CAirCAI(u));
 	// all other aircraft; coupled to HoverAirMoveType
 	if (ud->IsAirUnit())
