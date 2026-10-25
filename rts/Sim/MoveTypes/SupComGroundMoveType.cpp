@@ -16,6 +16,7 @@
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
+#include "System/SpringHash.h"
 #include "System/SpringMath.h"
 #include "System/Threading/ThreadPool.h"
 
@@ -44,6 +45,15 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(directGoal),
 	CR_MEMBER(directCheckFrame),
 	CR_MEMBER(directClear),
+
+	CR_MEMBER(submarine),
+	CR_MEMBER(subOrdered),
+	CR_MEMBER(diveDepth),
+	CR_MEMBER(diveFrames),
+	CR_MEMBER(depthFrom),
+	CR_MEMBER(depthTo),
+	CR_MEMBER(depthFrames),
+	CR_MEMBER(depthStartFrame),
 
 	CR_PREALLOC(GetPreallocContainer)
 ))
@@ -93,6 +103,14 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	footprintX = std::max(0.0f, CustomParam(ud, "supcom_footprint_x", md->xsize * SQUARE_SIZE));
 	footprintZ = std::max(0.0f, CustomParam(ud, "supcom_footprint_z", md->zsize * SQUARE_SIZE));
 	sinkLower = (CustomParam(ud, "supcom_sink_lower", 0.0f) != 0.0f);
+
+	// submarine: depth in elmos, dive time in seconds
+	submarine = (CustomParam(ud, "supcom_submarine", 0.0f) != 0.0f);
+	diveDepth = std::max(0.0f, CustomParam(ud, "supcom_dive_depth", 0.0f));
+	diveFrames = std::max(1.0f, CustomParam(ud, "supcom_dive_time", 0.0f) * GAME_SPEED);
+	subOrdered = submarine && (CustomParam(ud, "supcom_start_submerged", 0.0f) != 0.0f);
+	depthFrom = depthTo = (subOrdered? diveDepth: 0.0f);
+	depthStartFrame = gs->frameNum;
 }
 
 
@@ -509,6 +527,78 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	UpdateTurnRate();
 }
 
+float CSupComGroundMoveType::CurrentDepth() const
+{
+	if (depthFrames <= 0.0f)
+		return depthTo;
+
+	// smoothstep: monotone, slow at both ends, fastest in the middle, no overshoot
+	const float u = std::clamp((gs->frameNum - depthStartFrame) / depthFrames, 0.0f, 1.0f);
+	return (depthFrom + (depthTo - depthFrom) * (u * u * (3.0f - 2.0f * u)));
+}
+
+bool CSupComGroundMoveType::IsDiving() const
+{
+	return (depthFrames > 0.0f && (gs->frameNum - depthStartFrame) < depthFrames);
+}
+
+void CSupComGroundMoveType::StartDive(bool submerge)
+{
+	const float from = CurrentDepth();
+	const float to = submerge? diveDepth: 0.0f;
+
+	subOrdered = submerge;
+	depthFrom = from;
+	depthTo = to;
+	depthStartFrame = gs->frameNum;
+
+	// a reversal part-way takes the matching part of the full time
+	depthFrames = (diveDepth > 0.0f)? (diveFrames * math::fabs(to - from) / diveDepth): 0.0f;
+}
+
+bool CSupComGroundMoveType::SetMemberValue(unsigned int memberHash, void* memberValue)
+{
+	static const unsigned int SUBMERGED_HASH = spring::LiteHash("submerged", sizeof("submerged") - 1, 0);
+
+	if (memberHash == SUBMERGED_HASH) {
+		if (!submarine)
+			return false;
+
+		const bool submerge = *(reinterpret_cast<bool*>(memberValue));
+
+		if (submerge != subOrdered)
+			StartDive(submerge);
+
+		return true;
+	}
+
+	return CGroundMoveType::SetMemberValue(memberHash, memberValue);
+}
+
+const char* CSupComGroundMoveType::GetLayerName() const
+{
+	// a dive or surfacing keeps the layer it started in until it ends (Sub only at full depth)
+	if (submarine) {
+		if (IsDiving())
+			return ((depthFrom >= diveDepth)? "sub": "water");
+
+		return ((subOrdered && depthTo >= diveDepth)? "sub": "water");
+	}
+
+	const MoveDef* md = owner->moveDef;
+
+	if (md->speedModClass == MoveDef::Ship)
+		return "water";
+
+	// terrain under the unit's position against the water surface (height 0)
+	const bool underWater = (CGround::GetHeightReal(owner->pos.x, owner->pos.z) < 0.0f);
+
+	if (md->speedModClass == MoveDef::Hover)
+		return (underWater? "water": "land");
+
+	return (underWater? "seabed": "land");
+}
+
 void CSupComGroundMoveType::AdjustPosToWaterLine()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -517,6 +607,13 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 		return;
 	if (owner->IsFlying())
 		return;
+
+	if (submarine) {
+		// the water surface is at height 0; never below the sea floor
+		const float height = std::max(CGround::GetHeightReal(owner->pos.x, owner->pos.z), -CurrentDepth());
+		owner->Move(UpVector * (height - owner->pos.y), true);
+		return;
+	}
 
 	if (owner->FloatOnWater() || footprintX <= 0.0f || footprintZ <= 0.0f) {
 		CGroundMoveType::AdjustPosToWaterLine();
