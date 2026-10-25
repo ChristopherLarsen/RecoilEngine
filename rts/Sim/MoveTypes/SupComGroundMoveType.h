@@ -23,7 +23,10 @@
  *    blocked_restart times the top speed;
  *  - the unit sits at the mean terrain height under its footprint corners and,
  *    unless upright, tilts with the plane spanned by the corner diagonals;
- *    upright and sink_lower units are lowered by upright_sink times the spread.
+ *    upright and sink_lower units are lowered by upright_sink times the spread;
+ *  - ships (Ship move class) ride on the water surface; submarines (`supcom_submarine`) cruise
+ *    `supcom_dive_depth` below it and dive or surface over `supcom_dive_time` along a smooth curve,
+ *    ordered from Lua with MoveCtrl.SetGroundMoveTypeData(unitID, "submerged", bool).
  *
  * All rates are continuous (per second) and are integrated exactly over each
  * simulation frame, including phase changes inside a frame.
@@ -43,6 +46,17 @@ public:
 	void StopMoving(bool callScript = false, bool hardStop = false, bool cancelRaw = false) override;
 
 	void UpdateUnitPosition() override;
+
+	/// handles "submerged" (bool: dive or surface a submarine), everything else as the base class
+	bool SetMemberValue(unsigned int memberHash, void* memberValue) override;
+
+	/// movement layer (MOV-009): "land", "seabed", "water" or "sub"
+	const char* GetLayerName() const;
+	/// a submarine's current depth below the water surface (elmos)
+	float GetDepth() const { return CurrentDepth(); }
+	bool IsSubmarine() const { return submarine; }
+	bool IsSubmergedOrdered() const { return subOrdered; }
+	bool IsDiving() const;
 
 protected:
 	bool ArrivalAllowed() const override;
@@ -73,6 +87,9 @@ private:
 	/// a step rounded to the float grid around position p
 	static float GridStep(float p, float d);
 
+	void StartDive(bool submerge);
+	float CurrentDepth() const;
+
 private:
 	// per-unit values, engine units (elmos, frames, heading units)
 	float baseTurnRate = 0.0f;   ///< turn rate limit at low speed (heading units per frame)
@@ -93,6 +110,16 @@ private:
 	bool scBraking = false;      ///< braking committed for the current order
 	bool scStopNow = false;      ///< stop order: brake at once
 	bool scRestart = false;      ///< the last step was blocked
+
+	// submarine (MOV-011): depth below the water surface, moving between depthFrom and depthTo along a smooth curve
+	bool submarine = false;
+	bool subOrdered = false;     ///< the last dive order: true = submerged, false = surfaced
+	float diveDepth = 0.0f;      ///< elmos below the surface when submerged
+	float diveFrames = 0.0f;     ///< frames for a full dive or surfacing
+	float depthFrom = 0.0f;
+	float depthTo = 0.0f;
+	float depthFrames = 0.0f;    ///< frames for the current transition
+	int depthStartFrame = 0;
 
 	// direct steering cache
 	float3 directGoal;
