@@ -86,6 +86,10 @@ private:
 	void AdvanceDrive(float dt, float topSpeed, float& v, float& dist) const;
 
 	bool FootprintBlocked(const float3& pos) const;
+	/// the waypoint, or the nearest point where the footprint fits; round a corner, a point to go to first
+	float3 FitWaypoint(const float3& wp) const;
+	/// whether the footprint fits all along the straight line from a to b
+	bool LineFits(const float3& a, const float3& b) const;
 	bool DirectLineClear();
 	void SetWaypointDir(const float3& cwp, const float3& opos) override;
 	void UpdateTurnRate();
