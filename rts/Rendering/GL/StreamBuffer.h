@@ -43,6 +43,8 @@ public:
 	};
 
 	static void PutBufferLocks();
+	/// RenderBufferOrphan config: orphan BufferSubData storage at each frame swap (1, the macOS default) or not (0, elsewhere)
+	static bool OrphanOnInvalidate();
 
 	IStreamBufferConcept(IStreamBufferConcept::StreamBufferCreationParams p, std::string_view bufferTypeName);
 	virtual ~IStreamBufferConcept();
@@ -271,6 +273,11 @@ public:
 
 	void Invalidate() override {
 		if (!uploaded)
+			return;
+
+		uploaded = false;
+
+		if (!IStreamBufferConcept::OrphanOnInvalidate())
 			return;
 
 		// orphan the storage, otherwise uploads into ranges that queued draws
