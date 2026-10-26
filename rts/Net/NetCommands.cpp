@@ -533,7 +533,9 @@ void CGame::ClientReadNet()
 
 			case NETMSG_RANDSEED: {
 				ZoneScopedN("Net::RandSeed");
-				gsRNG.SetSeed(*((uint32_t*)&inbuf[1]), true);
+				// supcom: a loaded save game keeps its own random state
+				if (!gsRNG.ApplyPendingState())
+					gsRNG.SetSeed(*((uint32_t*)&inbuf[1]), true);
 				AddTraffic(-1, packetCode, dataLength);
 			} break;
 
