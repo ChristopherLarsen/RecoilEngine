@@ -81,8 +81,6 @@ static float CustomParam(const UnitDef* ud, const char* key, float def)
 // frames a wanted step may stay refused, with the footprint partly on impassable squares, before the engine's
 // own ground movement takes over
 static constexpr int BLOCKED_HANDOVER_FRAMES = GAME_SPEED;
-// elmos a footprint may overlap impassable squares across its heading
-static constexpr float FOOTPRINT_SIDE_SLACK = 1.0f;
 
 bool CSupComGroundMoveType::IsWantedBy(const UnitDef* ud)
 {
@@ -319,11 +317,8 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 
 	// axis-aligned footprint, turned with the unit's facing
 	const bool alongX = (math::fabs(flatFrontDir.x) > math::fabs(flatFrontDir.z));
-	// across the heading the footprint may graze an impassable square by up to FOOTPRINT_SIDE_SLACK, so that a unit
-	// can pass a gap exactly its own width without being centred on it to a fraction of an elmo (PTH-001 R2); along
-	// the heading it is exact (MOV-007, MOV-008)
-	const float hx = std::max(0.5f, (alongX? footprintZ: footprintX) * 0.5f - (alongX? 0.0f: FOOTPRINT_SIDE_SLACK));
-	const float hz = std::max(0.5f, (alongX? footprintX: footprintZ) * 0.5f - (alongX? FOOTPRINT_SIDE_SLACK: 0.0f));
+	const float hx = (alongX? footprintZ: footprintX) * 0.5f;
+	const float hz = (alongX? footprintX: footprintZ) * 0.5f;
 
 	const float x0 = pos.x - hx;
 	const float x1 = pos.x + hx;
