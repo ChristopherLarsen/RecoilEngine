@@ -12,6 +12,7 @@ public:
 
 private:
 	static int RequestPath(lua_State* L);
+	static int GetUnitReachablePoint(lua_State* L);
 	static int InitPathNodeCostsArray(lua_State* L);
 	static int FreePathNodeCostsArray(lua_State* L);
 	static int SetPathNodeCosts(lua_State* L);

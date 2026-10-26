@@ -6174,6 +6174,15 @@ int LuaSyncedRead::GetUnitMoveTypeData(lua_State* L)
 
 		LuaPushNamedNumber(L, "pathFailures", 0);
 
+		// supcom: whether the unit has a path, and the planner's search result for it (HAPFS answers "ok" for goals
+		// whose enclosure only the fine search sees; Spring.GetUnitReachablePoint answers reachability)
+		LuaPushNamedBool(L, "hasPath", groundmt->GetPathID() != 0);
+
+		if (const unsigned int pathID = groundmt->GetPathID(); pathID != 0) {
+			if (const char* sr = pathManager->GetPathSearchResult(pathID); sr != nullptr)
+				LuaPushNamedString(L, "pathSearch", sr);
+		}
+
 		if (const auto* scmt = dynamic_cast<const CSupComGroundMoveType*>(groundmt)) {
 			LuaPushNamedString(L, "supcomLayer", scmt->GetLayerName());
 			LuaPushNamedNumber(L, "supcomDepth", scmt->GetDepth());

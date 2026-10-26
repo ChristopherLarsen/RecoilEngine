@@ -7,6 +7,11 @@
 #include "LuaUtils.h"
 #include "Sim/Path/IPathManager.h"
 #include "Sim/MoveTypes/MoveDefHandler.h"
+#include "Sim/MoveTypes/MoveMath/MoveMath.h"
+#include "Sim/Units/Unit.h"
+#include "Sim/Units/UnitHandler.h"
+#include "Map/ReadMap.h"
+#include "System/SpringMath.h"
 
 #include <algorithm>
 #include <vector>
@@ -63,6 +68,7 @@ bool LuaPathFinder::PushEntries(lua_State* L)
 	CreatePathMetatable(L);
 
 	REGISTER_LUA_CFUNC(RequestPath);
+	REGISTER_LUA_CFUNC(GetUnitReachablePoint);
 	REGISTER_LUA_CFUNC(InitPathNodeCostsArray);
 	REGISTER_LUA_CFUNC(FreePathNodeCostsArray);
 	REGISTER_LUA_CFUNC(SetPathNodeCosts);
@@ -205,6 +211,129 @@ static void CreatePathMetatable(lua_State* L)
 	LuaPushNamedCFunc(L, "__index",    path_index);
 	LuaPushNamedCFunc(L, "__newindex", path_newindex);
 	lua_pop(L, 1);
+}
+
+
+/***
+ * supcom: whether a unit can reach a goal over the ground, and the reachable point nearest the goal
+ *
+ * A flood fill of the squares the unit's move class can stand on (terrain speed above zero, no structure under its
+ * footprint), from the unit's square, stopping at the goal's square or after maxSquares squares. Moving units do not
+ * block. For PTH-003 R1: an order to an unreachable goal ends at the reachable point nearest the goal.
+ *
+ * @function Spring.GetUnitReachablePoint
+ * @param unitID integer
+ * @param goalX number
+ * @param goalZ number
+ * @param maxSquares integer? (Default: 65536)
+ * @return boolean? reachable true when the goal's square was reached; false when the fill ended without it; nil when the limit was hit first
+ * @return number nearX centre of the visited square nearest the goal
+ * @return number nearZ
+ * @return integer visited squares visited
+ */
+int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
+{
+	const CUnit* unit = unitHandler.GetUnit(luaL_checkint(L, 1));
+
+	if (unit == nullptr || unit->moveDef == nullptr)
+		return 0;
+
+	const MoveDef& md = *unit->moveDef;
+	const float gx = luaL_checkfloat(L, 2);
+	const float gz = luaL_checkfloat(L, 3);
+	const int maxSquares = std::max(1, luaL_optint(L, 4, 65536));
+
+	const int W = mapDims.mapx;
+	const int H = mapDims.mapy;
+	const int gsx = std::clamp(int(gx / SQUARE_SIZE), 0, W - 1);
+	const int gsz = std::clamp(int(gz / SQUARE_SIZE), 0, H - 1);
+	const int ssx = std::clamp(int(unit->pos.x / SQUARE_SIZE), 0, W - 1);
+	const int ssz = std::clamp(int(unit->pos.z / SQUARE_SIZE), 0, H - 1);
+
+	// a square the unit can stand on: every square of its move class footprint passable, no structure there
+	const auto standable = [&](int sx, int sz) {
+		for (int z = sz - md.zsizeh; z < sz - md.zsizeh + md.zsize; z++) {
+			for (int x = sx - md.xsizeh; x < sx - md.xsizeh + md.xsize; x++) {
+				if (x < 0 || z < 0 || x >= W || z >= H)
+					return false;
+				if (CMoveMath::GetPosSpeedMod(md, x, z) <= 0.0f)
+					return false;
+			}
+		}
+		return ((CMoveMath::IsBlockedStructure(md, sx, sz, unit, 0) & CMoveMath::BLOCK_STRUCTURE) == 0);
+	};
+
+	std::vector<std::uint8_t> seen(size_t(W) * H, 0);
+	std::vector<int> queue;
+	queue.reserve(4096);
+	queue.push_back(ssz * W + ssx);
+	seen[ssz * W + ssx] = 1;
+
+	int best = ssz * W + ssx;
+	float bestSq = float((ssx - gsx) * (ssx - gsx) + (ssz - gsz) * (ssz - gsz));
+	bool reached = (ssx == gsx && ssz == gsz);
+	bool limited = false;
+
+	for (size_t head = 0; head < queue.size() && !reached; head++) {
+		if (int(head) >= maxSquares) {
+			limited = true;
+			break;
+		}
+
+		const int cx = queue[head] % W;
+		const int cz = queue[head] / W;
+
+		for (int dz = -1; dz <= 1 && !reached; dz++) {
+			for (int dx = -1; dx <= 1; dx++) {
+				if (dx == 0 && dz == 0)
+					continue;
+
+				const int nx = cx + dx;
+				const int nz = cz + dz;
+
+				if (nx < 0 || nz < 0 || nx >= W || nz >= H)
+					continue;
+
+				const int ni = nz * W + nx;
+
+				if (seen[ni])
+					continue;
+
+				seen[ni] = 1;
+
+				// diagonal steps only past two open orthogonal neighbours (no corner cutting)
+				if (dx != 0 && dz != 0 && (!standable(cx + dx, cz) || !standable(cx, cz + dz)))
+					continue;
+				if (!standable(nx, nz))
+					continue;
+
+				queue.push_back(ni);
+
+				const float dSq = float((nx - gsx) * (nx - gsx) + (nz - gsz) * (nz - gsz));
+
+				if (dSq < bestSq) {
+					bestSq = dSq;
+					best = ni;
+				}
+				if (nx == gsx && nz == gsz) {
+					reached = true;
+					break;
+				}
+			}
+		}
+	}
+
+	if (reached)
+		lua_pushboolean(L, true);
+	else if (limited)
+		lua_pushnil(L);
+	else
+		lua_pushboolean(L, false);
+
+	lua_pushnumber(L, ((best % W) + 0.5f) * SQUARE_SIZE);
+	lua_pushnumber(L, ((best / W) + 0.5f) * SQUARE_SIZE);
+	lua_pushnumber(L, int(queue.size()));
+	return 4;
 }
 
 
