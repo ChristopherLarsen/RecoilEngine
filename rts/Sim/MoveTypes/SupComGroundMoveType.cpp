@@ -42,6 +42,9 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scBraking),
 	CR_MEMBER(scStopNow),
 	CR_MEMBER(scRestart),
+	CR_MEMBER(scBlockedFrames),
+	CR_MEMBER(contactLift),
+	CR_MEMBER(scFreeFrames),
 
 	CR_MEMBER(directGoal),
 	CR_MEMBER(directCheckFrame),
@@ -75,6 +78,11 @@ static float CustomParam(const UnitDef* ud, const char* key, float def)
 	return std::strtof(it->second.c_str(), nullptr);
 }
 
+
+// frames a wanted step may stay refused before the engine's own movement takes over, and frames of free movement
+// before this move type takes back control
+static constexpr int BLOCKED_HANDOVER_FRAMES = GAME_SPEED;
+static constexpr int FREE_RETURN_FRAMES = GAME_SPEED / 2;
 
 bool CSupComGroundMoveType::IsWantedBy(const UnitDef* ud)
 {
@@ -120,6 +128,8 @@ void CSupComGroundMoveType::ResetForNewOrder()
 {
 	scBraking = false;
 	scStopNow = false;
+	scBlockedFrames = 0;
+	scFreeFrames = 0;
 
 	// a new order during braking or the settle replaces it
 	if (scSpeed > 0.0f)
@@ -417,6 +427,27 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		return;
 	}
 
+	// blocked for a second (pressed by a crowd against a wall, or pushed onto impassable squares): the engine's own
+	// ground movement, which side-steps and slides, until the unit has moved freely for half a second; the exact
+	// stepping of this move type cannot get such a unit out, and the engine's idle check then failed its order
+	if (scBlockedFrames >= BLOCKED_HANDOVER_FRAMES) {
+		CGroundMoveType::UpdateUnitPosition();
+
+		scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
+		scPhase = PHASE_DRIVE;
+		scBraking = false;
+		scRestart = false;
+
+		const bool moving = (owner->speed.SqLength2D() > Square(0.25f * maxSpeed));
+
+		scFreeFrames = moving? (scFreeFrames + 1): 0;
+
+		if (scFreeFrames >= FREE_RETURN_FRAMES || progressState != Active)
+			scBlockedFrames = scFreeFrames = 0;
+
+		return;
+	}
+
 	resultantForces = ZeroVector;
 
 	if (owner->IsSkidding())
@@ -512,10 +543,12 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			scSpeed = 0.0f;
 			scPhase = PHASE_DRIVE;
 			scRestart = (!stop && !scBraking);
+			scBlockedFrames += int(!stop);
 
 			ReRequestPath(false);
 		} else {
 			positionStuck = false;
+			scBlockedFrames = 0;
 		}
 	}
 
@@ -635,6 +668,7 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 
 	float hMean = 0.0f;
 	float hMin = CGround::GetHeightReal(pos.x, pos.z);
+	const float hMinCentre = hMin;
 	float hMax = hMin;
 
 	for (float3& c: corners) {
@@ -655,6 +689,11 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 	}
 
 	owner->Move(UpVector * (height - pos.y), true);
+
+	// the hover height and the footprint's height above the surface under the centre are contact, not flight: an
+	// object the engine thinks is in the air gets no terrain collision response and is not avoided by other units
+	const float centreSurface = hover? std::max(hMinCentre, 0.0f): hMinCentre;
+	contactLift = std::max(0.0f, owner->pos.y - centreSurface);
 
 	if (owner->upright)
 		return;

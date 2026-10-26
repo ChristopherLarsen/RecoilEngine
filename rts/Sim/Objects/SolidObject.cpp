@@ -111,6 +111,11 @@ void CSolidObject::UpdatePhysicalState(float eps)
 
 	unsigned int ps = physicalState;
 
+	// supcom: heights as if the deliberate lift were not there
+	const float lift = GetContactLift();
+	const float posY = pos.y - lift;
+	const float midY = midPos.y - lift;
+
 	// clear all non-void non-special bits
 	ps &= (~PSTATE_BIT_ONGROUND   );
 	ps &= (~PSTATE_BIT_INWATER    );
@@ -123,13 +128,13 @@ void CSolidObject::UpdatePhysicalState(float eps)
 	//   the height property is used for much fewer purposes
 	//   than radius, so less reliable for determining state
 	#define MASK_NOAIR (PSTATE_BIT_ONGROUND | PSTATE_BIT_INWATER | PSTATE_BIT_UNDERWATER | PSTATE_BIT_UNDERGROUND)
-	ps |= (PSTATE_BIT_ONGROUND    * ((   pos.y -         groundHeight) <=  eps));
-	ps |= (PSTATE_BIT_INWATER     * ((   pos.y             ) <= waterLevel));
+	ps |= (PSTATE_BIT_ONGROUND    * ((    posY -         groundHeight) <=  eps));
+	ps |= (PSTATE_BIT_INWATER     * ((    posY             ) <= waterLevel));
 //	ps |= (PSTATE_BIT_UNDERWATER  * ((   pos.y +     height) <  0.0f));
 //	ps |= (PSTATE_BIT_UNDERGROUND * ((   pos.y +     height) <    groundHeight));
-	ps |= (PSTATE_BIT_UNDERWATER  * ((midPos.y +     radius) <  waterLevel));
-	ps |= (PSTATE_BIT_UNDERGROUND * ((midPos.y +     radius) <    groundHeight));
-	ps |= (PSTATE_BIT_INAIR       * ((   pos.y -         topSurfaceHeight) >   eps));
+	ps |= (PSTATE_BIT_UNDERWATER  * ((    midY +     radius) <  waterLevel));
+	ps |= (PSTATE_BIT_UNDERGROUND * ((    midY +     radius) <    groundHeight));
+	ps |= (PSTATE_BIT_INAIR       * ((    posY -         topSurfaceHeight) >   eps));
 	ps |= (PSTATE_BIT_INAIR       * ((    ps   & MASK_NOAIR) ==    0));
 	#undef MASK_NOAIR
 

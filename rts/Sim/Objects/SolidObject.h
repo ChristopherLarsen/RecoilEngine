@@ -144,6 +144,8 @@ public:
 	virtual void ForcedSpin(const float3& newFrontDir, const float3& newRightDir);
 
 	virtual void UpdatePhysicalState(float eps);
+	/// supcom: elmos the object is deliberately held above the surface it stands on (counted as contact)
+	virtual float GetContactLift() const { return 0.0f; }
 
 	void Move(const float3& v, bool relative);
 

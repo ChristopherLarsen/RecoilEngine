@@ -60,6 +60,8 @@ public:
 	virtual bool IsFlying() const { return false; }
 	virtual bool IsReversing() const { return false; }
 	virtual bool IsPushResistant() const { return false; }
+	/// supcom: elmos the move type deliberately holds its unit above the surface (counted as contact)
+	virtual float GetContactLift() const { return 0.0f; }
 	virtual bool IsPushResitanceBlockActive() const { return false; }
 
 	bool UseHeading(      ) const { return (useHeading    ); }

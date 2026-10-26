@@ -52,6 +52,12 @@ public:
 
 	/// movement layer (MOV-009): "land", "seabed", "water" or "sub"
 	const char* GetLayerName() const;
+	float GetContactLift() const override { return contactLift; }
+	/// diagnosis (Lua GetUnitMoveTypeData): speed (elmos per frame), phase, braking, frames blocked, handed over
+	float GetStepSpeed() const { return scSpeed; }
+	int GetStepPhase() const { return scPhase; }
+	bool GetStepBraking() const { return scBraking; }
+	int GetBlockedFrames() const { return scBlockedFrames; }
 	/// a submarine's current depth below the water surface (elmos)
 	float GetDepth() const { return CurrentDepth(); }
 	bool IsSubmarine() const { return submarine; }
@@ -111,6 +117,9 @@ private:
 	bool scBraking = false;      ///< braking committed for the current order
 	bool scStopNow = false;      ///< stop order: brake at once
 	bool scRestart = false;      ///< the last step was blocked
+	float contactLift = 0.0f;    ///< elmos above the surface under the centre, set by AdjustPosToWaterLine
+	int scBlockedFrames = 0;     ///< consecutive frames with the wanted step refused
+	int scFreeFrames = 0;        ///< frames moving freely under the engine's movement (while handed over)
 
 	// submarine (MOV-011): depth below the water surface, moving between depthFrom and depthTo along a smooth curve
 	bool submarine = false;
