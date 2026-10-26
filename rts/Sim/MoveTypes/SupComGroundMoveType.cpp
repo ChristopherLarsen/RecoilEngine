@@ -44,7 +44,6 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scRestart),
 	CR_MEMBER(scBlockedFrames),
 	CR_MEMBER(contactLift),
-	CR_MEMBER(scFreeFrames),
 
 	CR_MEMBER(directGoal),
 	CR_MEMBER(directCheckFrame),
@@ -79,10 +78,9 @@ static float CustomParam(const UnitDef* ud, const char* key, float def)
 }
 
 
-// frames a wanted step may stay refused before the engine's own movement takes over, and frames of free movement
-// before this move type takes back control
+// frames a wanted step may stay refused, with the footprint partly on impassable squares, before the engine's
+// own ground movement takes over
 static constexpr int BLOCKED_HANDOVER_FRAMES = GAME_SPEED;
-static constexpr int FREE_RETURN_FRAMES = GAME_SPEED / 2;
 
 bool CSupComGroundMoveType::IsWantedBy(const UnitDef* ud)
 {
@@ -129,7 +127,6 @@ void CSupComGroundMoveType::ResetForNewOrder()
 	scBraking = false;
 	scStopNow = false;
 	scBlockedFrames = 0;
-	scFreeFrames = 0;
 
 	// a new order during braking or the settle replaces it
 	if (scSpeed > 0.0f)
@@ -427,25 +424,22 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		return;
 	}
 
-	// blocked for a second (pressed by a crowd against a wall, or pushed onto impassable squares): the engine's own
-	// ground movement, which side-steps and slides, until the unit has moved freely for half a second; the exact
-	// stepping of this move type cannot get such a unit out, and the engine's idle check then failed its order
+	// pushed by a crowd partly onto impassable squares and blocked there for a second: the engine's own ground
+	// movement (it side-steps and is pushed out by the terrain collision response) until the footprint is clear;
+	// this move type's exact steps cannot leave such a spot, and the engine's idle check then failed the order. A
+	// unit standing at an obstacle without overlapping it (MOV-007) keeps this move type.
 	if (scBlockedFrames >= BLOCKED_HANDOVER_FRAMES) {
-		CGroundMoveType::UpdateUnitPosition();
+		if (FootprintBlocked(owner->pos) && progressState == Active) {
+			CGroundMoveType::UpdateUnitPosition();
 
-		scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
-		scPhase = PHASE_DRIVE;
-		scBraking = false;
-		scRestart = false;
+			scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
+			scPhase = PHASE_DRIVE;
+			scBraking = false;
+			scRestart = false;
+			return;
+		}
 
-		const bool moving = (owner->speed.SqLength2D() > Square(0.25f * maxSpeed));
-
-		scFreeFrames = moving? (scFreeFrames + 1): 0;
-
-		if (scFreeFrames >= FREE_RETURN_FRAMES || progressState != Active)
-			scBlockedFrames = scFreeFrames = 0;
-
-		return;
+		scBlockedFrames = 0;
 	}
 
 	resultantForces = ZeroVector;

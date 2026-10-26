@@ -119,7 +119,6 @@ private:
 	bool scRestart = false;      ///< the last step was blocked
 	float contactLift = 0.0f;    ///< elmos above the surface under the centre, set by AdjustPosToWaterLine
 	int scBlockedFrames = 0;     ///< consecutive frames with the wanted step refused
-	int scFreeFrames = 0;        ///< frames moving freely under the engine's movement (while handed over)
 
 	// submarine (MOV-011): depth below the water surface, moving between depthFrom and depthTo along a smooth curve
 	bool submarine = false;
