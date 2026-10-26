@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <vector>
 
 #include "Map/Ground.h"
 #include "Map/ReadMap.h"
@@ -81,6 +82,8 @@ static float CustomParam(const UnitDef* ud, const char* key, float def)
 // frames a wanted step may stay refused, with the footprint partly on impassable squares, before the engine's
 // own ground movement takes over
 static constexpr int BLOCKED_HANDOVER_FRAMES = GAME_SPEED;
+// elmos of float rounding a footprint edge may lie across a square boundary, across the heading
+static constexpr float FOOTPRINT_SIDE_EPS = 0.01f;
 
 bool CSupComGroundMoveType::IsWantedBy(const UnitDef* ud)
 {
@@ -317,8 +320,11 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 
 	// axis-aligned footprint, turned with the unit's facing
 	const bool alongX = (math::fabs(flatFrontDir.x) > math::fabs(flatFrontDir.z));
-	const float hx = (alongX? footprintZ: footprintX) * 0.5f;
-	const float hz = (alongX? footprintX: footprintZ) * 0.5f;
+	// across the heading an edge within FOOTPRINT_SIDE_EPS of a square boundary does not enter the next square, so
+	// a unit can line up with a gap exactly its own width despite float rounding (PTH-001 R2); along the heading
+	// the footprint is exact (MOV-007, MOV-008)
+	const float hx = (alongX? footprintZ: footprintX) * 0.5f - (alongX? 0.0f: FOOTPRINT_SIDE_EPS);
+	const float hz = (alongX? footprintX: footprintZ) * 0.5f - (alongX? FOOTPRINT_SIDE_EPS: 0.0f);
 
 	const float x0 = pos.x - hx;
 	const float x1 = pos.x + hx;
@@ -384,7 +390,88 @@ void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos
 		return;
 	}
 
-	CGroundMoveType::SetWaypointDir(cwp, opos);
+	// the engine's waypoints can lie where this move type's centred footprint does not fit (beside a wall: the engine
+	// places an even-sized footprint off its centre), or round a corner the footprint cannot cut: repair them locally
+	float3 target = FitWaypoint(cwp);
+
+	// at a repaired waypoint the engine does not see its own as reached (it skips only within 7 elmos): ask it to
+	// move on to the next one
+	if (!target.same(cwp) && target.SqDistance2D(opos) < Square(SQUARE_SIZE * 0.5f))
+		TriggerSkipWayPoint();
+
+	CGroundMoveType::SetWaypointDir(target, opos);
+}
+
+// offsets of up to three squares around a point, nearest first
+static const std::vector<float3>& NearOffsets()
+{
+	static std::vector<float3> offsets;
+
+	if (offsets.empty()) {
+		for (int dz = -3; dz <= 3; dz++) {
+			for (int dx = -3; dx <= 3; dx++) {
+				if (dx != 0 || dz != 0)
+					offsets.emplace_back(dx * SQUARE_SIZE * 0.5f, 0.0f, dz * SQUARE_SIZE * 0.5f);
+			}
+		}
+		std::stable_sort(offsets.begin(), offsets.end(), [](const float3& a, const float3& b) { return (a.SqLength2D() < b.SqLength2D()); });
+	}
+
+	return offsets;
+}
+
+bool CSupComGroundMoveType::LineFits(const float3& a, const float3& b) const
+{
+	const float3 d = (b - a) * XZVector;
+	const int steps = std::max(1, int(math::ceil(d.Length2D() / (SQUARE_SIZE * 0.25f))));
+
+	for (int k = 1; k <= steps; k++) {
+		if (FootprintBlocked(a + d * (float(k) / steps)))
+			return false;
+	}
+
+	return true;
+}
+
+float3 CSupComGroundMoveType::FitWaypoint(const float3& wp) const
+{
+	// the nearest point to the waypoint (within a square and a half) where the footprint fits
+	float3 fit = wp;
+
+	if (FootprintBlocked(wp)) {
+		for (const float3& o: NearOffsets()) {
+			if (!FootprintBlocked(wp + o)) {
+				fit = wp + o;
+				break;
+			}
+		}
+	}
+
+	// not reachable in a straight line from here (round a corner): first a point near the unit from which it is
+	const float3& pos = owner->pos;
+
+	if (scBlockedFrames == 0 || LineFits(pos, fit))
+		return fit;
+
+	// first the two axis-aligned corners (line up with a gap, or round a wall end), then points round the unit
+	const float3 corners[2] = {{pos.x, pos.y, fit.z}, {fit.x, pos.y, pos.z}};
+
+	for (const float3& p: corners) {
+		// a corner on the unit itself would leave it steering nowhere
+		if (p.SqDistance2D(pos) < 1.0f)
+			continue;
+		if (LineFits(pos, p) && LineFits(p, fit))
+			return p;
+	}
+
+	for (const float3& o: NearOffsets()) {
+		const float3 p = pos + o * 2.0f;
+
+		if (LineFits(pos, p) && LineFits(p, fit))
+			return p;
+	}
+
+	return fit;
 }
 
 float CSupComGroundMoveType::GridStep(float p, float d)
