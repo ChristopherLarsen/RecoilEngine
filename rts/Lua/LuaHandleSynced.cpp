@@ -856,6 +856,7 @@ bool CSyncedLuaHandle::AllowUnitTransport(const CUnit* transporter, const CUnit*
  * @param x number
  * @param y number
  * @param z number
+ * @param allowed boolean the engine's own verdict: docked, aligned and upright (supcom fork)
  * @return boolean allow whether or not the transport load is allowed
  */
 bool CSyncedLuaHandle::AllowUnitTransportLoad(
@@ -866,7 +867,7 @@ bool CSyncedLuaHandle::AllowUnitTransportLoad(
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
 	LUA_CALL_IN_CHECK(L, true);
-	luaL_checkstack(L, 2 + 9, __func__);
+	luaL_checkstack(L, 2 + 10, __func__);
 
 	static const LuaHashString cmdStr(__func__);
 
@@ -883,8 +884,10 @@ bool CSyncedLuaHandle::AllowUnitTransportLoad(
 	lua_pushnumber(L, loadPos.x);
 	lua_pushnumber(L, loadPos.y);
 	lua_pushnumber(L, loadPos.z);
+	// supcom: the engine's own verdict (docked, aligned, upright), so that a gadget can wait for it
+	lua_pushboolean(L, allowed);
 
-	if (!RunCallIn(L, cmdStr, 9, 1))
+	if (!RunCallIn(L, cmdStr, 10, 1))
 		return true;
 
 	// ditto if it does but returns nothing
@@ -906,6 +909,7 @@ bool CSyncedLuaHandle::AllowUnitTransportLoad(
  * @param x number
  * @param y number
  * @param z number
+ * @param allowed boolean the engine's own verdict: docked, aligned and upright (supcom fork)
  * @return boolean allow whether or not the transport unload is allowed
  */
 bool CSyncedLuaHandle::AllowUnitTransportUnload(
@@ -916,7 +920,7 @@ bool CSyncedLuaHandle::AllowUnitTransportUnload(
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
 	LUA_CALL_IN_CHECK(L, true);
-	luaL_checkstack(L, 2 + 9, __func__);
+	luaL_checkstack(L, 2 + 10, __func__);
 
 	static const LuaHashString cmdStr(__func__);
 
@@ -932,8 +936,10 @@ bool CSyncedLuaHandle::AllowUnitTransportUnload(
 	lua_pushnumber(L, unloadPos.x);
 	lua_pushnumber(L, unloadPos.y);
 	lua_pushnumber(L, unloadPos.z);
+	// supcom: the engine's own verdict (docked, aligned, upright), so that a gadget can wait for it
+	lua_pushboolean(L, allowed);
 
-	if (!RunCallIn(L, cmdStr, 9, 1))
+	if (!RunCallIn(L, cmdStr, 10, 1))
 		return true;
 
 	const bool allow = luaL_optboolean(L, -1, allowed);

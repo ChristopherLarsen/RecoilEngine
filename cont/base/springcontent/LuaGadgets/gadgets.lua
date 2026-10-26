@@ -1182,16 +1182,17 @@ function gadgetHandler:AllowUnitTransport(
   return true
 end
 
+-- supcom: allowed is the engine's own verdict (docked, aligned, upright), passed on so that a gadget can wait for it
 function gadgetHandler:AllowUnitTransportLoad(
   transporterID, transporterUnitDefID, transporterTeam,
   transporteeID, transporteeUnitDefID, transporteeTeam,
-  loadPosX, loadPosY, loadPosZ
+  loadPosX, loadPosY, loadPosZ, allowed
 )
   for _,g in r_ipairs(self.AllowUnitTransportLoadList) do
     if (not g:AllowUnitTransportLoad(
       transporterID, transporterUnitDefID, transporterTeam,
       transporteeID, transporteeUnitDefID, transporteeTeam,
-      loadPosX, loadPosY, loadPosZ
+      loadPosX, loadPosY, loadPosZ, allowed
     )) then
       return false
     end
@@ -1199,16 +1200,17 @@ function gadgetHandler:AllowUnitTransportLoad(
   return true
 end
 
+-- supcom: allowed is the engine's own verdict (docked, aligned, upright), passed on so that a gadget can wait for it
 function gadgetHandler:AllowUnitTransportUnload(
   transporterID, transporterUnitDefID, transporterTeam,
   transporteeID, transporteeUnitDefID, transporteeTeam,
-  unloadPosX, unloadPosY, unloadPosZ
+  unloadPosX, unloadPosY, unloadPosZ, allowed
 )
   for _,g in r_ipairs(self.AllowUnitTransportUnloadList) do
     if (not g:AllowUnitTransportUnload(
       transporterID, transporterUnitDefID, transporterTeam,
       transporteeID, transporteeUnitDefID, transporteeTeam,
-      unloadPosX, unloadPosY, unloadPosZ
+      unloadPosX, unloadPosY, unloadPosZ, allowed
     )) then
       return false
     end
