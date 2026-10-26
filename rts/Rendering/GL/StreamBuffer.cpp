@@ -1,5 +1,22 @@
 #include "StreamBuffer.h"
 
+#include "System/Config/ConfigHandler.h"
+
+// supcom: orphaning every streamed render buffer at each frame swap stalled the main thread for 100 to 490 ms
+// several times a second in about half of all runs on an AMD Radeon Pro 5700 XT (Windows, 2020 Boot Camp driver);
+// off by default outside macOS, where the macOS port introduced it
+#ifdef __APPLE__
+CONFIG(int, RenderBufferOrphan).defaultValue(1).minimumValue(0).maximumValue(1).description("Orphan streamed render buffer storage at each frame swap (1) or reuse it (0).");
+#else
+CONFIG(int, RenderBufferOrphan).defaultValue(0).minimumValue(0).maximumValue(1).description("Orphan streamed render buffer storage at each frame swap (1) or reuse it (0).");
+#endif
+
+bool IStreamBufferConcept::OrphanOnInvalidate()
+{
+	static const bool orphan = (configHandler->GetInt("RenderBufferOrphan") != 0);
+	return orphan;
+}
+
 #include "VBO.h"
 
 #include <algorithm>
