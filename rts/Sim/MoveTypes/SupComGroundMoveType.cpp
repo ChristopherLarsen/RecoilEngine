@@ -304,7 +304,7 @@ float CSupComGroundMoveType::Advance(float topSpeed, float stopDist, bool stop)
 }
 
 
-bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
+int CSupComGroundMoveType::BlockedSquares(const float3& pos) const
 {
 	const MoveDef* md = owner->moveDef;
 
@@ -313,28 +313,50 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 	const float hx = (alongX? footprintZ: footprintX) * 0.5f;
 	const float hz = (alongX? footprintX: footprintZ) * 0.5f;
 
-	const float x0 = pos.x - hx;
-	const float x1 = pos.x + hx;
-	const float z0 = pos.z - hz;
-	const float z1 = pos.z + hz;
+	// the squares the footprint overlaps; an edge exactly on a square boundary does not enter the next square
+	const int sx0 = int(math::floor((pos.x - hx) / SQUARE_SIZE));
+	const int sz0 = int(math::floor((pos.z - hz) / SQUARE_SIZE));
+	const int sx1 = std::max(sx0, int(math::ceil((pos.x + hx) / SQUARE_SIZE)) - 1);
+	const int sz1 = std::max(sz0, int(math::ceil((pos.z + hz) / SQUARE_SIZE)) - 1);
 
-	if (x0 < 0.0f || z0 < 0.0f || x1 > mapDims.mapx * SQUARE_SIZE || z1 > mapDims.mapy * SQUARE_SIZE)
-		return true;
-
-	const int sx0 = std::clamp(int(x0 / SQUARE_SIZE), 0, mapDims.mapxm1);
-	const int sz0 = std::clamp(int(z0 / SQUARE_SIZE), 0, mapDims.mapym1);
-	// the last square the footprint overlaps; an edge exactly on a square boundary does not enter the next square
-	const int sx1 = std::clamp(std::max(sx0, int(math::ceil(x1 / SQUARE_SIZE)) - 1), 0, mapDims.mapxm1);
-	const int sz1 = std::clamp(std::max(sz0, int(math::ceil(z1 / SQUARE_SIZE)) - 1), 0, mapDims.mapym1);
+	int n = 0;
 
 	for (int sz = sz0; sz <= sz1; sz++) {
 		for (int sx = sx0; sx <= sx1; sx++) {
+			if (sx < 0 || sz < 0 || sx > mapDims.mapxm1 || sz > mapDims.mapym1) {
+				n++;
+				continue;
+			}
 			if (CMoveMath::GetPosSpeedMod(*md, sx, sz) <= 0.0f)
-				return true;
+				n++;
 		}
 	}
 
-	return false;
+	return n;
+}
+
+bool CSupComGroundMoveType::StepBlocked(const float3& pos) const
+{
+	const int n = BlockedSquares(pos);
+
+	if (n == 0)
+		return false;
+
+	// pushed partly onto impassable squares (by other units): a step may lead out or along, never deeper or with
+	// the unit's centre into another of them; a plain "already blocked, anything goes" let units climb cliffs
+	const int sx = int(math::floor(pos.x / SQUARE_SIZE));
+	const int sz = int(math::floor(pos.z / SQUARE_SIZE));
+
+	if (sx < 0 || sz < 0 || sx > mapDims.mapxm1 || sz > mapDims.mapym1)
+		return true;
+
+	// the centre may not enter an impassable square (it may move within or out of one it was pushed onto)
+	const bool newSquare = (sx != int(math::floor(owner->pos.x / SQUARE_SIZE)) || sz != int(math::floor(owner->pos.z / SQUARE_SIZE)));
+
+	if (newSquare && CMoveMath::GetPosSpeedMod(*owner->moveDef, sx, sz) <= 0.0f)
+		return true;
+
+	return (n > BlockedSquares(owner->pos));
 }
 
 bool CSupComGroundMoveType::DirectLineClear()
@@ -497,12 +519,37 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		bool blocked = false;
 
 		if (!positionStuck) {
-			blocked = (FootprintBlocked(owner->pos + moveRequest) && !FootprintBlocked(owner->pos));
+			blocked = StepBlocked(owner->pos + moveRequest);
 
 			if (!blocked) {
 				float3 resultantMove;
 				UpdatePos(owner, moveRequest, resultantMove, ThreadPool::GetThreadNum());
 				blocked = !resultantMove.same(moveRequest);
+			}
+		}
+
+		if (blocked) {
+			// slide: the part of the step along the obstacle, on the free axis (the larger part first), as the
+			// engine's own move type does; without it units stopped dead on walls and gave up their orders
+			const float3 parts[2] = {
+				(math::fabs(moveRequest.x) >= math::fabs(moveRequest.z))? float3(moveRequest.x, 0.0f, 0.0f): float3(0.0f, 0.0f, moveRequest.z),
+				(math::fabs(moveRequest.x) >= math::fabs(moveRequest.z))? float3(0.0f, 0.0f, moveRequest.z): float3(moveRequest.x, 0.0f, 0.0f),
+			};
+
+			for (const float3& part: parts) {
+				if (part.same(ZeroVector) || StepBlocked(owner->pos + part))
+					continue;
+
+				float3 resultantMove;
+				UpdatePos(owner, part, resultantMove, ThreadPool::GetThreadNum());
+
+				if (!resultantMove.same(part))
+					continue;
+
+				blocked = false;
+				moveRequest = part;
+				scSpeed = std::min(scSpeed, part.Length2D());
+				break;
 			}
 		}
 

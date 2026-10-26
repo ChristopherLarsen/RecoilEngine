@@ -79,7 +79,11 @@ private:
 	float AdvanceBraking(float dt, float& dist);
 	void AdvanceDrive(float dt, float topSpeed, float& v, float& dist) const;
 
-	bool FootprintBlocked(const float3& pos) const;
+	bool FootprintBlocked(const float3& pos) const { return (BlockedSquares(pos) > 0); }
+	/// impassable squares (or squares off the map) under the footprint at pos
+	int BlockedSquares(const float3& pos) const;
+	/// whether a step from the current position to pos is refused by the terrain
+	bool StepBlocked(const float3& pos) const;
 	bool DirectLineClear();
 	void SetWaypointDir(const float3& cwp, const float3& opos) override;
 	void UpdateTurnRate();
