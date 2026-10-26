@@ -143,6 +143,7 @@ public:
 	void CalculateTerrainType();
 	void UpdateTerrainType();
 	void UpdatePhysicalState(float eps) override;
+	float GetContactLift() const override;
 	void SendPhysicalStateEvents(unsigned int prevState);
 
 	float3 GetErrorVector(int allyteam) const;

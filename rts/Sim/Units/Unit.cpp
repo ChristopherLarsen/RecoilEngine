@@ -1858,6 +1858,11 @@ void CUnit::DependentDied(CObject* o)
 
 
 
+float CUnit::GetContactLift() const
+{
+	return ((moveType != nullptr)? moveType->GetContactLift(): 0.0f);
+}
+
 void CUnit::UpdatePhysicalState(float eps)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
