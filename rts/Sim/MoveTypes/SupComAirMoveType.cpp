@@ -34,6 +34,8 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(cruiseHeight),
 	CR_MEMBER(passSwing),
 	CR_MEMBER(maxBank),
+	CR_MEMBER(transportDescent),
+	CR_MEMBER(loadHeight),
 
 	CR_MEMBER(horSpeed),
 	CR_MEMBER(idleStage),
@@ -92,6 +94,8 @@ CSupComAirMoveType::CSupComAirMoveType(CUnit* owner): CHoverAirMoveType(owner)
 
 	passSwing = std::max(0.0f, CustomParam(ud, "supcom_air_pass_swing", 0.0f));
 	maxBank = std::max(0.0f, CustomParam(ud, "supcom_air_max_bank", 0.0f)) * math::DEG_TO_RAD;
+	transportDescent = std::max(0.0f, CustomParam(ud, "supcom_air_transport_descent", 0.0f)) / GAME_SPEED;
+	loadHeight = std::max(0.0f, CustomParam(ud, "supcom_air_load_height", 0.0f));
 
 	// the cruise height exactly as defined (the base class adds a random offset)
 	cruiseHeight = ud->wantedHeight;
@@ -331,8 +335,10 @@ void CSupComAirMoveType::UpdateFlight()
 
 		newY = ref + h;
 	} else {
-		// towards the cruise height at no more than the climb rate
-		newY = pos.y + std::clamp((ref + wantedHeight) - pos.y, -climbRate, climbRate);
+		// towards the wanted height (cruise, or the command AI's load height) at no more than the climb rate;
+		// a transport under a load or unload order lowers at no more than its transport descent
+		const float downRate = (transportDescent > 0.0f && InTransportOrder())? transportDescent: climbRate;
+		newY = pos.y + std::clamp((ref + wantedHeight) - pos.y, -downRate, climbRate);
 	}
 
 	// never below the reference height
@@ -382,6 +388,34 @@ const CUnit* CSupComAirMoveType::AttackTarget() const
 		return nullptr;
 
 	return target;
+}
+
+bool CSupComAirMoveType::InTransportOrder() const
+{
+	const auto& queue = owner->commandAI->commandQue;
+
+	if (queue.empty())
+		return false;
+
+	switch (queue.front().GetID()) {
+		case CMD_LOAD_UNITS:
+		case CMD_LOAD_ONTO:
+		case CMD_UNLOAD_UNIT:
+		case CMD_UNLOAD_UNITS:
+			return true;
+		default:
+			break;
+	}
+
+	return false;
+}
+
+float CSupComAirMoveType::TransportHeight(const float3& pos, float engineHeight) const
+{
+	if (loadHeight <= 0.0f)
+		return engineHeight;
+
+	return (ReferenceHeight(pos.x, pos.z) + loadHeight);
 }
 
 void CSupComAirMoveType::UpdateBank(short oldHeading)

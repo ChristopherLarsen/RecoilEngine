@@ -27,7 +27,9 @@ struct UnitDef;
  *    `supcom_air_land_hold_time` seconds, and lands under 0.1 map units above the ground;
  *  - attacking, a winged aircraft re-aims at its target's current position every frame and makes passes: it
  *    overshoots, runs out to `supcom_air_pass_swing` (elmos) and turns back; it banks with its turn rate, up to
- *    `supcom_air_max_bank` degrees (presentation).
+ *    `supcom_air_max_bank` degrees (presentation);
+ *  - a transport under a load or unload order lowers at no more than `supcom_air_transport_descent` (elmos per
+ *    second) and loads and unloads holding `supcom_air_load_height` (elmos) above the ground (TransportHeight).
  *
  * Speeds and heights are integrated exactly over each simulation frame.
  */
@@ -45,6 +47,12 @@ public:
 	void StartMoving(float3 pos, float goalRadius, float speed) override { StartMoving(pos, goalRadius); }
 	void StopMoving(bool callScript = false, bool hardStop = false, bool cancelRaw = false) override;
 	void KeepPointingTo(float3 pos, float distance, bool aggressive) override;
+
+	/// the height a transport loads and unloads at over pos: the reference plus the load height, or the
+	/// command AI's own height when no load height is set
+	float TransportHeight(const float3& pos, float engineHeight) const;
+	/// true when a load height is set: the transport docks only once it holds that height
+	bool HoldsLoadHeight() const { return (loadHeight > 0.0f); }
 
 private:
 	enum IdleStage {
@@ -64,6 +72,7 @@ private:
 	void ApplyStep(const float3& step);
 	void UpdateBank(short oldHeading);
 	const CUnit* AttackTarget() const;
+	bool InTransportOrder() const;
 
 	/// a horizontal step rounded towards zero onto the float grid around position p
 	static float GridStepDown(float p, float d);
@@ -83,6 +92,8 @@ private:
 	float cruiseHeight = 0.0f;   ///< elmos above the reference
 	float passSwing = 0.0f;      ///< elmos; 0 = plain steering (winged)
 	float maxBank = 0.0f;        ///< radians (winged, presentation)
+	float transportDescent = 0.0f; ///< elmos per frame; 0 = the climb rate
+	float loadHeight = 0.0f;     ///< elmos above the reference while loading and unloading; 0 = the command AI's
 
 	// state
 	float horSpeed = 0.0f;       ///< horizontal speed (elmos per frame)
