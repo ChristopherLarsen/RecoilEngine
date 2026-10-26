@@ -14,6 +14,7 @@
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/MoveTypes/AAirMoveType.h"
 #include "Sim/MoveTypes/HoverAirMoveType.h"
+#include "Sim/MoveTypes/SupComAirMoveType.h"
 #include "Sim/MoveTypes/MoveDefHandler.h"
 #include "Sim/MoveTypes/MoveMath/MoveMath.h"
 #include "Sim/Units/UnitDef.h"
@@ -1366,6 +1367,27 @@ void CMobileCAI::SetTransportee(CUnit* unit) {
 }
 
 
+// the height an air transport loads and unloads at: the engine's own, or a supcom_air transport's load height
+static float TransporteeWantedHeight(const CUnit* owner, const float3& pos, const CUnit* transportee)
+{
+	const float h = owner->GetTransporteeWantedHeight(pos, transportee);
+
+	if (const auto* scmt = dynamic_cast<const CSupComAirMoveType*>(owner->moveType))
+		return scmt->TransportHeight(pos, h);
+
+	return h;
+}
+
+// whether an air transport is close enough to wantedPos to take or set down its cargo: the engine's 3D radius,
+// or for a supcom_air transport with a load height the 2D radius at that height (within half an elmo)
+static bool InDockingRange(const CUnit* owner, const float3& wantedPos, float radius)
+{
+	if (const auto* scmt = dynamic_cast<const CSupComAirMoveType*>(owner->moveType); scmt != nullptr && scmt->HoldsLoadHeight())
+		return (owner->pos.SqDistance2D(wantedPos) < Square(radius) && std::abs(owner->pos.y - wantedPos.y) <= 0.5f);
+
+	return (owner->pos.SqDistance(wantedPos) < Square(radius));
+}
+
 void CMobileCAI::ExecuteLoadUnits(Command& c)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -1435,7 +1457,7 @@ void CMobileCAI::ExecuteLoadUnits(Command& c)
 
 					if (am != nullptr) {
 						// handle air transports differently
-						wantedPos.y = owner->GetTransporteeWantedHeight(wantedPos, unit);
+						wantedPos.y = TransporteeWantedHeight(owner, wantedPos, unit);
 
 						// calls am->StartMoving() which sets forceHeading to false (and also
 						// changes aircraftState, possibly in mid-pickup) --> must check that
@@ -1450,7 +1472,7 @@ void CMobileCAI::ExecuteLoadUnits(Command& c)
 						am->maxDrift = 1.0f;
 
 						// FIXME: kill the hardcoded constants, use the command's radius
-						const bool isInRange = (owner->pos.SqDistance(wantedPos) < Square(AIRTRANSPORT_DOCKING_RADIUS));
+						const bool isInRange = InDockingRange(owner, wantedPos, AIRTRANSPORT_DOCKING_RADIUS);
 						const bool isAligned = (std::abs(owner->heading - unit->heading) < AIRTRANSPORT_DOCKING_ANGLE);
 						const bool isUpright = (owner->updir.dot(UpVector) > 0.995f);
 
@@ -1969,7 +1991,7 @@ void CMobileCAI::UnloadLand(Command& c)
 	if (wantedPos.SqDistance2D(owner->pos) >= Square(owner->unitDef->loadingRadius * 0.9f))
 		return;
 
-	wantedPos.y = owner->GetTransporteeWantedHeight(wantedPos, transportee);
+	wantedPos.y = TransporteeWantedHeight(owner, wantedPos, transportee);
 
 	if ((am = dynamic_cast<CHoverAirMoveType*>(owner->moveType)) == nullptr) {
 		if (!eventHandler.AllowUnitTransportUnload(owner, transportee, wantedPos, true))
@@ -1993,7 +2015,7 @@ void CMobileCAI::UnloadLand(Command& c)
 
 		// FIXME: kill the hardcoded constants, use the command's radius
 		// NOTE: 2D distance-check would mean units get dropped from air
-		const bool isInRange = (owner->pos.SqDistance(wantedPos) < Square(AIRTRANSPORT_DOCKING_RADIUS));
+		const bool isInRange = InDockingRange(owner, wantedPos, AIRTRANSPORT_DOCKING_RADIUS);
 		const bool isAligned = (std::abs(owner->heading - am->GetForcedHeading()) < AIRTRANSPORT_DOCKING_ANGLE);
 		const bool isUpright = (owner->updir.dot(UpVector) > 0.99f);
 
@@ -2083,7 +2105,7 @@ void CMobileCAI::UnloadLandFlood(Command& c)
 
 	if (wantedPos.SqDistance2D(owner->pos) < Square(owner->unitDef->loadingRadius * 0.9f)) {
 		CHoverAirMoveType* am = dynamic_cast<CHoverAirMoveType*>(owner->moveType);
-		wantedPos.y = owner->GetTransporteeWantedHeight(wantedPos, transportee);
+		wantedPos.y = TransporteeWantedHeight(owner, wantedPos, transportee);
 
 		if (am != nullptr) {
 			// lower to ground
