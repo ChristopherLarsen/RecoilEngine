@@ -86,6 +86,8 @@ public:
 	}
 
 	virtual bool CurrentWaypointIsUnreachable(unsigned int pathID) { return false; }
+	/// supcom: the planner's search result for a path ("ok", "cantgetcloser", "outofrange", "error"), or nullptr
+	virtual const char* GetPathSearchResult(unsigned int pathID) const { return nullptr; }
 	virtual bool NextWayPointIsUnreachable(unsigned int pathID) { return false; }
 
 

@@ -168,6 +168,17 @@ public:
 	void GetDetailedPathSquares(unsigned pathID, std::vector<int2>& points) const;
 
 	void GetPathWayPoints(unsigned int pathID, std::vector<float3>& points, std::vector<int>& starts) const override;
+	const char* GetPathSearchResult(unsigned int pathID) const override {
+		const MultiPath* mp = GetMultiPathConst(pathID);
+		if (mp == nullptr)
+			return nullptr;
+		switch (mp->searchResult) {
+			case IPath::Ok:             return "ok";
+			case IPath::CantGetCloser:  return "cantgetcloser";
+			case IPath::GoalOutOfRange: return "outofrange";
+			default:                    return "error";
+		}
+	}
 
 	void TerrainChange(unsigned int x1, unsigned int z1, unsigned int x2, unsigned int z2, unsigned int type) override;
 
