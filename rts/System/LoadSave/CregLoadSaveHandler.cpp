@@ -47,6 +47,8 @@
 #include "System/Threading/ThreadPool.h"
 #include "System/creg/SerializeLuaState.h"
 #include "System/creg/Serializer.h"
+#include "System/GlobalRNG.h"
+#include "Sim/Misc/GlobalSynced.h"
 #include "System/Exceptions.h"
 #include "System/Log/ILog.h"
 
@@ -78,6 +80,18 @@ CR_REG_METADATA(CGameStateCollector, (
 void CGameStateCollector::Serialize(creg::ISerializer* s)
 {
 	s->SerializeObjectInstance(gs, gs->GetClass());
+	{
+		// supcom: the synced random generator; without it a loaded game draws a different random stream
+		// (idle hover drift, weapon spread, id pool) and stops being identical to the game that was saved
+		decltype(gsRNG.GetGenState()) val = 0, seq = 0, init = 0, last = 0;
+		gsRNG.GetFullState(val, seq, init, last);
+		s->SerializeInt(&val);
+		s->SerializeInt(&seq);
+		s->SerializeInt(&init);
+		s->SerializeInt(&last);
+		if (!s->IsWriting())
+			gsRNG.SetFullState(val, seq, init, last);
+	}
 	s->SerializeObjectInstance(gu, gu->GetClass());
 	s->SerializeObjectInstance(gameSetup, gameSetup->GetClass());
 	s->SerializeObjectInstance(game, game->GetClass());

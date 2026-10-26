@@ -3,6 +3,7 @@
 #ifndef _GLOBAL_RNG_H
 #define _GLOBAL_RNG_H
 
+#include <array>
 #include <limits>
 
 #include "lib/streflop/streflop_cond.h"
@@ -32,6 +33,8 @@ public:
 	res_type bnext(const res_type bound) { return (next() % bound); }
 
 	val_type state() const { return val; }
+	val_type sequence() const { return seq; }
+	void restore(val_type v, val_type s) { val = v; seq = s; }
 
 public:
 	static constexpr res_type min_res = 0;
@@ -85,6 +88,8 @@ public:
 	}
 
 	val_type state() const { return val; }
+	val_type sequence() const { return seq; }
+	void restore(val_type v, val_type s) { val = v; seq = s; }
 
 public:
 	static constexpr res_type min_res = std::numeric_limits<res_type>::min();
@@ -131,6 +136,23 @@ public:
 	rng_val_type GetInitSeed() const { AssureSyncedness(); return initSeed; }
 	rng_val_type GetLastSeed() const { AssureSyncedness(); return lastSeed; }
 	rng_val_type GetGenState() const { AssureSyncedness(); return (gen.state()); }
+
+	// supcom: the whole generator state, for save games (a loaded game continues the same random stream)
+	void GetFullState(rng_val_type& val, rng_val_type& seq, rng_val_type& init, rng_val_type& last) const {
+		val = gen.state(); seq = gen.sequence(); init = initSeed; last = lastSeed;
+	}
+	void SetFullState(rng_val_type val, rng_val_type seq, rng_val_type init, rng_val_type last) {
+		gen.restore(val, seq); initSeed = init; lastSeed = last;
+		pending = {val, seq, init, last}; hasPending = true;
+	}
+	// a loaded game's state wins over the start-up seed the server sends (NETMSG_RANDSEED), which arrives after loading
+	bool ApplyPendingState() {
+		if (!hasPending)
+			return false;
+		gen.restore(pending[0], pending[1]); initSeed = pending[2]; lastSeed = pending[3];
+		hasPending = false;
+		return true;
+	}
 
 	// needed for std::{random_}shuffle
 	rng_res_type operator()(              ) { AssureSyncedness(); return (this->*gnext )( ); }
@@ -180,6 +202,8 @@ private:
 
 	// initial and last-set seed
 	rng_val_type initSeed = 0;
+	std::array<rng_val_type, 4> pending = {};
+	bool hasPending = false;
 	rng_val_type lastSeed = 0;
 };
 
