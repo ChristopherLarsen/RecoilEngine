@@ -38,6 +38,7 @@ CR_REG_METADATA(MoveDef, (
 	CR_MEMBER(depthModParams),
 	CR_MEMBER(height),
 	CR_MEMBER(maxSlope),
+	CR_MEMBER(supcomShoreSlope),
 	CR_MEMBER(slopeMod),
 	CR_MEMBER(crushStrength),
 	CR_MEMBER(waterline),
@@ -255,6 +256,7 @@ MoveDef::MoveDef(const LuaTable& moveDefTable): MoveDef() {
 	allowRawMovement = moveDefTable.GetBool("allowRawMovement", false);
 
 	heatMapping = moveDefTable.GetBool("heatMapping", false);
+	supcomShoreSlope = moveDefTable.GetBool("supcom_shore_slope", false);
 	flowMapping = moveDefTable.GetBool("flowMapping", true);
 
 	heatMod = moveDefTable.GetFloat("heatMod", (1.0f / (GAME_SPEED * 2)) * 0.25f);

@@ -78,6 +78,26 @@ float CMoveMath::yLevel(const MoveDef& moveDef, const float3& pos)
 
 
 /* calculate the local speed-modifier for this MoveDef */
+// supcom (MOV-009 v7): the slope a class sees in slope cell (cx, cz). A class with supcom_shore_slope ignores the slope
+// limit where the cell reaches under the water surface (its lowest corner is below 0), so it can walk or hover down and
+// up a steep shore; dry cells keep the limit. The slope is clamped to the limit, so the speed term stays bounded.
+static float ClassSlope(const MoveDef& moveDef, float slope, unsigned cx, unsigned cz)
+{
+	if (!moveDef.supcomShoreSlope || slope <= moveDef.maxSlope)
+		return slope;
+
+	const float* corners = readMap->GetCornerHeightMapSynced();
+	const unsigned x0 = cx * 2, z0 = cz * 2;
+	const unsigned x1 = std::min(x0 + 2, unsigned(mapDims.mapx)), z1 = std::min(z0 + 2, unsigned(mapDims.mapy));
+	float lowest = corners[x0 + z0 * mapDims.mapxp1];
+
+	for (unsigned z = z0; z <= z1; z++)
+		for (unsigned x = x0; x <= x1; x++)
+			lowest = std::min(lowest, corners[x + z * mapDims.mapxp1]);
+
+	return (lowest < 0.0f)? moveDef.maxSlope: slope;
+}
+
 float CMoveMath::GetPosSpeedMod(const MoveDef& moveDef, unsigned xSquare, unsigned zSquare)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -89,7 +109,7 @@ float CMoveMath::GetPosSpeedMod(const MoveDef& moveDef, unsigned xSquare, unsign
 	const int squareTerrType = readMap->GetTypeMapSynced()[square];
 
 	const float height = readMap->GetMaxHeightMapSynced()[accurateSquare];
-	const float slope   = readMap->GetSlopeMapSynced()[square];
+	const float slope   = ClassSlope(moveDef, readMap->GetSlopeMapSynced()[square], xSquare >> 1, zSquare >> 1);
 
 	const CMapInfo::TerrainType& tt = mapInfo->terrainTypes[squareTerrType];
 
@@ -115,7 +135,7 @@ float CMoveMath::GetPosSpeedMod(const MoveDef& moveDef, unsigned xSquare, unsign
 	const int squareTerrType = readMap->GetTypeMapSynced()[square];
 
 	const float height = readMap->GetMaxHeightMapSynced()[accurateSquare];
-	const float slope  = readMap->GetSlopeMapSynced()[square];
+	const float slope  = ClassSlope(moveDef, readMap->GetSlopeMapSynced()[square], xSquare >> 1, zSquare >> 1);
 
 	const CMapInfo::TerrainType& tt = mapInfo->terrainTypes[squareTerrType];
 
