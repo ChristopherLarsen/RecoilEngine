@@ -14,6 +14,9 @@
 #include "MoveMath/MoveMath.h"
 #include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Misc/GlobalSynced.h"
+#include "Sim/Misc/QuadField.h"
+#include "Sim/Misc/TeamHandler.h"
+#include "Sim/Units/CommandAI/Command.h"
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
@@ -36,6 +39,8 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(footprintZ),
 	CR_MEMBER(sinkLower),
 	CR_MEMBER(hoverHeight),
+	CR_MEMBER(waterSpeedFactor),
+	CR_MEMBER(floorClearance),
 
 	CR_MEMBER(scSpeed),
 	CR_MEMBER(scPhase),
@@ -44,6 +49,9 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scStopNow),
 	CR_MEMBER(scRestart),
 	CR_MEMBER(scBlockedFrames),
+	CR_MEMBER(scYieldFrames),
+	CR_MEMBER(scYieldUnit),
+	CR_MEMBER(scYielding),
 	CR_MEMBER(contactLift),
 
 	CR_MEMBER(directGoal),
@@ -82,6 +90,12 @@ static float CustomParam(const UnitDef* ud, const char* key, float def)
 // frames a wanted step may stay refused, with the footprint partly on impassable squares, before the engine's
 // own ground movement takes over
 static constexpr int BLOCKED_HANDOVER_FRAMES = GAME_SPEED;
+// frames an idle allied unit must stay in contact in front of a mover before it is asked to make way (PTH-002 R3:
+// the yield bound is PLACEHOLDER 30 ticks, and the idle unit still has to clear the mover's way)
+static constexpr int YIELD_DELAY_FRAMES = 4;
+// a spot made way to: up to this many footprints ahead along the mover's direction and to either side
+static constexpr int YIELD_STEPS_AHEAD = 6;
+static constexpr int YIELD_STEPS_SIDE = 4;
 // elmos of float rounding a footprint edge may lie across a square boundary, across the heading
 static constexpr float FOOTPRINT_SIDE_EPS = 0.01f;
 
@@ -114,6 +128,8 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	footprintZ = std::max(0.0f, CustomParam(ud, "supcom_footprint_z", md->zsize * SQUARE_SIZE));
 	sinkLower = (CustomParam(ud, "supcom_sink_lower", 0.0f) != 0.0f);
 	hoverHeight = std::max(0.0f, CustomParam(ud, "supcom_hover_height", 0.0f));
+	waterSpeedFactor = std::max(0.01f, CustomParam(ud, "supcom_water_speed_factor", 1.0f));
+	floorClearance = std::max(0.0f, CustomParam(ud, "supcom_floor_clearance", 0.0f));
 
 	// submarine: depth in elmos, dive time in seconds
 	submarine = (CustomParam(ud, "supcom_submarine", 0.0f) != 0.0f);
@@ -564,6 +580,20 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	float topSpeed = wantReverse? maxReverseSpeed: maxSpeed;
 
+	// under water, the move class's depth speed rule (depthModParams), the same one the engine's own ground movement
+	// applies through its terrain speed: one rule for both move types (the game's default is no slowdown)
+	// on the sea floor (amphibious) or on water (hover), the unit's water speed factor (MOV-009 R7); ships and
+	// submarines keep their speed (MOV-011 R1)
+	{
+		const MoveDef* md = owner->moveDef;
+		const float terrain = CGround::GetHeightReal(owner->pos.x, owner->pos.z);
+
+		if (!md->FloatOnWater())
+			topSpeed *= md->GetDepthMod(terrain);
+		if (terrain < 0.0f && !submarine && md->speedModClass != MoveDef::Ship)
+			topSpeed *= waterSpeedFactor;
+	}
+
 	if (maxWantedSpeed > 0.0f)
 		topSpeed = std::min(topSpeed, maxWantedSpeed);
 
@@ -728,8 +758,9 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 		return;
 
 	if (submarine) {
-		// the water surface is at height 0; never below the sea floor
-		const float height = std::max(CGround::GetHeightReal(owner->pos.x, owner->pos.z), -CurrentDepth());
+		// the water surface is at height 0; in shallow water the dive holds floorClearance above the floor (MOV-011 R7)
+		const float floor = CGround::GetHeightReal(owner->pos.x, owner->pos.z);
+		const float height = std::max(floor + floorClearance, -CurrentDepth());
 		owner->Move(UpVector * (height - owner->pos.y), true);
 		return;
 	}
@@ -793,4 +824,165 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 
 	owner->UpdateDirVectors(normal.Normalize());
 	owner->UpdateMidAndAimPos();
+}
+
+
+bool CSupComGroundMoveType::Update()
+{
+	const bool moved = CGroundMoveType::Update();
+
+	// arrived (or stopped) after making way: an ordinary idle unit again
+	if (scYielding && progressState != Active)
+		scYielding = false;
+
+	CheckYield();
+	return moved;
+}
+
+bool CSupComGroundMoveType::CanYield() const
+{
+	if (progressState == Active || scYielding)
+		return false;
+	if (owner->beingBuilt || owner->GetTransporter() != nullptr || owner->IsStunned())
+		return false;
+	// a unit holding position is moved only by an explicit swap (PTH-002 R3, case G)
+	if (owner->moveState == MOVESTATE_HOLDPOS)
+		return false;
+
+	return owner->commandAI->commandQue.empty();
+}
+
+void CSupComGroundMoveType::CheckYield()
+{
+	// runs in the serial move type update, so it may start another unit moving
+	if (progressState != Active || scYielding || owner->beingBuilt || owner->GetTransporter() != nullptr) {
+		scYieldFrames = 0;
+		scYieldUnit = -1;
+		return;
+	}
+
+	const float3& pos = owner->pos;
+	const float3 front = (scDir < 0)? -flatFrontDir: flatFrontDir;
+	const float searchRadius = HalfSize() * 2.0f + SQUARE_SIZE * 4.0f;
+
+	QuadFieldQuery qfQuery;
+	quadField.GetUnitsExact(qfQuery, pos, searchRadius, false);
+
+	// the lowest id among the idle allied units in contact in front (deterministic)
+	CSupComGroundMoveType* blocker = nullptr;
+
+	for (CUnit* u: *qfQuery.units) {
+		if (u == owner || !teamHandler.AlliedTeams(owner->team, u->team))
+			continue;
+
+		CSupComGroundMoveType* mt = dynamic_cast<CSupComGroundMoveType*>(u->moveType);
+
+		if (mt == nullptr || !mt->CanYield())
+			continue;
+
+		const float3 d = (u->pos - pos) * XZVector;
+		const float dist = d.Length2D();
+		// in contact: footprints or collision spheres within a square and a half (a blocked mover stops a few elmos short)
+		const float contact = std::max(HalfSize() + mt->HalfSize(), owner->radius + u->radius) + SQUARE_SIZE * 1.5f;
+		// in front: within 60 degrees of the heading or of the way to the current waypoint
+		const float3 toWp = (currWayPoint - pos) * XZVector;
+		const bool inFront = (dist <= 0.01f) || (d.dot(front) >= 0.5f * dist) ||
+			(toWp.SqLength2D() > 1.0f && d.dot(toWp) >= 0.5f * dist * toWp.Length2D());
+
+		if (dist > contact || !inFront)
+			continue;
+		if (blocker == nullptr || u->id < blocker->owner->id)
+			blocker = mt;
+	}
+
+	if (blocker == nullptr) {
+		scYieldFrames = 0;
+		scYieldUnit = -1;
+		return;
+	}
+
+	if (blocker->owner->id != scYieldUnit) {
+		scYieldUnit = blocker->owner->id;
+		scYieldFrames = 0;
+	}
+
+	if (++scYieldFrames < YIELD_DELAY_FRAMES)
+		return;
+
+	scYieldFrames = 0;
+	blocker->MakeWay(this);
+}
+
+// distance from p to the segment a-b, in the horizontal plane
+static float SegmentDist2D(const float3& p, const float3& a, const float3& b)
+{
+	const float3 ab = (b - a) * XZVector;
+	const float len2 = ab.SqLength2D();
+	const float t = (len2 > 0.0f)? std::clamp(((p - a) * XZVector).dot(ab) / len2, 0.0f, 1.0f): 0.0f;
+
+	return (a + ab * t).distance2D(p);
+}
+
+bool CSupComGroundMoveType::MakeWay(const CSupComGroundMoveType* mover)
+{
+	const float3& pos = owner->pos;
+	const float3& mpos = mover->owner->pos;
+
+	// along the mover's way: from the mover to this unit, else the mover's heading
+	float3 ahead = (pos - mpos) * XZVector;
+	ahead = (ahead.SqLength2D() > 0.01f)? ahead.SafeNormalize2D(): (mover->flatFrontDir * XZVector).SafeNormalize2D();
+	const float3 side = float3(-ahead.z, 0.0f, ahead.x);
+
+	// the mover's route near here: to its current and next waypoints, then its goal
+	const float3 route[4] = {mpos, mover->currWayPoint, mover->nextWayPoint, mover->goalPos};
+	const float clearance = HalfSize() + mover->HalfSize() + SQUARE_SIZE * 0.5f;
+	const float step = std::max(HalfSize() * 2.0f, float(SQUARE_SIZE));
+
+	const auto OffRoute = [&](const float3& p) {
+		for (int i = 0; i < 3; i++) {
+			if (SegmentDist2D(p, route[i], route[i + 1]) < clearance)
+				return false;
+		}
+		return true;
+	};
+	const auto Free = [&](const float3& p) {
+		if (FootprintBlocked(p))
+			return false;
+
+		QuadFieldQuery qfQuery;
+		quadField.GetUnitsExact(qfQuery, p, HalfSize() + SQUARE_SIZE * 0.5f, false);
+
+		for (const CUnit* u: *qfQuery.units) {
+			if (u != owner)
+				return false;
+		}
+		return true;
+	};
+
+	// nearest first: a footprints ahead (through a gap), then b to the side; reached in two straight legs
+	for (int n = 1; n <= YIELD_STEPS_AHEAD + YIELD_STEPS_SIDE; n++) {
+		for (int a = 0; a <= std::min(n, YIELD_STEPS_AHEAD); a++) {
+			const int b = n - a;
+
+			if (b > YIELD_STEPS_SIDE)
+				continue;
+
+			const float3 mid = pos + ahead * (a * step);
+
+			for (int k = 0; k < ((b == 0)? 1: 2); k++) {
+				const float3 spot = mid + side * (((k == 0)? 1: -1) * b * step);
+
+				if (!OffRoute(spot) || !Free(spot))
+					continue;
+				if (!LineFits(pos, mid) || !LineFits(mid, spot))
+					continue;
+
+				StartMoving(spot, SQUARE_SIZE * 0.5f);
+				scYielding = true;
+				return true;
+			}
+		}
+	}
+
+	return false;
 }

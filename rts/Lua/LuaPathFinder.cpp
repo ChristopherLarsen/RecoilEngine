@@ -2,6 +2,7 @@
 
 
 #include "LuaPathFinder.h"
+#include "Sim/MoveTypes/SupComGroundMoveType.h"
 #include "LuaInclude.h"
 #include "LuaHandle.h"
 #include "LuaUtils.h"
@@ -250,17 +251,34 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 	const int ssx = std::clamp(int(unit->pos.x / SQUARE_SIZE), 0, W - 1);
 	const int ssz = std::clamp(int(unit->pos.z / SQUARE_SIZE), 0, H - 1);
 
-	// a square the unit can stand on: every square of its move class footprint passable, no structure there
+	// the footprint in squares: the fork's ground move type's own (exact, possibly even; it drives through a gap that
+	// wide), else the move class's (the engine makes it odd, a square wider than an even unit footprint)
+	int fx = md.xsize;
+	int fz = md.zsize;
+
+	if (const CSupComGroundMoveType* mt = dynamic_cast<const CSupComGroundMoveType*>(unit->moveType)) {
+		fx = std::max(1, int(std::lround(mt->GetFootprintX() / SQUARE_SIZE)));
+		fz = std::max(1, int(std::lround(mt->GetFootprintZ() / SQUARE_SIZE)));
+	}
+
+	MoveTypes::CheckCollisionQuery collisionQuery(unit);
+
+	// a square the unit can stand on: every square of its footprint passable, no structure there
 	const auto standable = [&](int sx, int sz) {
-		for (int z = sz - md.zsizeh; z < sz - md.zsizeh + md.zsize; z++) {
-			for (int x = sx - md.xsizeh; x < sx - md.xsizeh + md.xsize; x++) {
+		const int x0 = sx - (fx >> 1);
+		const int z0 = sz - (fz >> 1);
+
+		for (int z = z0; z < z0 + fz; z++) {
+			for (int x = x0; x < x0 + fx; x++) {
 				if (x < 0 || z < 0 || x >= W || z >= H)
 					return false;
 				if (CMoveMath::GetPosSpeedMod(md, x, z) <= 0.0f)
 					return false;
 			}
 		}
-		return ((CMoveMath::IsBlockedStructure(md, sx, sz, unit, 0) & CMoveMath::BLOCK_STRUCTURE) == 0);
+
+		collisionQuery.UpdateElevationForPos(int2{sx, sz});
+		return ((CMoveMath::RangeIsBlocked(x0, x0 + fx - 1, z0, z0 + fz - 1, &collisionQuery, 0) & CMoveMath::BLOCK_STRUCTURE) == 0);
 	};
 
 	std::vector<std::uint8_t> seen(size_t(W) * H, 0);
