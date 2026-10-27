@@ -357,7 +357,11 @@ public:
 
 	void reserve(size_t) {} // no-op
 	void clear() {
-		std::memset(pages.data(), 0, total_size());
+		// supcom: zero only the pages handed out so far. The rest were never used and are still zero: the pools are
+		// objects with static storage (zeroed at start), and freeMem zeroes every page it takes back. Zeroing all of
+		// them wrote the whole pool (about 1.1 GB for the unit, weapon, feature and projectile pools) into every
+		// process's working set, headless test runs included.
+		std::memset(pages.data(), 0, used_page_count * PAGE_SIZE());
 		std::memset(indcs.data(), 0, NUM_PAGES());
 
 		used_page_count = 0;
