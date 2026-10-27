@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <bit>
+#include <algorithm>
 
 #include <SDL.h>
 
@@ -93,8 +94,13 @@ bool CheckAvailableVideoModes()
 			if (cm.w < globalRendering->minRes.x || cm.h < globalRendering->minRes.y)
 				continue;
 
-			// show only the largest refresh-rate and bit-depth per resolution
-			if (cm.w == pm.w && cm.h == pm.h && (SDL_BPP(cm.format) < SDL_BPP(pm.format) || cm.refresh_rate < pm.refresh_rate))
+			// supcom (Q83): every refresh rate per resolution, the largest bit-depth of each (was: only the largest rate)
+			const auto sameMode = [&](const GlobalRenderingInfo::AvailableVideoMode& m) {
+				return (m.displayIndex == k + 1 && m.width == cm.w && m.height == cm.h && m.refreshRate == cm.refresh_rate);
+			};
+			const auto& avms = globalRenderingInfo.availableVideoModes;
+
+			if (std::find_if(avms.begin(), avms.end(), sameMode) != avms.end())
 				continue;
 
 			globalRenderingInfo.availableVideoModes.emplace_back(GlobalRenderingInfo::AvailableVideoMode{

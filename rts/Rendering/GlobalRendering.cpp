@@ -75,6 +75,7 @@ CONFIG(bool, TeamNanoSpray).defaultValue(true).headlessValue(false);
 CONFIG(int, MinimizeOnFocusLoss).defaultValue(0).minimumValue(0).maximumValue(1).description("When set to 1 minimize Window if it loses key focus when in fullscreen mode.");
 
 CONFIG(bool, Fullscreen).defaultValue(true).headlessValue(false).description("Sets whether the game will run in fullscreen, as opposed to a window. For Windowed Fullscreen of Borderless Window, set this to 0, WindowBorderless to 1, and WindowPosX and WindowPosY to 0.");
+CONFIG(int, FullscreenRefreshRate).defaultValue(0).minimumValue(0).description("supcom: refresh rate (Hz) of the display mode used in exclusive fullscreen (Fullscreen=1, WindowBorderless=0); the nearest rate the display offers at the window size. 0: the display's own choice.");
 CONFIG(bool, WindowBorderless).defaultValue(false).description("When set and Fullscreen is 0, will put the game in Borderless Window mode, also known as Windowed Fullscreen. When using this, it is generally best to also set WindowPosX and WindowPosY to 0");
 CONFIG(bool, BlockCompositing).defaultValue(false).safemodeValue(true).description("Disables kwin compositing to fix tearing, possible fixes low FPS in windowed mode, too.");
 // setting this as default 0 for now is because if the frame were to be dropped for being late, DWMFlush will force the compositor to use the framebuffer. This can result in blocking until the framebuffer can be composited (up to 1 frame) and may not be desirable for all use cases (specifically with vsync set to off). However, only more widespread testing and investigation across various hardware/os configs would tell us what advantage DWMFlush would bring.
@@ -370,6 +371,7 @@ CGlobalRendering::CGlobalRendering()
 		"DualScreenMiniMapOnLeft",
 		"Fullscreen",
 		"WindowBorderless",
+		"FullscreenRefreshRate",
 		"DWMFlush",
 		"XResolution",
 		"YResolution",
@@ -1348,6 +1350,18 @@ void CGlobalRendering::SetWindowAttributes(SDL_Window* window)
 	SDL_SetWindowSize(window, newRes.x, newRes.y);
 
 	const bool sdlFullScreen = fullScreen || IsBorderlessFullScreen(borderless, winPosX, winPosY, newRes.x, newRes.y);
+
+	// supcom (Q83): in exclusive fullscreen use the configured refresh rate (the nearest mode the display offers)
+	if (const int hz = configHandler->GetInt("FullscreenRefreshRate"); hz > 0 && sdlFullScreen && GetFullScreenFlag(borderless) == SDL_WINDOW_FULLSCREEN) {
+		const int di = std::max(0, SDL_GetWindowDisplayIndex(window));
+		SDL_DisplayMode want = {0, newRes.x, newRes.y, hz, nullptr};
+		SDL_DisplayMode mode;
+
+		if (SDL_GetClosestDisplayMode(di, &want, &mode) == nullptr || SDL_SetWindowDisplayMode(window, &mode) != 0)
+			LOG("[GR::%s][FullscreenRefreshRate] wanted %dx%d@%dHz: err=\"%s\"", __func__, newRes.x, newRes.y, hz, SDL_GetError());
+		else
+			LOG("[GR::%s][FullscreenRefreshRate] wanted %dx%d@%dHz, mode %dx%d@%dHz", __func__, newRes.x, newRes.y, hz, mode.w, mode.h, mode.refresh_rate);
+	}
 
 	if (SDL_SetWindowFullscreen(window, GetFullScreenFlag(borderless) * sdlFullScreen) != 0)
 		LOG("[GR::%s][4][SDL_SetWindowFullscreen] err=\"%s\"", __func__, SDL_GetError());
