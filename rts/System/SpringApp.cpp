@@ -109,8 +109,17 @@
 
 
 CONFIG(unsigned, SetCoreAffinity).defaultValue(0).safemodeValue(1).description("Defines a bitmask indicating which CPU cores the main-thread should use.");
-CONFIG(unsigned, TextureMemPoolSize).defaultValue(512).minimumValue(0).description("Set to 0 to disable, otherwise specify a predefined memory to serve Bitmap allocation requests");
-CONFIG(bool, UseLuaMemPools).defaultValue(true).description("Whether Lua VM memory allocations are made from pools.");
+// supcom: a headless engine draws nothing, so it has no use for a bitmap pool, and the Lua pools keep every block a
+// Lua state ever freed (about 1.1 GB after loading the game data). Headless defaults are off; a config file still wins.
+#ifdef HEADLESS
+static constexpr unsigned TEXTURE_MEM_POOL_DEFAULT = 0;
+static constexpr bool USE_LUA_MEM_POOLS_DEFAULT = false;
+#else
+static constexpr unsigned TEXTURE_MEM_POOL_DEFAULT = 512;
+static constexpr bool USE_LUA_MEM_POOLS_DEFAULT = true;
+#endif
+CONFIG(unsigned, TextureMemPoolSize).defaultValue(TEXTURE_MEM_POOL_DEFAULT).minimumValue(0).description("Set to 0 to disable, otherwise specify a predefined memory to serve Bitmap allocation requests");
+CONFIG(bool, UseLuaMemPools).defaultValue(USE_LUA_MEM_POOLS_DEFAULT).description("Whether Lua VM memory allocations are made from pools.");
 CONFIG(bool, UseHighResTimer).defaultValue(false).description("On Windows, sets whether Spring will use low- or high-resolution timer functions for tasks like graphical interpolation between game frames.");
 CONFIG(bool, UseFontConfigLib).defaultValue(true).description("Whether the system fontconfig library (if present and enabled at compile-time) should be used for handling fonts.");
 CONFIG(bool, UseFontConfigSystemFonts).defaultValue(true).description("Whether the system fonts will be searched by fontconfig.");

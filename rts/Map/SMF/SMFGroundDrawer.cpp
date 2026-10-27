@@ -50,8 +50,13 @@ CONFIG(bool, AllowDrawMapPostDeferredEvents).defaultValue(false).description("En
 CONFIG(bool, AllowDrawMapDeferredEvents).defaultValue(false).description("Enable DrawGroundDeferred Lua callin.");
 
 
+// supcom: headless draws no terrain; the basic mesh drawer avoids the ROAM node pools (about 200 MB)
 CONFIG(int, ROAM)
+#ifdef HEADLESS
+	.defaultValue(0)
+#else
 	.defaultValue(1)
+#endif
 	.minimumValue(0)
 	.maximumValue(1)
 	.description("Use ROAM for terrain mesh rendering: 0 to disable, 1=VBO mode to enable.");
