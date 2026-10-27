@@ -13,6 +13,8 @@
  * the arrival, blocked steps and the vertical placement:
  *
  *  - speed rises at the unit's acceleration up to its top speed, horizontally;
+ *  - under water the top speed follows the move class's depthModParams, as the engine's own ground movement;
+ *    on the sea floor (amphibious) or on water (hover) it is also scaled by supcom_water_speed_factor (MOV-009 R7);
  *  - braking starts where constant braking plus the settle brings the unit to
  *    rest at its stopping point, and is not undone for the same order;
  *  - below brake / settle_rate the speed decays exponentially, and the unit is at
@@ -24,9 +26,12 @@
  *  - the unit sits at the mean terrain height under its footprint corners and,
  *    unless upright, tilts with the plane spanned by the corner diagonals;
  *    upright and sink_lower units are lowered by upright_sink times the spread;
+ *  - an idle allied unit of this move type that a moving one touches in front makes way: it moves to the
+ *    nearest free spot off the mover's route (PTH-002 R3); a unit holding position does not;
  *  - ships (Ship move class) ride on the water surface; submarines (`supcom_submarine`) cruise
  *    `supcom_dive_depth` below it and dive or surface over `supcom_dive_time` along a smooth curve,
- *    ordered from Lua with MoveCtrl.SetGroundMoveTypeData(unitID, "submerged", bool).
+ *    ordered from Lua with MoveCtrl.SetGroundMoveTypeData(unitID, "submerged", bool); in water shallower than the
+ *    dive depth a dive stops supcom_floor_clearance above the floor (MOV-011 R7).
  *
  * All rates are continuous (per second) and are integrated exactly over each
  * simulation frame, including phase changes inside a frame.
@@ -46,6 +51,7 @@ public:
 	void StopMoving(bool callScript = false, bool hardStop = false, bool cancelRaw = false) override;
 
 	void UpdateUnitPosition() override;
+	bool Update() override;
 
 	/// handles "submerged" (bool: dive or surface a submarine), everything else as the base class
 	bool SetMemberValue(unsigned int memberHash, void* memberValue) override;
@@ -53,6 +59,9 @@ public:
 	/// movement layer (MOV-009): "land", "seabed", "water" or "sub"
 	const char* GetLayerName() const;
 	float GetContactLift() const override { return contactLift; }
+	/// the footprint this move type drives with (elmos)
+	float GetFootprintX() const { return footprintX; }
+	float GetFootprintZ() const { return footprintZ; }
 	/// diagnosis (Lua GetUnitMoveTypeData): speed (elmos per frame), phase, braking, frames blocked
 	float GetStepSpeed() const { return scSpeed; }
 	int GetStepPhase() const { return scPhase; }
@@ -94,6 +103,14 @@ private:
 	void SetWaypointDir(const float3& cwp, const float3& opos) override;
 	void UpdateTurnRate();
 
+	/// PTH-002 R3 (mover side): an idle allied unit in contact in front for a few frames is asked to make way
+	void CheckYield();
+	/// PTH-002 R3 (idle side): move to the nearest free spot off the mover's route; false if there is none
+	bool MakeWay(const CSupComGroundMoveType* mover);
+	/// whether an idle unit of this move type may be asked to make way
+	bool CanYield() const;
+	float HalfSize() const { return 0.5f * std::max(footprintX, footprintZ); }
+
 	/// a step rounded to the float grid around position p
 	static float GridStep(float p, float d);
 
@@ -113,6 +130,8 @@ private:
 	float footprintZ = 0.0f;     ///< elmos, along the unit's forward axis
 	bool sinkLower = false;
 	float hoverHeight = 0.0f;    ///< elmos above the corner references (hover units, MOV-010)
+	float waterSpeedFactor = 1.0f; ///< top speed multiplier on the sea floor or on water (MOV-009 R7)
+	float floorClearance = 0.0f; ///< elmos a submarine stays above the floor (MOV-011 R7)
 
 	// state
 	float scSpeed = 0.0f;        ///< instantaneous speed along the motion direction (elmos per frame, >= 0)
@@ -123,6 +142,9 @@ private:
 	bool scRestart = false;      ///< the last step was blocked
 	float contactLift = 0.0f;    ///< elmos above the surface under the centre, set by AdjustPosToWaterLine
 	int scBlockedFrames = 0;     ///< consecutive frames with the wanted step refused
+	int scYieldFrames = 0;       ///< consecutive frames in contact with the same idle unit in front
+	int scYieldUnit = -1;        ///< that unit's id
+	bool scYielding = false;     ///< moving out of the way (no order of its own)
 
 	// submarine (MOV-011): depth below the water surface, moving between depthFrom and depthTo along a smooth curve
 	bool submarine = false;
