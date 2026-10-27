@@ -470,6 +470,7 @@ bool CGroundDecalHandler::ReloadDecalShaders() {
 	decalShader->SetUniform("waterAbsorbColor", 0.0f, 0.0f, 0.0f);
 
 	decalShader->SetUniform("curAdjustedFrame", std::max(gs->frameNum, 0) + globalRendering->timeOffset);
+	decalShader->SetUniform("distanceFade", distanceFade.x, distanceFade.y, distanceFade.z, distanceFade.w);
 	decalShader->SetUniform("screenSizeInverse",
 		1.0f / globalRendering->viewSizeX,
 		1.0f / globalRendering->viewSizeY
@@ -822,6 +823,7 @@ void CGroundDecalHandler::Draw()
 	}
 
 	decalShader->SetUniform("infoTexIntensityMul", float(infoTextureHandler->InMetalMode()) + 1.0f);
+	decalShader->SetUniform("distanceFade", distanceFade.x, distanceFade.y, distanceFade.z, distanceFade.w);
 	decalShader->SetUniform("curAdjustedFrame", std::max(gs->frameNum, 0) + globalRendering->timeOffset);
 	if (shadowHandler.ShadowsLoaded())
 		decalShader->SetUniformMatrix4x4("shadowMatrix", false, shadowHandler.GetShadowMatrixRaw());
@@ -1231,6 +1233,12 @@ void CGroundDecalHandler::SetUnitLeaveTracks(CUnit* unit, bool leaveTracks)
 	else {
 		AddTrack(unit, unit->pos, false);
 	}
+}
+
+void CGroundDecalHandler::SetDistanceFade(float nearDist, float farDist, bool tracks)
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	distanceFade = { nearDist, farDist, tracks ? 1.0f : 0.0f, 0.0f };
 }
 
 static inline bool CanReceiveTracks(const float3& pos)
@@ -1675,9 +1683,9 @@ void CGroundDecalHandler::GameFramePost(int frameNum)
 		AddTrack(unit, unit->pos, true);
 	}
 
-	if (frameNum % 16 ==  0) {
-		CompactDecalsVector(frameNum);
-	}
+	// supcom: was "frameNum % 16 == 0", which with the "% 300" test inside compacted only every 1200 frames (40 s), so
+	// expired track decals stayed in the draw list up to 40 s past their life
+	CompactDecalsVector(frameNum);
 }
 
 void CGroundDecalHandler::SunChanged()
