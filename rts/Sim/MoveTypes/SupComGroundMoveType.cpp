@@ -402,20 +402,23 @@ void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos
 	CGroundMoveType::SetWaypointDir(target, opos);
 }
 
-// offsets of up to three squares around a point, nearest first
+// offsets of up to three squares around a point, nearest first. Worker threads call this (FollowPath ->
+// SetWaypointDir -> FitWaypoint), so the list is built once by the thread-safe initialisation of a local static;
+// filling it lazily raced (heap corruption, and a list that could differ between runs: Q107)
 static const std::vector<float3>& NearOffsets()
 {
-	static std::vector<float3> offsets;
+	static const std::vector<float3> offsets = [] {
+		std::vector<float3> v;
 
-	if (offsets.empty()) {
 		for (int dz = -3; dz <= 3; dz++) {
 			for (int dx = -3; dx <= 3; dx++) {
 				if (dx != 0 || dz != 0)
-					offsets.emplace_back(dx * SQUARE_SIZE * 0.5f, 0.0f, dz * SQUARE_SIZE * 0.5f);
+					v.emplace_back(dx * SQUARE_SIZE * 0.5f, 0.0f, dz * SQUARE_SIZE * 0.5f);
 			}
 		}
-		std::stable_sort(offsets.begin(), offsets.end(), [](const float3& a, const float3& b) { return (a.SqLength2D() < b.SqLength2D()); });
-	}
+		std::stable_sort(v.begin(), v.end(), [](const float3& a, const float3& b) { return (a.SqLength2D() < b.SqLength2D()); });
+		return v;
+	}();
 
 	return offsets;
 }
