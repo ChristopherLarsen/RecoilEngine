@@ -42,6 +42,10 @@ public:
 
 	virtual void SetUnitLeaveTracks(CUnit* unit, bool leaveTracks) = 0;
 
+	// supcom: fade track decals (and Lua decals whose user data 0 x is above 0.5) with camera distance, from nearDist
+	// (fully visible) to farDist (gone); farDist <= nearDist switches the fade off. Render-only.
+	virtual void SetDistanceFade(float nearDist, float farDist, bool tracks) {}
+
 	virtual void AddSolidObject(const CSolidObject* object) = 0;
 	virtual void ForceRemoveSolidObject(const CSolidObject* object) = 0;
 

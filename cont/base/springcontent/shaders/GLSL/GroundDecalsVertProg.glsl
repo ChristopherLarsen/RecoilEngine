@@ -10,8 +10,8 @@ in vec4 createParams2;
 in vec4 createParams3;
 in vec4 createParams4;
 in uvec4 createParams5; // { type:8; id:24; }
+in vec4 userDefined0; // supcom: x > 0.5 marks a Lua decal for the distance fade
 #if 0 // custom shaders only
-in vec4 userDefined0;
 in vec4 userDefined1;
 #endif
 
@@ -19,6 +19,7 @@ uniform sampler2D heightTex;
 uniform sampler2D groundNormalTex;
 uniform vec4 mapDims; //mapxy; 1.0 / mapxy
 uniform float curAdjustedFrame;
+uniform vec4 distanceFade; // supcom: near, far (camera distance, elmos), tracks (1 = fade track decals too), unused
 
 flat out vec4 vTranformedPos[5]; // midpos + 4 transformed vertices around midpos
 
@@ -221,6 +222,15 @@ void main() {
 	float alphaMax = alpha - (curAdjustedFrame -        createFrameMax) * alphaFalloff;
 	alphaMax *= visMult;
 	vAlpha   *= visMult;
+
+	// supcom: fade tracks and marked Lua decals with camera distance (strategic zoom); the cull below drops faded ones
+	if (distanceFade.y > distanceFade.x && ((decalType == 3u && distanceFade.z > 0.5) || (decalType == 4u && userDefined0.x > 0.5))) {
+		vec2 fadeMid = (posTL + posTR + posBL + posBR) * 0.25;
+		vec3 camPos = (gl_ModelViewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+		float fade = 1.0 - smoothstep(distanceFade.x, distanceFade.y, distance(camPos, vec3(fadeMid.x, HeightAtWorldPos(fadeMid), fadeMid.y)));
+		alphaMax *= fade;
+		vAlpha   *= fade;
+	}
 
 	vDecalType = float(decalType); //copy type only, don't care about ID
 

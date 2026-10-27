@@ -193,6 +193,7 @@ public:
 	const CSolidObject* GetDecalSolidObjectOwner(uint32_t id) const override;
 
 	void SetUnitLeaveTracks(CUnit* unit, bool leaveTracks) override;
+	void SetDistanceFade(float nearDist, float farDist, bool tracks) override;
 private:
 	static void BindVertexAttributes();
 	static void UnbindVertexAttributes();
@@ -220,4 +221,7 @@ private:
 	uint32_t GetNextId();
 
 	static constexpr uint32_t TRACKS_UPDATE_RATE = 4u;
+
+	// supcom: camera-distance fade (near, far, tracks on/off, unused); not saved, Lua sets it again after a load
+	float4 distanceFade = { 0.0f, 0.0f, 0.0f, 0.0f };
 };

@@ -229,6 +229,7 @@ class LuaUnsyncedCtrl {
 		static int SetGroundDecalCreationFrame(lua_State* L);
 		static int SetGroundDecalGlowParams(lua_State* L);
 		static int SetGroundDecalUserData(lua_State* L);
+		static int SetGroundDecalDistanceFade(lua_State* L);
 
 		static int SDLSetTextInputRect(lua_State* L);
 		static int SDLStartTextInput(lua_State* L);

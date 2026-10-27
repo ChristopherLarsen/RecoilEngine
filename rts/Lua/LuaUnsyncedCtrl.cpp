@@ -334,6 +334,7 @@ bool LuaUnsyncedCtrl::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(SetGroundDecalCreationFrame);
 	REGISTER_LUA_CFUNC(SetGroundDecalGlowParams);
 	REGISTER_LUA_CFUNC(SetGroundDecalUserData);
+	REGISTER_LUA_CFUNC(SetGroundDecalDistanceFade);
 
 	REGISTER_LUA_CFUNC(SDLSetTextInputRect);
 	REGISTER_LUA_CFUNC(SDLStartTextInput);
@@ -5344,6 +5345,22 @@ int LuaUnsyncedCtrl::SetGroundDecalUserData(lua_State* L)
 
 	lua_pushboolean(L, true);
 	return 1;
+}
+
+/***
+ * supcom: fade track decals, and Lua decals whose user data 0 x is above 0.5, with the camera's distance (for a strategic
+ * zoom that shows icons). Render-only.
+ *
+ * @function Spring.SetGroundDecalDistanceFade
+ * @param nearDist number camera distance (elmos) up to which the decals are fully visible
+ * @param farDist number camera distance from which they are gone; farDist <= nearDist switches the fade off
+ * @param tracks boolean? (Default: `true`) also fade the engine's unit track decals
+ * @return nil
+ */
+int LuaUnsyncedCtrl::SetGroundDecalDistanceFade(lua_State* L)
+{
+	groundDecals->SetDistanceFade(luaL_checkfloat(L, 1), luaL_checkfloat(L, 2), luaL_optboolean(L, 3, true));
+	return 0;
 }
 
 /******************************************************************************
