@@ -463,6 +463,7 @@ static int MoveDefTable(lua_State* L, const void* data)
 	LuaPushNamedBool  (L, "isSubmarine"  , md->isSubmarine);
 
 	LuaPushNamedBool  (L, "heatMapping"  , md->heatMapping);
+	LuaPushNamedBool  (L, "supcomShoreSlope", md->supcomShoreSlope); // supcom (MOV-009 v7): movedefs key supcom_shore_slope
 	LuaPushNamedNumber(L, "heatMod"      , md->heatMod);
 	LuaPushNamedNumber(L, "heatProduced" , md->heatProduced);
 

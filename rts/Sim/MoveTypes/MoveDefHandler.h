@@ -203,6 +203,9 @@ struct MoveDef {
 
 	/// do we leave heat and avoid any left by others?
 	bool heatMapping = true;
+	/// supcom (MOV-009 v7): the slope limit does not apply in a slope cell that reaches under the water surface
+	/// (movedefs key supcom_shore_slope; inside the checksummed range, so the path cache follows it)
+	bool supcomShoreSlope = false;
 	bool flowMapping = true;
 #pragma pack(pop)
 };
