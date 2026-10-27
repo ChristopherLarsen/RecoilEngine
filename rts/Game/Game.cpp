@@ -1837,7 +1837,8 @@ void CGame::SimFrame() {
 	#endif
 
 	// useful for desync-debugging (enter instead of -1 start & end frame of the range you want to debug)
-	DumpState(-1, -1, 1, std::nullopt);
+	// supcom: period -1 keeps the one /dumpstate set (1 reset it every frame, so every frame of the range was dumped)
+	DumpState(-1, -1, -1, std::nullopt);
 
 	ASSERT_SYNCED(gsRNG.GetGenState());
 	LEAVE_SYNCED_CODE();
