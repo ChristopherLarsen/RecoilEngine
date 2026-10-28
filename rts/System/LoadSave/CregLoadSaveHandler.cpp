@@ -30,6 +30,7 @@
 #include "Sim/Misc/QuadField.h"
 #include "Sim/Misc/CategoryHandler.h"
 #include "Sim/MoveTypes/MoveDefHandler.h"
+#include "Sim/Path/IPathManager.h"
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/Misc/Wind.h"
 #include "Sim/Misc/YardmapStatusEffectsMap.h"
@@ -300,6 +301,11 @@ void CCregLoadSaveHandler::SaveGame(const std::string& path)
 			os.SavePackage(&oss, &gsc, gsc.GetClass());
 			PrintSize("Game", ((int)oss.tellp()) - gameStart);
 
+			// supcom: the synced path state, after the units it refers to (Q69)
+			const int pathStart = oss.tellp();
+			pathManager->SaveState(oss);
+			PrintSize("Paths", ((int)oss.tellp()) - pathStart);
+
 
 			// save AI state
 			const int aiStart = oss.tellp();
@@ -408,6 +414,9 @@ void CCregLoadSaveHandler::LoadGame()
 		// the only job of gsc is to collect gamestate data
 		CGameStateCollector* gsc = static_cast<CGameStateCollector*>(pGSC);
 		spring::SafeDelete(gsc);
+
+		// supcom: the synced path state; units are loaded, so its unit ids resolve (Q69)
+		pathManager->LoadState(iss);
 	}
 
 	LEAVE_SYNCED_CODE();

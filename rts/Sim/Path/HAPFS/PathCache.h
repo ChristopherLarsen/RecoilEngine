@@ -4,6 +4,7 @@
 #define HAPFS_PATHCACHE_H
 
 #include <deque>
+#include <iosfwd>
 #include <unordered_map>
 
 #include "IPath.h"
@@ -43,6 +44,10 @@ public:
 		float goalRadius,
 		int pathType
 	);
+
+	// supcom: save games (Q69); the cached paths in queue (expiry) order
+	void SaveState(std::ostream& os) const;
+	void LoadState(std::istream& is);
 
 private:
 	void RemoveFrontQueItem();

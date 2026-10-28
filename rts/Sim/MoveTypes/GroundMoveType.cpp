@@ -150,8 +150,10 @@ CR_REG_METADATA(CGroundMoveType, (
 	// The ECS registry is not persisted across save/load, so a saved entity ID will collide with
 	// a newly-allocated entity in the fresh registry, causing FollowPath to destroy the wrong path
 	// or swap to an invalid one.
-	CR_IGNORED(nextPathId),
-	CR_IGNORED(deletePathId),
+	// supcom: a path manager that saves its state keeps these ids valid; PostLoad clears them
+	// for the others (Q69).
+	CR_MEMBER(nextPathId),
+	CR_MEMBER(deletePathId),
 
 	CR_MEMBER(numIdlingUpdates),
 	CR_MEMBER(numIdlingSlowUpdates),
@@ -561,6 +563,12 @@ void CGroundMoveType::PostLoad()
 	RECOIL_DETAILED_TRACY_ZONE;
 	pathController = GMTDefaultPathController(owner);
 
+	// supcom: these ids survive only with a path manager that saves its state (Q69)
+	if (!pathManager->SavesState()) {
+		nextPathId = 0;
+		deletePathId = 0;
+	}
+
 	// If the active moveType is not set to default ground move (i.e. is on scripted move type) then skip.
 	if ((uint8_t *)owner->moveType != owner->amtMemBuffer) {
 		// Safety measure to clear the path id.
@@ -572,6 +580,10 @@ void CGroundMoveType::PostLoad()
 
 	// HACK: re-initialize path after load
 	if (pathID == 0)
+		return;
+
+	// supcom: the path manager restores this path under the same id after the units are loaded
+	if (pathManager->SavesState())
 		return;
 
 	// There isn't a path to clear (we've just loaded a saved game), so we must now clear pathID

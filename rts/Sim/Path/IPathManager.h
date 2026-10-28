@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <cinttypes>
+#include <iosfwd>
 
 #include "PFSTypes.h"
 #include "System/type2.h"
@@ -25,6 +26,18 @@ public:
 
 	virtual std::int64_t Finalize() { return 0; }
 	virtual std::int64_t PostFinalizeRefresh() { return 0; }
+
+	/**
+	 * supcom: save games carry the synced path state (paths under their ids, pending
+	 * searches, estimator costs and update queues, synced path caches, heat map), so a
+	 * loaded game plans exactly as the game that was saved. A path manager that does
+	 * this returns true from SavesState; move types then keep their path ids on load
+	 * instead of re-requesting their paths. SaveState runs after the creg game state
+	 * is written, LoadState after it is read (units exist, their PostLoad has run).
+	 */
+	virtual bool SavesState() const { return false; }
+	virtual void SaveState(std::ostream& os) const {}
+	virtual void LoadState(std::istream& is) {}
 
 	virtual bool AllowDirectionalPathing() { return false; }
 	virtual bool AllowShortestPath() { return false; }

@@ -123,6 +123,13 @@ public:
 
 	PathNodeStateBuffer& GetNodeStateBuffer() { return blockStates; }
 
+	/**
+	 * supcom: save games (Q69). The block offsets and vertex costs as they were
+	 * last updated, the blocks still queued for an update, and the synced cache.
+	 */
+	void SaveState(std::ostream& os) const;
+	void LoadState(std::istream& is);
+
 private:
 	friend class HAPFS::CPathManager;
 	friend struct ::HAPFSPathDrawer;

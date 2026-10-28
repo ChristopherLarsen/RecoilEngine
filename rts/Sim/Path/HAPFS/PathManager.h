@@ -118,6 +118,10 @@ public:
 	std::int64_t Finalize() override;
 	std::int64_t PostFinalizeRefresh() override;
 
+	bool SavesState() const override { return true; }
+	void SaveState(std::ostream& os) const override;
+	void LoadState(std::istream& is) override;
+
 	bool AllowDirectionalPathing() override { return true; }
 
 	void RemoveCacheFiles() override;
@@ -277,11 +281,16 @@ private:
 
 	void SavePathCacheForPathId(int pathIdToSave) override;
 
+	static void SaveMultiPath(std::ostream& os, const MultiPath& mp);
+	static void LoadMultiPath(std::istream& is, MultiPath& mp);
+
 private:
 	mutable std::mutex pathMapUpdate;
 
 
 	bool finalized = false;
+	// supcom: set by LoadState; the estimators keep the loaded costs instead of a full refresh
+	bool stateLoaded = false;
 
 	PathFlowMap* pathFlowMap;
 	PathHeatMap* pathHeatMap;

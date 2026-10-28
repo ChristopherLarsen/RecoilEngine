@@ -10,6 +10,7 @@
 
 
 struct MoveDef;
+namespace HAPFS { class CPathManager; }
 
 
 class CPathFinderDef {
@@ -87,6 +88,8 @@ public:
 	}
 
 private:
+	friend class HAPFS::CPathManager; // supcom: saves the stored paths' search definitions (Q69)
+
 	uint32_t halfWayX;
 	uint32_t halfWayZ;
 	uint32_t searchRadiusSq;

@@ -3,6 +3,10 @@
 // #undef NDEBUG
 
 #include "PathManager.h"
+
+#include <algorithm>
+#include <string>
+
 #include "PathingState.h"
 #include "PathConstants.h"
 #include "PathFinder.h"
@@ -12,11 +16,14 @@
 #include "PathLog.h"
 #include "PathMemPool.h"
 #include "PathSearch.h"
+#include "PathStateIO.h"
 #include "Registry.h"
 #include "Map/MapInfo.h"
 #include "Sim/Misc/ModInfo.h"
 #include "Sim/Objects/SolidObject.h"
 #include "Sim/MoveTypes/MoveDefHandler.h"
+#include "Sim/Units/Unit.h"
+#include "Sim/Units/UnitHandler.h"
 #include "System/Log/ILog.h"
 #include "System/TimeProfiler.h"
 #include "System/Threading/ThreadPool.h"
@@ -220,7 +227,9 @@ std::int64_t CPathManager::PostFinalizeRefresh()
 	RECOIL_DETAILED_TRACY_ZONE;
 	const spring_time t0 = spring_gettime();
 
-	if (finalized)
+	// supcom: after a load the estimators hold the saved costs and update queues; a
+	// full refresh here would apply queued updates the saved game had not done yet
+	if (finalized && !stateLoaded)
 	{
 		pathingStates[PATH_MED_RES].UpdateVertexPathCosts(-1);
 		pathingStates[PATH_LOW_RES].UpdateVertexPathCosts(-1);
@@ -228,6 +237,224 @@ std::int64_t CPathManager::PostFinalizeRefresh()
 
 	const spring_time dt = spring_gettime() - t0;
 	return (dt.toMilliSecsi());
+}
+
+
+// supcom: save games keep the synced path state (Q69). Bump on any layout change.
+static constexpr std::uint32_t PATH_STATE_VERSION = 1;
+
+static std::int32_t SavedUnitID(const CSolidObject* obj) {
+	const CUnit* unit = dynamic_cast<const CUnit*>(obj);
+	return ((unit != nullptr)? unit->id: -1);
+}
+
+static CSolidObject* LoadedUnit(std::int32_t id) {
+	return ((id >= 0)? unitHandler.GetUnit(id): nullptr);
+}
+
+static std::int32_t SavedPathType(const MoveDef* md) {
+	return ((md != nullptr)? md->pathType: -1);
+}
+
+static const MoveDef* LoadedMoveDef(std::int32_t pathType) {
+	return ((pathType >= 0)? moveDefHandler.GetMoveDefByPathType(pathType): nullptr);
+}
+
+void CPathManager::SaveMultiPath(std::ostream& os, const MultiPath& mp)
+{
+	StateIO::PutPath(os, mp.lowResPath);
+	StateIO::PutPath(os, mp.medResPath);
+	StateIO::PutPath(os, mp.maxResPath);
+	StateIO::Put(os, std::int32_t(mp.searchResult));
+	StateIO::Put(os, mp.start);
+	StateIO::Put(os, mp.finalGoal);
+
+	const CCircularSearchConstraint& pd = mp.peDef;
+	StateIO::Put(os, pd.wsStartPos);
+	StateIO::Put(os, pd.wsGoalPos);
+	StateIO::Put(os, pd.sqGoalRadius);
+	StateIO::Put(os, pd.maxRawPathLen);
+	StateIO::Put(os, pd.minRawSpeedMod);
+	StateIO::Put(os, pd.startInGoalRadius);
+	StateIO::Put(os, pd.constraintDisabled);
+	StateIO::Put(os, pd.skipSubSearches);
+	StateIO::Put(os, pd.testMobile);
+	StateIO::Put(os, pd.needPath);
+	StateIO::Put(os, pd.exactPath);
+	StateIO::Put(os, pd.allowRawPath);
+	StateIO::Put(os, pd.allowDefPath);
+	StateIO::Put(os, pd.dirIndependent);
+	StateIO::Put(os, pd.synced);
+	StateIO::Put(os, pd.useVerifiedStartBlock);
+	StateIO::Put(os, pd.startSquareX);
+	StateIO::Put(os, pd.startSquareZ);
+	StateIO::Put(os, pd.goalSquareX);
+	StateIO::Put(os, pd.goalSquareZ);
+	StateIO::Put(os, pd.halfWayX);
+	StateIO::Put(os, pd.halfWayZ);
+	StateIO::Put(os, pd.searchRadiusSq);
+
+	StateIO::Put(os, SavedPathType(mp.moveDef));
+	StateIO::Put(os, SavedUnitID(mp.caller));
+	StateIO::Put(os, mp.updated);
+}
+
+void CPathManager::LoadMultiPath(std::istream& is, MultiPath& mp)
+{
+	std::int32_t searchResult = 0;
+	std::int32_t pathType = -1;
+	std::int32_t callerID = -1;
+
+	StateIO::GetPath(is, mp.lowResPath);
+	StateIO::GetPath(is, mp.medResPath);
+	StateIO::GetPath(is, mp.maxResPath);
+	StateIO::Get(is, searchResult);
+	StateIO::Get(is, mp.start);
+	StateIO::Get(is, mp.finalGoal);
+
+	CCircularSearchConstraint& pd = mp.peDef;
+	StateIO::Get(is, pd.wsStartPos);
+	StateIO::Get(is, pd.wsGoalPos);
+	StateIO::Get(is, pd.sqGoalRadius);
+	StateIO::Get(is, pd.maxRawPathLen);
+	StateIO::Get(is, pd.minRawSpeedMod);
+	StateIO::Get(is, pd.startInGoalRadius);
+	StateIO::Get(is, pd.constraintDisabled);
+	StateIO::Get(is, pd.skipSubSearches);
+	StateIO::Get(is, pd.testMobile);
+	StateIO::Get(is, pd.needPath);
+	StateIO::Get(is, pd.exactPath);
+	StateIO::Get(is, pd.allowRawPath);
+	StateIO::Get(is, pd.allowDefPath);
+	StateIO::Get(is, pd.dirIndependent);
+	StateIO::Get(is, pd.synced);
+	StateIO::Get(is, pd.useVerifiedStartBlock);
+	StateIO::Get(is, pd.startSquareX);
+	StateIO::Get(is, pd.startSquareZ);
+	StateIO::Get(is, pd.goalSquareX);
+	StateIO::Get(is, pd.goalSquareZ);
+	StateIO::Get(is, pd.halfWayX);
+	StateIO::Get(is, pd.halfWayZ);
+	StateIO::Get(is, pd.searchRadiusSq);
+
+	StateIO::Get(is, pathType);
+	StateIO::Get(is, callerID);
+	StateIO::Get(is, mp.updated);
+
+	mp.searchResult = IPath::SearchResult(searchResult);
+	mp.moveDef = LoadedMoveDef(pathType);
+	mp.caller = LoadedUnit(callerID);
+}
+
+void CPathManager::SaveState(std::ostream& os) const
+{
+	assert(IsFinalized());
+	StateIO::Put(os, PATH_STATE_VERSION);
+
+	// paths in id order, so equal games write equal saves
+	std::vector<unsigned int> pathIDs;
+	pathIDs.reserve(pathMap.size());
+	for (const auto& p: pathMap)
+		pathIDs.push_back(p.first);
+	std::sort(pathIDs.begin(), pathIDs.end());
+
+	StateIO::Put(os, std::uint64_t(pathIDs.size()));
+	for (const unsigned int pathID: pathIDs) {
+		StateIO::Put(os, pathID);
+		SaveMultiPath(os, pathMap.find(pathID)->second);
+	}
+	StateIO::Put(os, nextPathID);
+
+	// searches requested since the last Update (resolved by the next one)
+	std::vector<entt::entity> searches;
+	for (const entt::entity e: registry.view<PathSearch>())
+		searches.push_back(e);
+	std::sort(searches.begin(), searches.end(), [](entt::entity a, entt::entity b) {
+		return (registry.get<PathSearch>(a).pathId < registry.get<PathSearch>(b).pathId);
+	});
+
+	StateIO::Put(os, std::uint64_t(searches.size()));
+	for (const entt::entity e: searches) {
+		const PathSearch& ps = registry.get<PathSearch>(e);
+		const PathExtension* pe = registry.try_get<PathExtension>(e);
+
+		StateIO::Put(os, ps.pathId);
+		StateIO::Put(os, SavedUnitID(ps.caller));
+		StateIO::Put(os, SavedPathType(ps.moveDef));
+		StateIO::Put(os, ps.startPos);
+		StateIO::Put(os, ps.goalPos);
+		StateIO::Put(os, ps.goalRadius);
+		StateIO::Put(os, std::int32_t((pe != nullptr)? int(pe->pathResToExtend): -1));
+	}
+
+	StateIO::Put(os, frameNumToRefreshPathStateWorkloadRatio);
+	StateIO::Put(os, pathStateWorkloadRatio);
+	StateIO::Put(os, std::uint8_t(highPriorityResPS == &pathingStates[PATH_LOW_RES]));
+
+	pathingStates[PATH_LOW_RES].SaveState(os);
+	pathingStates[PATH_MED_RES].SaveState(os);
+	pathHeatMap->SaveState(os);
+}
+
+void CPathManager::LoadState(std::istream& is)
+{
+	assert(IsFinalized());
+
+	std::uint32_t version = 0;
+	StateIO::Get(is, version);
+	if (version != PATH_STATE_VERSION)
+		throw content_error("[HAPFS] save game path state version " + std::to_string(version) + ", this build reads " + std::to_string(PATH_STATE_VERSION));
+
+	pathMap.clear();
+	registry.clear();
+
+	std::uint64_t numPaths = 0;
+	StateIO::Get(is, numPaths);
+	for (std::uint64_t i = 0; i < numPaths; i++) {
+		unsigned int pathID = 0;
+		StateIO::Get(is, pathID);
+		LoadMultiPath(is, pathMap[pathID]);
+	}
+	StateIO::Get(is, nextPathID);
+
+	std::uint64_t numSearches = 0;
+	StateIO::Get(is, numSearches);
+	for (std::uint64_t i = 0; i < numSearches; i++) {
+		unsigned int pathID = 0;
+		std::int32_t callerID = -1;
+		std::int32_t pathType = -1;
+		float3 startPos;
+		float3 goalPos;
+		float goalRadius = 0.0f;
+		std::int32_t extendRes = -1;
+
+		StateIO::Get(is, pathID);
+		StateIO::Get(is, callerID);
+		StateIO::Get(is, pathType);
+		StateIO::Get(is, startPos);
+		StateIO::Get(is, goalPos);
+		StateIO::Get(is, goalRadius);
+		StateIO::Get(is, extendRes);
+
+		const entt::entity e = registry.create();
+		registry.emplace<PathSearch>(e, LoadedUnit(callerID), LoadedMoveDef(pathType), startPos, goalPos, goalRadius, pathID);
+		if (extendRes >= 0)
+			registry.emplace<PathExtension>(e, ExtendPathResType(extendRes));
+	}
+
+	std::uint8_t lowResFirst = 0;
+	StateIO::Get(is, frameNumToRefreshPathStateWorkloadRatio);
+	StateIO::Get(is, pathStateWorkloadRatio);
+	StateIO::Get(is, lowResFirst);
+	highPriorityResPS = &pathingStates[lowResFirst? PATH_LOW_RES: PATH_MED_RES];
+	lowPriorityResPS  = &pathingStates[lowResFirst? PATH_MED_RES: PATH_LOW_RES];
+
+	pathingStates[PATH_LOW_RES].LoadState(is);
+	pathingStates[PATH_MED_RES].LoadState(is);
+	pathHeatMap->LoadState(is);
+
+	stateLoaded = true;
+	LOG("[HAPFS::%s] loaded %u paths, %u pending searches", __func__, unsigned(numPaths), unsigned(numSearches));
 }
 
 void CPathManager::FinalizePath(MultiPath* path, const float3 startPos, const float3 goalPos, const bool cantGetCloser)
