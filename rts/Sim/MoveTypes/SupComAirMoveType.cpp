@@ -463,5 +463,7 @@ void CSupComAirMoveType::UpdateFall()
 	ApplyStep(step);
 
 	if (tumbleRate != 0.0f)
-		owner->AddHeading(short(tumbleRate), false, false, 0.0f);
+		// float to int first, then to short: a direct float-to-short conversion is undefined outside the short range
+		// and x86 and arm64 compilers give different results there (cross-architecture desync, Q120)
+		owner->AddHeading(short(int(tumbleRate)), false, false, 0.0f);
 }
