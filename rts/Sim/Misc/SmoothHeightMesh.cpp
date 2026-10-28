@@ -5,6 +5,12 @@
 #include <limits>
 
 #include "SmoothHeightMesh.h"
+#include "Sim/Path/HAPFS/PathStateIO.h"
+
+#include <cinttypes>
+#include <istream>
+#include <ostream>
+#include <string>
 
 #include "Map/Ground.h"
 #include "Map/ReadMap.h"
@@ -680,6 +686,91 @@ void SmoothHeightMesh::MakeSmoothMesh() {
 
 	// tempMesh should be kept inline with mesh to avoid bluring artefacts in dynamic updates
 	std::copy(mesh.begin(), mesh.end(), tempMesh.begin());
+}
+
+
+// supcom (Q69): the smoothed mesh and the updates still queued for it. The mesh follows terrain changes over many
+// frames (damage queues, then the horizontal and vertical blur passes), so a loaded game keeps the saved state
+// instead of rebuilding it from the loaded heights.
+namespace {
+	constexpr std::uint32_t SMOOTH_MESH_STATE_VERSION = 1;
+
+	void PutQueue(std::ostream& os, std::queue<int> q) {
+		HAPFS::StateIO::Put(os, std::uint64_t(q.size()));
+		for (; !q.empty(); q.pop())
+			HAPFS::StateIO::Put(os, q.front());
+	}
+	void GetQueue(std::istream& is, std::queue<int>& q) {
+		std::uint64_t n = 0;
+		HAPFS::StateIO::Get(is, n);
+		q = {};
+		for (std::uint64_t i = 0; i < n; i++) {
+			int v = 0;
+			HAPFS::StateIO::Get(is, v);
+			q.push(v);
+		}
+	}
+}
+
+void SmoothHeightMesh::SaveState(std::ostream& os) const
+{
+	using namespace HAPFS::StateIO;
+	Put(os, SMOOTH_MESH_STATE_VERSION);
+	Put(os, enabled);
+	Put(os, maxx);
+	Put(os, maxy);
+	PutVec(os, maximaMesh);
+	PutVec(os, mesh);
+	PutVec(os, tempMesh);
+	PutVec(os, origMesh);
+	PutVec(os, colsMaxima);
+	PutVec(os, maximaRows);
+
+	const std::vector<std::uint8_t> damage(mapChangeTrack.damageMap.begin(), mapChangeTrack.damageMap.end());
+	PutVec(os, damage);
+	PutQueue(os, mapChangeTrack.damageQueue[0]);
+	PutQueue(os, mapChangeTrack.damageQueue[1]);
+	PutQueue(os, mapChangeTrack.horizontalBlurQueue);
+	PutQueue(os, mapChangeTrack.verticalBlurQueue);
+	Put(os, mapChangeTrack.queueReleaseOnFrame);
+	Put(os, mapChangeTrack.activeBuffer);
+}
+
+void SmoothHeightMesh::LoadState(std::istream& is)
+{
+	using namespace HAPFS::StateIO;
+	std::uint32_t version = 0;
+	Get(is, version);
+	if (version != SMOOTH_MESH_STATE_VERSION)
+		throw content_error("[SmoothHeightMesh] save game has smooth mesh state version " + std::to_string(version));
+
+	bool savedEnabled = false;
+	int savedMaxX = 0;
+	int savedMaxY = 0;
+	Get(is, savedEnabled);
+	Get(is, savedMaxX);
+	Get(is, savedMaxY);
+	if (savedEnabled != enabled || savedMaxX != maxx || savedMaxY != maxy)
+		throw content_error("[SmoothHeightMesh] smooth mesh of the save game does not fit this game (size or enabled state)");
+
+	GetVecSized(is, maximaMesh, "smooth mesh maxima");
+	GetVecSized(is, mesh, "smooth mesh");
+	GetVecSized(is, tempMesh, "smooth mesh blur buffer");
+	GetVecSized(is, origMesh, "original smooth mesh");
+	GetVecSized(is, colsMaxima, "smooth mesh column maxima");
+	GetVecSized(is, maximaRows, "smooth mesh maxima rows");
+
+	std::vector<std::uint8_t> damage;
+	GetVec(is, damage);
+	if (damage.size() != mapChangeTrack.damageMap.size())
+		throw content_error("[SmoothHeightMesh] smooth mesh damage map size mismatch");
+	std::copy(damage.begin(), damage.end(), mapChangeTrack.damageMap.begin());
+	GetQueue(is, mapChangeTrack.damageQueue[0]);
+	GetQueue(is, mapChangeTrack.damageQueue[1]);
+	GetQueue(is, mapChangeTrack.horizontalBlurQueue);
+	GetQueue(is, mapChangeTrack.verticalBlurQueue);
+	Get(is, mapChangeTrack.queueReleaseOnFrame);
+	Get(is, mapChangeTrack.activeBuffer);
 }
 
 

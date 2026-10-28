@@ -6,6 +6,7 @@
 #include "ExternalAI/SkirmishAIHandler.h"
 #include "ExternalAI/EngineOutHandler.h"
 #include "CregLoadSaveHandler.h"
+#include "Map/MapDamage.h"
 #include "Map/ReadMap.h"
 #include "Game/Game.h"
 #include "Game/GameSetup.h"
@@ -28,6 +29,7 @@
 #include "Sim/Misc/InterceptHandler.h"
 #include "Sim/Misc/LosHandler.h"
 #include "Sim/Misc/QuadField.h"
+#include "Sim/Misc/SmoothHeightMesh.h"
 #include "Sim/Misc/CategoryHandler.h"
 #include "Sim/MoveTypes/MoveDefHandler.h"
 #include "Sim/Path/IPathManager.h"
@@ -306,6 +308,12 @@ void CCregLoadSaveHandler::SaveGame(const std::string& path)
 			pathManager->SaveState(oss);
 			PrintSize("Paths", ((int)oss.tellp()) - pathStart);
 
+			// supcom: the smooth mesh and the craters still being dug; both follow the heights over many frames
+			const int terrainStart = oss.tellp();
+			smoothGround.SaveState(oss);
+			mapDamage->SaveState(oss);
+			PrintSize("Terrain", ((int)oss.tellp()) - terrainStart);
+
 
 			// save AI state
 			const int aiStart = oss.tellp();
@@ -417,6 +425,11 @@ void CCregLoadSaveHandler::LoadGame()
 
 		// supcom: the synced path state; units are loaded, so its unit ids resolve (Q69)
 		pathManager->LoadState(iss);
+
+		// supcom: the smooth mesh and the craters still being dug; after the creg post-loads, whose full terrain
+		// recalculation (CReadMap::PostLoad) queues the whole smooth mesh again
+		smoothGround.LoadState(iss);
+		mapDamage->LoadState(iss);
 	}
 
 	LEAVE_SYNCED_CODE();

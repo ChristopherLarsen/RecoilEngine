@@ -20,6 +20,9 @@ public:
 
 	bool Disabled() const override { return false; }
 
+	void SaveState(std::ostream& os) const override;
+	void LoadState(std::istream& is) override;
+
 private:
 	void SetExplosionSquare(float v) {
 		explosionSquaresPool[explSquaresPoolIdx] = v;

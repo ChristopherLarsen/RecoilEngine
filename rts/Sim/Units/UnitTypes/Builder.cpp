@@ -154,8 +154,16 @@ bool CBuilder::UpdateTerraform(const Command&)
 
 	const float* heightmap = readMap->GetCornerHeightMapSynced();
 	float terraformScale = 0.1f;
+	bool heightsChanged = false;
 
 	assert(!mapDamage->Disabled());
+
+	// supcom: the last step of a terraform is recalculated too; StopBuild only recalculates while terraforming is
+	// still set, so the derived terrain, LOS, paths and smooth mesh kept the heights of the last SlowUpdate
+	const auto RecalcTerraformArea = [this]() {
+		constexpr int tsr = TERRA_SMOOTHING_RADIUS;
+		mapDamage->RecalcArea(tx1 - tsr, tx2 + tsr, tz1 - tsr, tz2 + tsr);
+	};
 
 	const auto SmoothBorders = [this, heightmap, &terraformScale]() {
 		// smooth the x-borders
@@ -227,8 +235,10 @@ bool CBuilder::UpdateTerraform(const Command&)
 				}
 			}
 			SmoothBorders();
+			heightsChanged = true;
 
 			if (curBuildee->terraformLeft <= 0.0f) {
+				RecalcTerraformArea();
 				terraforming = false;
 				curBuildee->groundLevelled = true;
 
@@ -259,12 +269,22 @@ bool CBuilder::UpdateTerraform(const Command&)
 			}
 		}
 		SmoothBorders();
+		heightsChanged = true;
 
 		if (myTerraformLeft <= 0.0f) {
+			RecalcTerraformArea();
 			terraforming = false;
 			StopBuild();
 		}
 	} break;
+	}
+
+	// supcom: the derived terrain (centre heights, normals, slopes) follows the heights every frame; the full
+	// recalculation (LOS, paths, smooth mesh) stays on SlowUpdate. A loaded game rebuilds the derived terrain from
+	// the heights, so it must never lag behind them (save/load identity, Q69)
+	if (heightsChanged && terraforming) {
+		constexpr int tsr = TERRA_SMOOTHING_RADIUS;
+		readMap->UpdateHeightMapSynced({std::max(tx1 - tsr, 0), std::max(tz1 - tsr, 0), std::min(tx2 + tsr, mapDims.mapx), std::min(tz2 + tsr, mapDims.mapy)});
 	}
 
 	ScriptDecloak(curBuildee, nullptr);
