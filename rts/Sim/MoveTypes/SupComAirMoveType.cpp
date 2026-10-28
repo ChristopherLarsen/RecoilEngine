@@ -382,7 +382,9 @@ const CUnit* CSupComAirMoveType::AttackTarget() const
 	if (c.GetID() != CMD_ATTACK || c.GetNumParams() != 1)
 		return nullptr;
 
-	const CUnit* target = unitHandler.GetUnit(int(c.GetParam(0)));
+	// a command parameter is a float from the network: check the range before converting it to a unit id
+	const float targetParam = c.GetParam(0);
+	const CUnit* target = (targetParam >= 0.0f && targetParam < float(MAX_UNITS))? unitHandler.GetUnit(int(targetParam)): nullptr;
 
 	if (target == nullptr || target == owner)
 		return nullptr;

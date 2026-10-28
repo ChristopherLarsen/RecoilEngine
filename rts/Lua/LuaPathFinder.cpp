@@ -270,8 +270,13 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 
 	const int W = mapDims.mapx;
 	const int H = mapDims.mapy;
-	const int gsx = std::clamp(int(gx / SQUARE_SIZE), 0, W - 1);
-	const int gsz = std::clamp(int(gz / SQUARE_SIZE), 0, H - 1);
+	// the goal comes from Lua and may be anything: clamp before converting (an out-of-range float-to-int conversion
+	// differs between x86 and arm64); same squares as before for every finite goal, NaN counts as 0
+	const auto goalSquare = [](float v, int maxSquare) {
+		return (v == v)? int(std::clamp(v / SQUARE_SIZE, 0.0f, float(maxSquare))): 0;
+	};
+	const int gsx = goalSquare(gx, W - 1);
+	const int gsz = goalSquare(gz, H - 1);
 	const int ssx = std::clamp(int(unit->pos.x / SQUARE_SIZE), 0, W - 1);
 	const int ssz = std::clamp(int(unit->pos.z / SQUARE_SIZE), 0, H - 1);
 
