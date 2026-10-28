@@ -52,6 +52,9 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scStopNow),
 	CR_MEMBER(scRestart),
 	CR_MEMBER(scBlockedFrames),
+	CR_MEMBER(scStructFrames),
+	CR_MEMBER(scHandoverFrames),
+	CR_MEMBER(scHandoverFrom),
 	CR_MEMBER(scYieldFrames),
 	CR_MEMBER(scYieldUnit),
 	CR_MEMBER(scYielding),
@@ -93,6 +96,10 @@ static float CustomParam(const UnitDef* ud, const char* key, float def)
 // frames a wanted step may stay refused, with the footprint partly on impassable squares, before the engine's
 // own ground movement takes over
 static constexpr int BLOCKED_HANDOVER_FRAMES = GAME_SPEED;
+// frames a wanted step may stay refused by a structure while following a path before the engine's own ground
+// movement takes over (Q100; DESIGN), and the longest such handover (it ends once the unit has moved two squares)
+static constexpr int STRUCT_HANDOVER_FRAMES = GAME_SPEED / 2;
+static constexpr int STRUCT_HANDOVER_TIME = GAME_SPEED * 2;
 // frames an idle allied unit must stay in contact in front of a mover before it is asked to make way (PTH-002 R3:
 // the yield bound is PLACEHOLDER 30 ticks, and the idle unit still has to clear the mover's way)
 static constexpr int YIELD_DELAY_FRAMES = 4;
@@ -534,6 +541,31 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		return;
 	}
 
+	// refused by a structure for half a second while following a path: the planner, with the move class's
+	// square-offset footprint, cut the corner of a structure that the engine's own position test then refuses (a mex
+	// beside a factory exit, Q100), and this move type's exact steps cannot get round it. The engine's own ground
+	// movement slides along the structure, as stock units do, until the unit has moved two squares or two seconds pass.
+	if (scHandoverFrames == 0 && scStructFrames >= STRUCT_HANDOVER_FRAMES && progressState == Active) {
+		scHandoverFrames = STRUCT_HANDOVER_TIME;
+		scHandoverFrom = owner->pos;
+		scStructFrames = 0;
+	}
+	if (scHandoverFrames > 0) {
+		if (progressState == Active && owner->pos.SqDistance2D(scHandoverFrom) < Square(SQUARE_SIZE * 2.0f)) {
+			scHandoverFrames--;
+			CGroundMoveType::UpdateUnitPosition();
+
+			scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
+			scPhase = PHASE_DRIVE;
+			scBraking = false;
+			scRestart = false;
+			return;
+		}
+
+		scHandoverFrames = 0;
+		scBlockedFrames = 0;
+	}
+
 	// pushed by a crowd partly onto impassable squares and blocked there for a second: the engine's own ground
 	// movement (it side-steps and is pushed out by the terrain collision response) until the footprint is clear;
 	// this move type's exact steps cannot leave such a spot, and the engine's idle check then failed the order. A
@@ -648,6 +680,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	if (!moveRequest.same(ZeroVector)) {
 		bool blocked = false;
+		bool byStructure = false;
 
 		if (!positionStuck) {
 			blocked = (FootprintBlocked(owner->pos + moveRequest) && !FootprintBlocked(owner->pos));
@@ -656,6 +689,15 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				float3 resultantMove;
 				UpdatePos(owner, moveRequest, resultantMove, ThreadPool::GetThreadNum());
 				blocked = !resultantMove.same(moveRequest);
+
+				// refused by a structure under the engine's own footprint (not by terrain or a unit)
+				if (blocked) {
+					const float3 next = owner->pos + moveRequest;
+					const int nsx = int(next.x / SQUARE_SIZE);
+					const int nsz = int(next.z / SQUARE_SIZE);
+
+					byStructure = (CMoveMath::IsBlockedStructure(*owner->moveDef, nsx, nsz, owner, ThreadPool::GetThreadNum()) != 0);
+				}
 			}
 		}
 
@@ -666,11 +708,13 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			scPhase = PHASE_DRIVE;
 			scRestart = (!stop && !scBraking);
 			scBlockedFrames += int(!stop);
+			scStructFrames = (byStructure && !stop)? scStructFrames + 1: 0;
 
 			ReRequestPath(false);
 		} else {
 			positionStuck = false;
 			scBlockedFrames = 0;
+			scStructFrames = 0;
 		}
 	}
 
