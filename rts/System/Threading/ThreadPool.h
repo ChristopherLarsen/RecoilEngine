@@ -141,13 +141,18 @@ namespace ThreadPool {
 
 
 struct MultithreadedSection {
-	MultithreadedSection() {
+	MultithreadedSection(): wasInSection(ThreadPool::IsInMultiThreadedSection() != 0) {
 		ThreadPool::SetInMultiThreadedSection(true);
 	}
 
+	// supcom: restore the previous state instead of clearing it. Worker threads keep the flag set for their whole
+	// life; a parallel section entered on a worker used to clear it for good, so code testing the flag behaved
+	// differently on worker threads than on the main thread (the HAPFS path cache, see IPathFinder::GetPath)
 	~MultithreadedSection() {
-		ThreadPool::SetInMultiThreadedSection(false);
+		ThreadPool::SetInMultiThreadedSection(wasInSection);
 	}
+
+	const bool wasInSection;
 };
 
 
