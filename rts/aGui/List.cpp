@@ -319,6 +319,8 @@ bool List::HandleEventSelf(const SDL_Event& ev)
 		case SDL_MOUSEWHEEL: {
 			int mousex, mousey;
 			SDL_GetMouseState(&mousex, &mousey);
+			mousex = int(mousex * globalRendering->pixelRatio);
+			mousey = int(mousey * globalRendering->pixelRatio);
 			if(hasFocus && MouseOver(mousex, mousey)) {
 				if (ev.wheel.y > 0) {
 					ScrollUpOne();
