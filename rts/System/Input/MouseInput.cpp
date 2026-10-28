@@ -91,9 +91,14 @@ bool IMouseInput::HandleSDLMouseEvent(const SDL_Event& event)
 		} break;
 		case SDL_MOUSEWHEEL: {
 			if (mouse != nullptr)
+#ifdef __APPLE__
 				mouse->MouseWheel(event.wheel.preciseY); // trackpads send fractional steps that the integer y drops
+#else
+				mouse->MouseWheel(event.wheel.y);
+#endif
 
 		} break;
+#ifdef __APPLE__
 		case SDL_MULTIGESTURE: {
 			// trackpad pinch arrives as SDL's two-finger gesture; spreading the fingers zooms in like wheel-up.
 			// the threshold keeps the small distance jitter of a two-finger scroll from zooming twice
@@ -101,6 +106,7 @@ bool IMouseInput::HandleSDLMouseEvent(const SDL_Event& event)
 				mouse->MouseWheel(event.mgesture.dDist * 30.0f);
 
 		} break;
+#endif
 		case SDL_WINDOWEVENT: {
 			switch (event.window.event) {
 				case SDL_WINDOWEVENT_ENTER: {
