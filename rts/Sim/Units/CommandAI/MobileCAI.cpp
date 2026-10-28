@@ -335,6 +335,8 @@ void CMobileCAI::GiveCommandReal(const Command& c, bool fromSynced)
 }
 
 
+static void LoadDbg(const CUnit* t, const CUnit* u, const char* why); // LOADDBG, defined before ExecuteLoadUnits
+
 void CMobileCAI::SlowUpdate()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
