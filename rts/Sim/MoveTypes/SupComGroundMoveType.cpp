@@ -41,6 +41,8 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(hoverHeight),
 	CR_MEMBER(waterSpeedFactor),
 	CR_MEMBER(floorClearance),
+	CR_MEMBER(seabedSwitchDepth),
+	CR_MEMBER(onSeabed),
 	CR_MEMBER(headingFree),
 
 	CR_MEMBER(scSpeed),
@@ -131,6 +133,7 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	hoverHeight = std::max(0.0f, CustomParam(ud, "supcom_hover_height", 0.0f));
 	waterSpeedFactor = std::max(0.01f, CustomParam(ud, "supcom_water_speed_factor", 1.0f));
 	floorClearance = std::max(0.0f, CustomParam(ud, "supcom_floor_clearance", 0.0f));
+	seabedSwitchDepth = std::max(0.0f, CustomParam(ud, "supcom_seabed_switch_depth", 0.0f));
 
 	// submarine: depth in elmos, dive time in seconds
 	submarine = (CustomParam(ud, "supcom_submarine", 0.0f) != 0.0f);
@@ -591,7 +594,10 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 		if (!md->FloatOnWater())
 			topSpeed *= md->GetDepthMod(terrain);
-		if (terrain < 0.0f && !submarine && md->speedModClass != MoveDef::Ship)
+		// hover units over water; amphibious units on the sea floor (their layer, MOV-009 R8)
+		const bool inWaterLayer = (md->speedModClass == MoveDef::Hover)? (terrain < 0.0f): OnSeabed();
+
+		if (inWaterLayer && !submarine && md->speedModClass != MoveDef::Ship)
 			topSpeed *= waterSpeedFactor;
 	}
 
@@ -774,7 +780,15 @@ const char* CSupComGroundMoveType::GetLayerName() const
 	if (md->speedModClass == MoveDef::Hover)
 		return (underWater? "water": "land");
 
-	return (underWater? "seabed": "land");
+	return (OnSeabed()? "seabed": "land");
+}
+
+bool CSupComGroundMoveType::OnSeabed() const
+{
+	if (seabedSwitchDepth <= 0.0f)
+		return (CGround::GetHeightReal(owner->pos.x, owner->pos.z) < 0.0f);
+
+	return onSeabed;
 }
 
 void CSupComGroundMoveType::AdjustPosToWaterLine()
@@ -859,6 +873,16 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 bool CSupComGroundMoveType::Update()
 {
 	const bool moved = CGroundMoveType::Update();
+
+	// MOV-009 R8: Land -> Seabed at the switch depth, back to Land as the depth falls to zero
+	if (seabedSwitchDepth > 0.0f) {
+		const float depth = -CGround::GetHeightReal(owner->pos.x, owner->pos.z);
+
+		if (!onSeabed && depth >= seabedSwitchDepth)
+			onSeabed = true;
+		else if (onSeabed && depth <= 0.0f)
+			onSeabed = false;
+	}
 
 	// arrived (or stopped) after making way: an ordinary idle unit again
 	if (scYielding && progressState != Active)

@@ -61,6 +61,8 @@ public:
 	const char* GetLayerName() const;
 	/// the direction a step is taken in: the unit's front, or for a heading-free hover unit its waypoint direction
 	float3 MotionDir() const;
+	/// amphibious unit on the sea floor (MOV-009 R8): at the water line, or with a switch depth the kept layer
+	bool OnSeabed() const;
 	float GetContactLift() const override { return contactLift; }
 	bool HeadingLocked() const override;
 	bool GetHeadingFree() const { return headingFree; }
@@ -137,6 +139,8 @@ private:
 	float hoverHeight = 0.0f;    ///< elmos above the corner references (hover units, MOV-010)
 	float waterSpeedFactor = 1.0f; ///< top speed multiplier on the sea floor or on water (MOV-009 R7)
 	float floorClearance = 0.0f; ///< elmos a submarine stays above the floor (MOV-011 R7)
+	float seabedSwitchDepth = 0.0f; ///< elmos of water under the unit at which Land becomes Seabed (MOV-009 R8; 0 = water line)
+	bool onSeabed = false;       ///< the Seabed layer, with seabedSwitchDepth > 0 (kept between frames for the hysteresis)
 
 	// state
 	float scSpeed = 0.0f;        ///< instantaneous speed along the motion direction (elmos per frame, >= 0)
