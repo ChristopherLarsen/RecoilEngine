@@ -478,8 +478,10 @@ SDL_Window* CGlobalRendering::CreateSDLWindow(const char* title) const
 #ifdef MAC_EGL_BRIDGE_AVAILABLE
 	// the GL context lives offscreen (Mesa EGL), the window is only presented to
 	sdlFlags &= ~SDL_WINDOW_OPENGL;
+#ifdef __APPLE__
 	if (configHandler->GetBool("MacHighDPI"))
 		sdlFlags |= SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
 #endif
 
 	for (size_t i = 0; i < (aaLvls.size()) && (newWindow == nullptr); i++) {
