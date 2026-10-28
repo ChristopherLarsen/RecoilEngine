@@ -53,12 +53,17 @@ public:
 	void UpdateUnitPosition() override;
 	bool Update() override;
 
-	/// handles "submerged" (bool: dive or surface a submarine), everything else as the base class
+	/// handles "submerged" (bool: dive or surface a submarine) and "supcomHeadingFree" (bool, hover units: follow the
+	/// route without turning, Lua sets the heading; MOV-005 R7), everything else as the base class
 	bool SetMemberValue(unsigned int memberHash, void* memberValue) override;
 
 	/// movement layer (MOV-009): "land", "seabed", "water" or "sub"
 	const char* GetLayerName() const;
+	/// the direction a step is taken in: the unit's front, or for a heading-free hover unit its waypoint direction
+	float3 MotionDir() const;
 	float GetContactLift() const override { return contactLift; }
+	bool HeadingLocked() const override;
+	bool GetHeadingFree() const { return headingFree; }
 	/// the footprint this move type drives with (elmos)
 	float GetFootprintX() const { return footprintX; }
 	float GetFootprintZ() const { return footprintZ; }
@@ -145,6 +150,7 @@ private:
 	int scYieldFrames = 0;       ///< consecutive frames in contact with the same idle unit in front
 	int scYieldUnit = -1;        ///< that unit's id
 	bool scYielding = false;     ///< moving out of the way (no order of its own)
+	bool headingFree = false;    ///< hover unit following its route without turning (MOV-005 R7, set from Lua)
 
 	// submarine (MOV-011): depth below the water surface, moving between depthFrom and depthTo along a smooth curve
 	bool submarine = false;
