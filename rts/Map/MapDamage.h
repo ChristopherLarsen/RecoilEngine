@@ -3,6 +3,8 @@
 #ifndef _MAP_DAMAGE_H_
 #define _MAP_DAMAGE_H_
 
+#include <iosfwd>
+
 #include "System/float3.h"
 
 class IMapDamage
@@ -23,6 +25,10 @@ public:
 	virtual void Update() = 0;
 
 	virtual bool Disabled() const = 0;
+
+	/// supcom: craters still being dug, for save games (Q69); the default keeps nothing
+	virtual void SaveState(std::ostream& os) const {}
+	virtual void LoadState(std::istream& is) {}
 
 	float mapHardness = 0.0f;
 };

@@ -3,6 +3,7 @@
 #ifndef SMOOTH_HEIGHT_MESH_H
 #define SMOOTH_HEIGHT_MESH_H
 
+#include <iosfwd>
 #include <memory_resource>
 #include <queue>
 #include <vector>
@@ -61,6 +62,11 @@ public:
 	void MapChanged(int x1, int z1, int x2, int z2);
 
 	void MakeSmoothMesh();
+
+	/// supcom: the mesh and its pending updates for save games (Q69); the mesh updates over many frames, so a
+	/// rebuild from the loaded heights would not match the saved game's mesh
+	void SaveState(std::ostream& os) const;
+	void LoadState(std::istream& is);
 
 private:
 	void InitMapChangeTracking();
