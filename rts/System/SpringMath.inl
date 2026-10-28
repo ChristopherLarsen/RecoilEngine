@@ -54,7 +54,11 @@ inline float GetHeadingFromVectorF(const float dx, const float dz)
 		// ensure a minimum distance between dz and 0 such that
 		// sqr(dx/dz) never exceeds abs(num_limits<float>::max)
 		const float sz = dz * 2.0f - 1.0f;
-		const float d  = dx / (dz + 0.000001f * sz);
+		// supcom: for 0 < dz < 1e-6 that pad turned the divisor negative and the heading came out 180 degrees off (a
+		// direction exactly along x, after SetHeadingFromDirection's rotation, has dz of a few 1e-8); the pad keeps the
+		// sign of dz there, every other direction is unchanged
+		const float dzp = dz + 0.000001f * sz;
+		const float d  = dx / ((dz > 0.0f && dzp <= 0.0f)? (dz + 0.000001f): dzp);
 		const float dd = d * d;
 
 		if (math::fabs(d) > 1.0f) {
