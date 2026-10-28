@@ -1555,6 +1555,23 @@ bool CBitmap::Save(const std::string& filename, bool dontSaveAlpha, bool logged,
 	CBitmap flippedCopy = *this;
 	flippedCopy.ReverseYAxis();
 
+	// the path, an old file and the log lines are dealt with outside the pool's mutex: a log sink can need the main
+	// thread (LOG can indirectly load bitmaps through FontTexture, see Load), and the main thread may be waiting for
+	// this mutex (an RmlUi texture), while this runs on a worker for /screenshot
+	const std::string& fsImageExt = FileSystem::GetExtensionLowerCase(filename);
+	const std::string& fsFullPath = dataDirsAccess.LocateFile(filename, FileQueryFlags::WRITE);
+	const std::wstring& ilFullPath = std::wstring(fsFullPath.begin(), fsFullPath.end());
+
+	if (FileSystem::FileExists(fsFullPath)) {
+		if (logged)
+			LOG("[CBitmap::%s] deleting \"%s\" in \"%s\"", __func__, filename.c_str(), fsFullPath.c_str());
+
+		FileSystem::DeleteFile(fsFullPath);
+	}
+
+	if (logged)
+		LOG("[CBitmap::%s] saving \"%s\" to \"%s\" (IL_VERSION=%d IL_UNICODE=%d)", __func__, filename.c_str(), fsFullPath.c_str(), IL_VERSION, sizeof(ILchar) != 1);
+
 	std::unique_lock lck(ITexMemPool::texMemPool->GetMutex());
 
 	// clear any previous errors
@@ -1586,38 +1603,25 @@ bool CBitmap::Save(const std::string& filename, bool dontSaveAlpha, bool logged,
 		assert(ilGetError() == IL_NO_ERROR);
 	}
 
-	const std::string& fsImageExt = FileSystem::GetExtensionLowerCase(filename);
-	const std::string& fsFullPath = dataDirsAccess.LocateFile(filename, FileQueryFlags::WRITE);
-	const std::wstring& ilFullPath = std::wstring(fsFullPath.begin(), fsFullPath.end());
-
-	if (FileSystem::FileExists(fsFullPath)) {
-		if (logged)
-			LOG("[CBitmap::%s] deleting \"%s\" in \"%s\"", __func__, filename.c_str(), fsFullPath.c_str());
-
-		FileSystem::DeleteFile(fsFullPath);
-	}
-
-	if (logged)
-		LOG("[CBitmap::%s] saving \"%s\" to \"%s\" (IL_VERSION=%d IL_UNICODE=%d)", __func__, filename.c_str(), fsFullPath.c_str(), IL_VERSION, sizeof(ILchar) != 1);
-
 	const ILchar* p = (sizeof(ILchar) != 1)?
 		reinterpret_cast<const ILchar*>(ilFullPath.data()):
 		reinterpret_cast<const ILchar*>(fsFullPath.data());
 
-	bool success = SaveToFile(p, fsImageExt);
-
-	if (logged) {
-		if (success) {
-			LOG("[CBitmap::%s] saved \"%s\" to \"%s\"", __func__, filename.c_str(), fsFullPath.c_str());
-		} else {
-			LOG("[CBitmap::%s] error 0x%x saving \"%s\" to \"%s\"", __func__, ilGetError(), filename.c_str(), fsFullPath.c_str());
-		}
-	}
+	const bool success = SaveToFile(p, fsImageExt);
+	const ILenum ilError = success? IL_NO_ERROR: ilGetError();
 
 	ilDeleteImages(1, &imageID);
 	ilDisable(IL_ORIGIN_SET);
 
 	lck.unlock(); //unlock explicitly because Free(flippedCopy) is locking the same mutex
+
+	if (logged) {
+		if (success) {
+			LOG("[CBitmap::%s] saved \"%s\" to \"%s\"", __func__, filename.c_str(), fsFullPath.c_str());
+		} else {
+			LOG("[CBitmap::%s] error 0x%x saving \"%s\" to \"%s\"", __func__, ilError, filename.c_str(), fsFullPath.c_str());
+		}
+	}
 
 	return success;
 }
