@@ -170,6 +170,9 @@ public:
 	int winSizeX;
 	int winSizeY;
 
+	/// window pixels per SDL window point (above 1 on a macOS Retina display, see MacHighDPI)
+	float pixelRatio = 1.0f;
+
 	/// the viewport position relative to the window's top-left corner
 	int viewPosX;
 	int viewPosY;

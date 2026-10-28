@@ -47,6 +47,7 @@
 
 #include "System/Misc/TracyDefs.h"
 
+CONFIG(bool, MacHighDPI).defaultValue(true).description("macOS: render at the display's native (Retina) resolution instead of the window's point size scaled up.");
 CONFIG(bool, DebugGL).defaultValue(false).description("Enables GL debug-context and output. (see GL_ARB_debug_output)");
 CONFIG(bool, DebugGLStacktraces).defaultValue(false).description("Create a stacktrace when an OpenGL error occurs");
 CONFIG(bool, DebugGLReportGroups).defaultValue(false).description("Show OpenGL PUSH/POP groups in the GL debug");
@@ -475,6 +476,8 @@ SDL_Window* CGlobalRendering::CreateSDLWindow(const char* title) const
 #ifdef MAC_EGL_BRIDGE_AVAILABLE
 	// the GL context lives offscreen (Mesa EGL), the window is only presented to
 	sdlFlags &= ~SDL_WINDOW_OPENGL;
+	if (configHandler->GetBool("MacHighDPI"))
+		sdlFlags |= SDL_WINDOW_ALLOW_HIGHDPI;
 #endif
 
 	for (size_t i = 0; i < (aaLvls.size()) && (newWindow == nullptr); i++) {
@@ -1689,6 +1692,16 @@ void CGlobalRendering::ReadWindowPosAndSize()
 	SDL_GetWindowSize(sdlWindow, &winSizeX, &winSizeY);
 	SDL_GetWindowPosition(sdlWindow, &winPosX, &winPosY);
 
+#ifdef MAC_EGL_BRIDGE_AVAILABLE
+	// the bridge renders at the window's pixel size; SDL keeps window sizes and mouse positions in points
+	int pixSizeX = winSizeX;
+	int pixSizeY = winSizeY;
+	SDL_GetWindowSizeInPixels(sdlWindow, &pixSizeX, &pixSizeY);
+	pixelRatio = (winSizeX > 0) ? (pixSizeX / float(winSizeX)) : 1.0f;
+	winSizeX = pixSizeX;
+	winSizeY = pixSizeY;
+#endif
+
 	//enforce >=0 https://github.com/beyond-all-reason/spring/issues/23
 	//winPosX = std::max(winPosX, 0);
 	//winPosY = std::max(winPosY, 0);
@@ -1717,8 +1730,9 @@ void CGlobalRendering::SaveWindowPosAndSize()
 	// do not notify about changes to block update loop
 	configHandler->Set("WindowPosX", winPosX, false, false);
 	configHandler->Set("WindowPosY", winPosY, false, false);
-	configHandler->Set("XResolutionWindowed", winSizeX, false, false);
-	configHandler->Set("YResolutionWindowed", winSizeY, false, false);
+	// the config holds window points, as SDL_CreateWindow and SDL_SetWindowSize expect
+	configHandler->Set("XResolutionWindowed", int(winSizeX / pixelRatio + 0.5f), false, false);
+	configHandler->Set("YResolutionWindowed", int(winSizeY / pixelRatio + 0.5f), false, false);
 }
 
 

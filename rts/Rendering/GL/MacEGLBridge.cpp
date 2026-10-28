@@ -342,7 +342,7 @@ void* MacEGLBridge::CreateContext(SDL_Window* window, int major, int minor, bool
 	}
 
 	int wx = 0, wy = 0;
-	SDL_GetWindowSize(window, &wx, &wy);
+	SDL_GetWindowSizeInPixels(window, &wx, &wy);
 	if (!CreateSurface(wx, wy) || !egl.MakeCurrent(display, surface, surface, context)) {
 		LOG_L(L_ERROR, "[MacEGLBridge] eglMakeCurrent failed: 0x%x", egl.GetError());
 		return nullptr;
@@ -350,6 +350,10 @@ void* MacEGLBridge::CreateContext(SDL_Window* window, int major, int minor, bool
 
 	if (!CreatePresenter(window))
 		return nullptr;
+
+	int ox = 0, oy = 0;
+	SDL_GetRendererOutputSize(renderer, &ox, &oy);
+	LOG("[MacEGLBridge] pbuffer %dx%d, presenter output %dx%d", wx, wy, ox, oy);
 
 	return context;
 }
@@ -503,7 +507,7 @@ void MacEGLBridge::SwapWindow(SDL_Window* window)
 
 	// track window size changes; the pbuffer is the engine's default framebuffer
 	int wx = 0, wy = 0;
-	SDL_GetWindowSize(window, &wx, &wy);
+	SDL_GetWindowSizeInPixels(window, &wx, &wy);
 	if ((wx != surfSizeX || wy != surfSizeY) && wx > 0 && wy > 0) {
 		std::lock_guard<std::mutex> lck(surfMutex);
 		LOG("[MacEGLBridge] resizing pbuffer %dx%d -> %dx%d", surfSizeX, surfSizeY, wx, wy);
