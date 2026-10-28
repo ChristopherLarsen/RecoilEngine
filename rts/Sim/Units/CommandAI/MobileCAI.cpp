@@ -342,6 +342,8 @@ void CMobileCAI::SlowUpdate()
 		return;
 
 	if (!commandQue.empty() && commandQue.front().GetTimeOut() < gs->frameNum) {
+		if (commandQue.front().GetID() == CMD_LOAD_UNITS && commandQue.front().GetNumParams() == 1)
+			LoadDbg(owner, unitHandler.GetUnit(commandQue.front().GetParam(0)), "command-timeout");
 		StopMoveAndFinishCommand();
 		return;
 	}
@@ -1388,6 +1390,31 @@ static bool InDockingRange(const CUnit* owner, const float3& wantedPos, float ra
 	return (owner->pos.SqDistance(wantedPos) < Square(radius));
 }
 
+// LOADDBG: which CanTransport condition fails (mirrors CUnit::CanTransport, debug only)
+static const char* WhyCantTransport(const CUnit* t, const CUnit* u)
+{
+	if (!t->unitDef->IsTransportUnit()) return "not-a-transport";
+	if (u->GetTransporter() != nullptr) return "cargo-aboard-a-transport";
+	if (!eventHandler.AllowUnitTransport(t, u)) return "lua-AllowUnitTransport";
+	if (t->transportCapacityUsed >= t->unitDef->transportCapacity) return "capacity-full";
+	if (u->unitDef->cantBeTransported) return "cantBeTransported";
+	if (u->xsize > (t->unitDef->transportSize * SPRING_FOOTPRINT_SCALE)) return "too-big";
+	if (u->xsize < (t->unitDef->minTransportSize * SPRING_FOOTPRINT_SCALE)) return "too-small";
+	if (u->mass >= CSolidObject::DEFAULT_MASS || u->beingBuilt) return "mass-default-or-being-built";
+	if (u->mass < t->unitDef->minTransportMass) return "too-light";
+	if ((u->mass + t->transportMassUsed) > t->unitDef->transportMass) return "mass-full";
+	if (!t->CanLoadUnloadAtPos(u->pos, u)) return "cannot-load-at-cargo-pos";
+	return "CanTransport-other";
+}
+
+static void LoadDbg(const CUnit* t, const CUnit* u, const char* why)
+{
+	LOG("[LOADDBG] f=%d transport=%d cargo=%d dist=%.0f exit=%s capUsed=%d/%d massUsed=%.0f/%.0f loadingTransportId=%d",
+		gs->frameNum, t->id, (u != nullptr)? u->id: -1, (u != nullptr)? u->pos.distance2D(t->pos): -1.0f, why,
+		t->transportCapacityUsed, t->unitDef->transportCapacity, t->transportMassUsed, t->unitDef->transportMass,
+		(u != nullptr)? u->loadingTransportId: -2);
+}
+
 void CMobileCAI::ExecuteLoadUnits(Command& c)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -1397,6 +1424,7 @@ void CMobileCAI::ExecuteLoadUnits(Command& c)
 			CUnit* unit = unitHandler.GetUnit(c.GetParam(0));
 
 			if (unit == nullptr) {
+				LoadDbg(owner, nullptr, "cargo-gone");
 				StopMoveAndFinishCommand();
 				return;
 			}
@@ -1405,6 +1433,7 @@ void CMobileCAI::ExecuteLoadUnits(Command& c)
 				// internally issued by MobileCAI
 				if (unit->commandAI->commandQue.empty()) {
 					if (!LoadStillValid(unit)) {
+						LoadDbg(owner, unit, "internal-load-not-valid");
 						StopMoveAndFinishCommand();
 						return;
 					}
@@ -1425,13 +1454,16 @@ void CMobileCAI::ExecuteLoadUnits(Command& c)
 			}
 
 			if (inCommand == CMD_LOAD_UNITS) {
-				if (!owner->script->IsBusy())
+				if (!owner->script->IsBusy()) {
+					LoadDbg(owner, unit, "inCommand-load-script-idle");
 					StopMoveAndFinishCommand();
+				}
 
 				return;
 			}
 
 			if (!owner->CanTransport(unit) || !UpdateTargetLostTimer(int(c.GetParam(0)))) {
+				LoadDbg(owner, unit, owner->CanTransport(unit)? "target-lost-timer": WhyCantTransport(owner, unit));
 				StopMoveAndFinishCommand();
 				return;
 			}
