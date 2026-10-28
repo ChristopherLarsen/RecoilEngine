@@ -41,6 +41,7 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(hoverHeight),
 	CR_MEMBER(waterSpeedFactor),
 	CR_MEMBER(floorClearance),
+	CR_MEMBER(headingFree),
 
 	CR_MEMBER(scSpeed),
 	CR_MEMBER(scPhase),
@@ -558,7 +559,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	switch (setHeading) {
 		case HEADING_CHANGED_MOVE: {
-			wantReverse = WantReverse(waypointDir, flatFrontDir);
+			wantReverse = !HeadingLocked() && WantReverse(waypointDir, flatFrontDir);
 		} break;
 		case HEADING_CHANGED_STOP:
 		case HEADING_CHANGED_STUN: {
@@ -633,7 +634,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	scRestart = false;
 
-	float3 moveRequest = flatFrontDir * (dist * scDir);
+	const float3 motionDir = MotionDir();
+	float3 moveRequest = motionDir * (dist * scDir);
 
 	moveRequest.x = GridStep(owner->pos.x, moveRequest.x);
 	moveRequest.z = GridStep(owner->pos.z, moveRequest.z);
@@ -666,8 +668,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		}
 	}
 
-	oldSpeed = owner->speed.dot(flatFrontDir);
-	newSpeed = moveRequest.dot(flatFrontDir);
+	oldSpeed = owner->speed.dot(motionDir);
+	newSpeed = moveRequest.dot(motionDir);
 
 	// reported velocity is the step's displacement
 	owner->SetVelocityAndSpeed(moveRequest);
@@ -705,9 +707,36 @@ void CSupComGroundMoveType::StartDive(bool submerge)
 	depthFrames = (diveDepth > 0.0f)? (diveFrames * math::fabs(to - from) / diveDepth): 0.0f;
 }
 
+bool CSupComGroundMoveType::HeadingLocked() const
+{
+	return (headingFree && owner->moveDef != nullptr && owner->moveDef->speedModClass == MoveDef::Hover);
+}
+
+float3 CSupComGroundMoveType::MotionDir() const
+{
+	if (!HeadingLocked())
+		return flatFrontDir;
+
+	float3 d = waypointDir * XZVector;
+
+	if (d.SqLength2D() <= 1e-6f)
+		return flatFrontDir;
+
+	return d.SafeNormalize2D();
+}
+
 bool CSupComGroundMoveType::SetMemberValue(unsigned int memberHash, void* memberValue)
 {
 	static const unsigned int SUBMERGED_HASH = spring::LiteHash("submerged", sizeof("submerged") - 1, 0);
+	static const unsigned int HEADING_FREE_HASH = spring::LiteHash("supcomHeadingFree", sizeof("supcomHeadingFree") - 1, 0);
+
+	if (memberHash == HEADING_FREE_HASH) {
+		if (owner->moveDef == nullptr || owner->moveDef->speedModClass != MoveDef::Hover)
+			return false;
+
+		headingFree = *(reinterpret_cast<bool*>(memberValue));
+		return true;
+	}
 
 	if (memberHash == SUBMERGED_HASH) {
 		if (!submarine)

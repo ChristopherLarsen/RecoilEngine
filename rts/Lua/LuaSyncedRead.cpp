@@ -6191,6 +6191,7 @@ int LuaSyncedRead::GetUnitMoveTypeData(lua_State* L)
 			LuaPushNamedNumber(L, "supcomStepSpeed", scmt->GetStepSpeed());
 			LuaPushNamedNumber(L, "supcomStepPhase", scmt->GetStepPhase());
 			LuaPushNamedBool(L, "supcomBraking", scmt->GetStepBraking());
+			LuaPushNamedBool(L, "supcomHeadingFree", scmt->GetHeadingFree());
 			LuaPushNamedNumber(L, "supcomBlockedFrames", scmt->GetBlockedFrames());
 			LuaPushNamedNumber(L, "supcomPhysState", unit->physicalState);
 		}

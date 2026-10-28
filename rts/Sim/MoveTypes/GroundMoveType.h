@@ -154,6 +154,8 @@ public:
 private:
 	// derived move types may hold the arrival back, e.g. until the unit has come to rest
 	virtual bool ArrivalAllowed() const { return true; }
+	/// supcom: true while something else owns the unit's heading (ChangeHeading then does nothing)
+	virtual bool HeadingLocked() const { return false; }
 
 	float3 GetObstacleAvoidanceDir(const float3& desiredDir);
 	float3 Here() const;

@@ -1436,6 +1436,8 @@ void CGroundMoveType::ChangeHeading(short newHeading) {
 		return;
 	if (owner->GetTransporter() != nullptr)
 		return;
+	if (HeadingLocked())
+		return;
 
 	wantedHeading = newHeading;
 	if (owner->heading == wantedHeading) {
