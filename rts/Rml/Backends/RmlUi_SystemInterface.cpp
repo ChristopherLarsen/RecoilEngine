@@ -194,7 +194,7 @@ bool RmlSDLRecoil::InputEventHandler(Rml::Context* context, const SDL_Event& ev)
 			                                       GetKeyModifierState());
 			break;
 		case SDL_MOUSEWHEEL:
-			result = context->ProcessMouseWheel(float(-ev.wheel.y), GetKeyModifierState());
+			result = context->ProcessMouseWheel(-ev.wheel.preciseY, GetKeyModifierState());
 			break;
 		case SDL_KEYDOWN:
 			result = context->ProcessKeyDown(ConvertKey(ev.key.keysym.sym), GetKeyModifierState());

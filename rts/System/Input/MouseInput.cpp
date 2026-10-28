@@ -28,6 +28,8 @@
 #include "System/SafeUtil.h"
 
 #include <SDL_events.h>
+
+#include <cmath>
 #include <SDL_hints.h>
 #include <SDL_syswm.h>
 
@@ -89,7 +91,14 @@ bool IMouseInput::HandleSDLMouseEvent(const SDL_Event& event)
 		} break;
 		case SDL_MOUSEWHEEL: {
 			if (mouse != nullptr)
-				mouse->MouseWheel(event.wheel.y);
+				mouse->MouseWheel(event.wheel.preciseY); // trackpads send fractional steps that the integer y drops
+
+		} break;
+		case SDL_MULTIGESTURE: {
+			// trackpad pinch arrives as SDL's two-finger gesture; spreading the fingers zooms in like wheel-up.
+			// the threshold keeps the small distance jitter of a two-finger scroll from zooming twice
+			if (mouse != nullptr && event.mgesture.numFingers == 2 && std::fabs(event.mgesture.dDist) > 0.003f)
+				mouse->MouseWheel(event.mgesture.dDist * 30.0f);
 
 		} break;
 		case SDL_WINDOWEVENT: {
@@ -218,7 +227,8 @@ bool IMouseInput::WarpPos(int2 pos)
 		SDL_ShowCursor(SDL_DISABLE);
 	#endif
 
-	SDL_WarpMouseInWindow(globalRendering->GetWindow(), pos.x, pos.y);
+	// SDL warps in window points
+	SDL_WarpMouseInWindow(globalRendering->GetWindow(), int(pos.x / globalRendering->pixelRatio), int(pos.y / globalRendering->pixelRatio));
 
 	// SDL_WarpMouse generates SDL_MOUSEMOTION events
 	// in `middle click scrolling` those SDL generated ones would point into
