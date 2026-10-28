@@ -60,6 +60,9 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(directGoal),
 	CR_MEMBER(directCheckFrame),
 	CR_MEMBER(directClear),
+	CR_MEMBER(detourPoint),
+	CR_MEMBER(detourFor),
+	CR_MEMBER(detourOn),
 
 	CR_MEMBER(submarine),
 	CR_MEMBER(subOrdered),
@@ -334,10 +337,8 @@ float CSupComGroundMoveType::Advance(float topSpeed, float stopDist, bool stop)
 }
 
 
-bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
+bool CSupComGroundMoveType::FootprintSquares(const float3& pos, int& sx0, int& sz0, int& sx1, int& sz1) const
 {
-	const MoveDef* md = owner->moveDef;
-
 	// axis-aligned footprint, turned with the unit's facing
 	const bool alongX = (math::fabs(flatFrontDir.x) > math::fabs(flatFrontDir.z));
 	// across the heading an edge within FOOTPRINT_SIDE_EPS of a square boundary does not enter the next square, so
@@ -352,13 +353,23 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 	const float z1 = pos.z + hz;
 
 	if (x0 < 0.0f || z0 < 0.0f || x1 > mapDims.mapx * SQUARE_SIZE || z1 > mapDims.mapy * SQUARE_SIZE)
-		return true;
+		return false;
 
-	const int sx0 = std::clamp(int(x0 / SQUARE_SIZE), 0, mapDims.mapxm1);
-	const int sz0 = std::clamp(int(z0 / SQUARE_SIZE), 0, mapDims.mapym1);
+	sx0 = std::clamp(int(x0 / SQUARE_SIZE), 0, mapDims.mapxm1);
+	sz0 = std::clamp(int(z0 / SQUARE_SIZE), 0, mapDims.mapym1);
 	// the last square the footprint overlaps; an edge exactly on a square boundary does not enter the next square
-	const int sx1 = std::clamp(std::max(sx0, int(math::ceil(x1 / SQUARE_SIZE)) - 1), 0, mapDims.mapxm1);
-	const int sz1 = std::clamp(std::max(sz0, int(math::ceil(z1 / SQUARE_SIZE)) - 1), 0, mapDims.mapym1);
+	sx1 = std::clamp(std::max(sx0, int(math::ceil(x1 / SQUARE_SIZE)) - 1), 0, mapDims.mapxm1);
+	sz1 = std::clamp(std::max(sz0, int(math::ceil(z1 / SQUARE_SIZE)) - 1), 0, mapDims.mapym1);
+	return true;
+}
+
+bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
+{
+	const MoveDef* md = owner->moveDef;
+	int sx0, sz0, sx1, sz1;
+
+	if (!FootprintSquares(pos, sx0, sz0, sx1, sz1))
+		return true;
 
 	for (int sz = sz0; sz <= sz1; sz++) {
 		for (int sx = sx0; sx <= sx1; sx++) {
@@ -368,6 +379,23 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 	}
 
 	return false;
+}
+
+bool CSupComGroundMoveType::PathBlocked(const float3& pos) const
+{
+	// the step test gets structures from the engine's collision handling; the planner, with its square-offset
+	// footprint, may cut one (a mex beside a factory exit), so the repair tests them too, under the exact footprint
+	int sx0, sz0, sx1, sz1;
+
+	if (!FootprintSquares(pos, sx0, sz0, sx1, sz1))
+		return true;
+	if (FootprintBlocked(pos))
+		return true;
+
+	MoveTypes::CheckCollisionQuery query(owner);
+	query.UpdateElevationForPos(int2{(sx0 + sx1) / 2, (sz0 + sz1) / 2});
+
+	return ((CMoveMath::RangeIsBlocked(sx0, sx1, sz0, sz1, &query, ThreadPool::GetThreadNum()) & CMoveMath::BLOCK_STRUCTURE) != 0);
 }
 
 bool CSupComGroundMoveType::DirectLineClear()
@@ -449,14 +477,14 @@ bool CSupComGroundMoveType::LineFits(const float3& a, const float3& b) const
 	const int steps = std::max(1, int(math::ceil(d.Length2D() / (SQUARE_SIZE * 0.25f))));
 
 	for (int k = 1; k <= steps; k++) {
-		if (FootprintBlocked(a + d * (float(k) / steps)))
+		if (PathBlocked(a + d * (float(k) / steps)))
 			return false;
 	}
 
 	return true;
 }
 
-float3 CSupComGroundMoveType::FitWaypoint(const float3& wp) const
+float3 CSupComGroundMoveType::FitWaypoint(const float3& wp)
 {
 	// the nearest point to the waypoint (within a square and a half) where the footprint fits
 	float3 fit = wp;
@@ -473,8 +501,24 @@ float3 CSupComGroundMoveType::FitWaypoint(const float3& wp) const
 	// not reachable in a straight line from here (round a corner): first a point near the unit from which it is
 	const float3& pos = owner->pos;
 
+	// a detour found while blocked is followed until reached; the first free step must not steer straight at the
+	// obstacle again
+	if (detourOn) {
+		if (detourFor.same(fit) && pos.SqDistance2D(detourPoint) > Square(SQUARE_SIZE * 0.5f) && !LineFits(pos, fit))
+			return detourPoint;
+
+		detourOn = false;
+	}
+
 	if (scBlockedFrames == 0 || LineFits(pos, fit))
 		return fit;
+
+	const auto Detour = [&](const float3& p) {
+		detourOn = true;
+		detourPoint = p;
+		detourFor = fit;
+		return p;
+	};
 
 	// first the two axis-aligned corners (line up with a gap, or round a wall end), then points round the unit
 	const float3 corners[2] = {{pos.x, pos.y, fit.z}, {fit.x, pos.y, pos.z}};
@@ -484,14 +528,14 @@ float3 CSupComGroundMoveType::FitWaypoint(const float3& wp) const
 		if (p.SqDistance2D(pos) < 1.0f)
 			continue;
 		if (LineFits(pos, p) && LineFits(p, fit))
-			return p;
+			return Detour(p);
 	}
 
 	for (const float3& o: NearOffsets()) {
 		const float3 p = pos + o * 2.0f;
 
 		if (LineFits(pos, p) && LineFits(p, fit))
-			return p;
+			return Detour(p);
 	}
 
 	return fit;
