@@ -129,7 +129,20 @@ void CPreGame::LoadSaveFile(const std::string& save)
 	saveFileHandler = ILoadSaveHandler::CreateHandler(save);
 
 	if (saveFileHandler->LoadGameStartInfo(save) || configHandler->GetBool("LoadBadSaves")) {
-		StartServer(saveFileHandler->GetScriptText());
+		// supcom: the server's script names the save, so the demo of this game records it and its
+		// playback can start from the same save (GameDataReceived); clients' own setup is untouched (Q69)
+		TdfParser script(saveFileHandler->GetScriptText().c_str(), saveFileHandler->GetScriptText().size());
+		TdfParser::TdfSection* tgame = script.GetRootSection()->sections["game"];
+
+		if (tgame == nullptr) {
+			StartServer(saveFileHandler->GetScriptText());
+			return;
+		}
+
+		std::ostringstream savedScript;
+		tgame->AddPair("SaveFile", save);
+		script.print(savedScript);
+		StartServer(savedScript.str());
 		return;
 	}
 
@@ -590,6 +603,22 @@ void CPreGame::GameDataReceived(std::shared_ptr<const netcode::RawPacket> packet
 		CPlayer::UpdateControlledTeams();
 	} else {
 		throw content_error("error loading received setup-script");
+	}
+
+	// supcom: the demo of a game that started from a save names that save (LoadSaveFile); playback
+	// loads it before the recorded frames run, as the recorded game did (Q69)
+	if (saveFileHandler == nullptr && !gameSetup->demoName.empty()) {
+		TdfParser script(gameData->GetSetupText().c_str(), gameData->GetSetupText().size());
+		const std::string save = script.SGetValueDef("", "GAME\\SaveFile");
+
+		if (!save.empty()) {
+			saveFileHandler = ILoadSaveHandler::CreateHandler(save);
+
+			if (!saveFileHandler->LoadGameStartInfo(save))
+				throw content_error("[PreGame] demo of a saved game: save \"" + save + "\" is missing or from another engine version");
+
+			LOG("[PreGame::%s] the demo starts from save \"%s\"", __func__, save.c_str());
+		}
 	}
 
 	// some sanity checks
