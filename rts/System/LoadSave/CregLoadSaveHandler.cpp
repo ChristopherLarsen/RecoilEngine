@@ -430,6 +430,12 @@ void CCregLoadSaveHandler::LoadGame()
 		// recalculation (CReadMap::PostLoad) queues the whole smooth mesh again
 		smoothGround.LoadState(iss);
 		mapDamage->LoadState(iss);
+
+		// supcom: the LOS maps are not saved (CLosHandler: the LOS types repopulate from the units), and they would
+		// repopulate only in the first frame's LOS update, after that frame's synced Lua has run, so Lua saw no line of
+		// sight for one frame (a gun dropped its held target as unseen, Q73). Rebuilt now from the loaded units, as the
+		// saving run's maps were at the end of the saved frame (the LOS update runs after all movement).
+		losHandler->Update();
 	}
 
 	LEAVE_SYNCED_CODE();
