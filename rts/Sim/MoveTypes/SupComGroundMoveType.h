@@ -101,15 +101,10 @@ private:
 	float AdvanceBraking(float dt, float& dist);
 	void AdvanceDrive(float dt, float topSpeed, float& v, float& dist) const;
 
-	/// the squares under the centred footprint at pos; false when it leaves the map
-	bool FootprintSquares(const float3& pos, int& sx0, int& sz0, int& sx1, int& sz1) const;
 	bool FootprintBlocked(const float3& pos) const;
-	/// terrain or a structure under the footprint (what refuses a step; the waypoint repair's test)
-	bool PathBlocked(const float3& pos) const;
-	/// the waypoint, or the nearest point where the footprint fits; round a corner or an obstacle the path cuts, a
-	/// point to go to first (kept until reached)
-	float3 FitWaypoint(const float3& wp);
-	/// whether the footprint fits all along the straight line from a to b (terrain and structures)
+	/// the waypoint, or the nearest point where the footprint fits; round a corner, a point to go to first
+	float3 FitWaypoint(const float3& wp) const;
+	/// whether the footprint fits all along the straight line from a to b
 	bool LineFits(const float3& a, const float3& b) const;
 	bool DirectLineClear();
 	void SetWaypointDir(const float3& cwp, const float3& opos) override;
@@ -175,10 +170,4 @@ private:
 	float3 directGoal;
 	int directCheckFrame = 0;
 	bool directClear = false;
-
-	// detour round an obstacle the path cuts, found while blocked (Q100): followed until reached, or until the
-	// waypoint changes or lies in a straight line
-	float3 detourPoint;
-	float3 detourFor;
-	bool detourOn = false;
 };
