@@ -232,6 +232,30 @@ static void CreatePathMetatable(lua_State* L)
  * @return number nearZ
  * @return integer visited squares visited
  */
+// buffers of the reachable-point fill, reused between calls: one generation number per call marks a square as seen
+// (seenGen) or as having a known standable() answer (memoGen, memoVal), so nothing is cleared or allocated per call.
+// Synced Lua runs on the main thread only.
+struct ReachableFillBuffers {
+	std::vector<std::uint32_t> seenGen;
+	std::vector<std::uint32_t> memoGen;
+	std::vector<std::uint8_t> memoVal;
+	std::vector<int> queue;
+	std::uint32_t gen = 0;
+
+	std::uint32_t Next(size_t size) {
+		if (seenGen.size() != size || ++gen == 0) {
+			seenGen.assign(size, 0);
+			memoGen.assign(size, 0);
+			memoVal.assign(size, 0);
+			gen = 1;
+		}
+		queue.clear();
+		return gen;
+	}
+};
+
+static ReachableFillBuffers reachableFill;
+
 int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 {
 	const CUnit* unit = unitHandler.GetUnit(luaL_checkint(L, 1));
@@ -263,8 +287,11 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 
 	MoveTypes::CheckCollisionQuery collisionQuery(unit);
 
+	ReachableFillBuffers& fb = reachableFill;
+	const std::uint32_t gen = fb.Next(size_t(W) * H);
+
 	// a square the unit can stand on: every square of its footprint passable, no structure there
-	const auto standable = [&](int sx, int sz) {
+	const auto standableUncached = [&](int sx, int sz) {
 		const int x0 = sx - (fx >> 1);
 		const int z0 = sz - (fz >> 1);
 
@@ -280,12 +307,23 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 		collisionQuery.UpdateElevationForPos(int2{sx, sz});
 		return ((CMoveMath::RangeIsBlocked(x0, x0 + fx - 1, z0, z0 + fz - 1, &collisionQuery, 0) & CMoveMath::BLOCK_STRUCTURE) == 0);
 	};
+	// the same answer, computed once per square and call (the diagonal test asks for a square's neighbours again)
+	const auto standable = [&](int sx, int sz) {
+		if (sx < 0 || sz < 0 || sx >= W || sz >= H)
+			return standableUncached(sx, sz);
 
-	std::vector<std::uint8_t> seen(size_t(W) * H, 0);
-	std::vector<int> queue;
-	queue.reserve(4096);
+		const size_t i = size_t(sz) * W + sx;
+
+		if (fb.memoGen[i] != gen) {
+			fb.memoGen[i] = gen;
+			fb.memoVal[i] = std::uint8_t(standableUncached(sx, sz));
+		}
+		return (fb.memoVal[i] != 0);
+	};
+
+	std::vector<int>& queue = fb.queue;
 	queue.push_back(ssz * W + ssx);
-	seen[ssz * W + ssx] = 1;
+	fb.seenGen[ssz * W + ssx] = gen;
 
 	int best = ssz * W + ssx;
 	float bestSq = float((ssx - gsx) * (ssx - gsx) + (ssz - gsz) * (ssz - gsz));
@@ -314,10 +352,10 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 
 				const int ni = nz * W + nx;
 
-				if (seen[ni])
+				if (fb.seenGen[ni] == gen)
 					continue;
 
-				seen[ni] = 1;
+				fb.seenGen[ni] = gen;
 
 				// diagonal steps only past two open orthogonal neighbours (no corner cutting)
 				if (dx != 0 && dz != 0 && (!standable(cx + dx, cz) || !standable(cx, cz + dz)))
