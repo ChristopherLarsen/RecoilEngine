@@ -34,6 +34,12 @@
  */
 void ErrorMessageBox(const char* msg, const char* caption, unsigned int flags = MBF_OK);
 
+/**
+ * supcom: true when the environment asks for no modal crash or error box (KARDASHEV_NO_CRASH_DIALOG or
+ * SPRING_NO_CRASH_DIALOG set to anything but "" or "0"), for unattended test runs.
+ */
+bool NoCrashDialog();
+
 
 /**
  * Spring's common exception handler.

@@ -477,6 +477,11 @@ LONG CALLBACK ExceptionHandler(LPEXCEPTION_POINTERS e)
 	// only the first crash is of any real interest
 	CrashHandler::Remove();
 
+	// supcom: unattended runs ask for no modal box; end with the exception code itself (0xC0000005 for an access
+	// violation) now that the log and the stack trace are written
+	if (NoCrashDialog())
+		TerminateProcess(GetCurrentProcess(), e->ExceptionRecord->ExceptionCode);
+
 	// inform user about the exception
 	SNPRINTF(errBuf, sizeof(errBuf), errFmt, errStr, (logOutput.GetFilePath()).c_str());
 	ErrorMessageBox(errBuf, "Spring: Unhandled exception", MBF_OK | MBF_CRASH); //calls exit()!

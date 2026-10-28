@@ -8,6 +8,7 @@
 
 #include "errorhandler.h"
 
+#include <cstdlib>
 #include <string>
 #include <functional>
 
@@ -82,10 +83,22 @@ static void ExitSpringProcess(const char* msg, const char* caption, unsigned int
 #endif
 
 
+bool NoCrashDialog()
+{
+	for (const char* name: {"KARDASHEV_NO_CRASH_DIALOG", "SPRING_NO_CRASH_DIALOG"}) {
+		const char* v = std::getenv(name);
+
+		if (v != nullptr && v[0] != '\0' && !(v[0] == '0' && v[1] == '\0'))
+			return true;
+	}
+
+	return false;
+}
+
 void ErrorMessageBox(const char* msg, const char* caption, unsigned int flags)
 {
 	#if (!defined(DEDICATED) && !defined(HEADLESS))
-	if (Threading::IsMainThread()) {
+	if (Threading::IsMainThread() && !NoCrashDialog()) {
 		// the thread that throws up this message-box will be blocked
 		// until it is clicked away which can cause spurious detected
 		// hangs, so deregister it here (by forwarding an empty error)
