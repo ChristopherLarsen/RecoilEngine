@@ -3,6 +3,7 @@
 #include "PathHeatMap.h"
 #include "PathConstants.h"
 #include "PathManager.h"
+#include "PathStateIO.h"
 #include "Sim/Misc/GlobalSynced.h"
 #include "Sim/MoveTypes/MoveDefHandler.h"
 #include "Sim/Objects/SolidObject.h"
@@ -109,6 +110,16 @@ float PathHeatMap::GetHeatCost(unsigned int x, unsigned int z, const MoveDef& md
 		c = (md.heatMod * val);
 
 	return c;
+}
+
+void PathHeatMap::SaveState(std::ostream& os) const {
+	StateIO::PutVec(os, heatMap);
+	StateIO::Put(os, heatMapOffset);
+}
+
+void PathHeatMap::LoadState(std::istream& is) {
+	StateIO::GetVecSized(is, heatMap, "heat map");
+	StateIO::Get(is, heatMapOffset);
 }
 
 }

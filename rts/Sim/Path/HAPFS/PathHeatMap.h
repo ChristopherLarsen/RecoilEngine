@@ -3,6 +3,7 @@
 #ifndef HAPFS_PATH_HEATMAP_HDR
 #define HAPFS_PATH_HEATMAP_HDR
 
+#include <iosfwd>
 #include <vector>
 #include "System/type2.h"
 
@@ -43,6 +44,10 @@ public:
 	}
 
 	float GetHeatCost(unsigned int x, unsigned int z, const MoveDef&, unsigned int ownerID) const;
+
+	// supcom: save games (Q69)
+	void SaveState(std::ostream& os) const;
+	void LoadState(std::istream& is);
 
 private:
 	struct HeatCell {
