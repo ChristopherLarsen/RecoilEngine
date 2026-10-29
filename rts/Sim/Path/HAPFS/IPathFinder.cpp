@@ -7,6 +7,7 @@
 #include "Sim/MoveTypes/MoveDefHandler.h"
 #include "System/Log/ILog.h"
 #include "System/TimeProfiler.h"
+#include "System/Threading/SupComThreading.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -163,10 +164,8 @@ IPath::SearchResult IPathFinder::GetPath(
 
 		//if (ci.pathType == -1)
 		// When the MT 'Pathing System' is running, it will handle updating the cache separately.
-		// supcom: only the main thread outside parallel sections adds to the shared cache. Worker threads added to it
-		// concurrently (a data race), and which searches cached what depended on the thread count and scheduling, so
-		// later searches got cached or fresh results differently from run to run (same-seed divergence)
-		if (ThreadPool::GetThreadNum() == 0 && !ThreadPool::IsInMultiThreadedSection())
+		// supcom hook (SupComThreading.h, PathCacheMainThreadOnly): only the main thread adds to the shared cache
+		if ((!SupComThreading::PathCacheMainThreadOnly() || ThreadPool::GetThreadNum() == 0) && !ThreadPool::IsInMultiThreadedSection())
 			AddCache(&path, result, mStartBlock, goalBlock, pfDef.sqGoalRadius, moveDef.pathType, pfDef.synced);
 		// else{
 		// 	if (debugLoggingActive == ThreadPool::GetThreadNum()){
