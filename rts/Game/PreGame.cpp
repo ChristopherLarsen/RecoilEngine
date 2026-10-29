@@ -6,6 +6,7 @@
 
 #include <SDL_keycode.h>
 
+#include "System/LoadSave/SupComSaveState.h"
 #include "PreGame.h"
 
 #include "ClientData.h"
@@ -134,7 +135,7 @@ void CPreGame::LoadSaveFile(const std::string& save)
 		TdfParser script(saveFileHandler->GetScriptText().c_str(), saveFileHandler->GetScriptText().size());
 		TdfParser::TdfSection* tgame = script.GetRootSection()->sections["game"];
 
-		if (tgame == nullptr) {
+		if (tgame == nullptr || !SupComSaveState::FullState()) {
 			StartServer(saveFileHandler->GetScriptText());
 			return;
 		}
@@ -607,7 +608,7 @@ void CPreGame::GameDataReceived(std::shared_ptr<const netcode::RawPacket> packet
 
 	// supcom: the demo of a game that started from a save names that save (LoadSaveFile); playback
 	// loads it before the recorded frames run, as the recorded game did (Q69)
-	if (saveFileHandler == nullptr && !gameSetup->demoName.empty()) {
+	if (saveFileHandler == nullptr && !gameSetup->demoName.empty() && SupComSaveState::FullState()) {
 		TdfParser script(gameData->GetSetupText().c_str(), gameData->GetSetupText().size());
 		const std::string save = script.SGetValueDef("", "GAME\\SaveFile");
 

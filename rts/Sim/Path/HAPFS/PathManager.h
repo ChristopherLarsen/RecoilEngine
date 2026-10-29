@@ -3,6 +3,7 @@
 #ifndef HAPFS_PATHMANAGER_H
 #define HAPFS_PATHMANAGER_H
 
+#include "System/LoadSave/SupComSaveState.h"
 #include <cinttypes>
 
 #include "Sim/Misc/ModInfo.h"
@@ -118,7 +119,7 @@ public:
 	std::int64_t Finalize() override;
 	std::int64_t PostFinalizeRefresh() override;
 
-	bool SavesState() const override { return true; }
+	bool SavesState() const override { return SupComSaveState::FullState(); } // supcom hook: SaveGameFullState
 	void SaveState(std::ostream& os) const override;
 	void LoadState(std::istream& is) override;
 

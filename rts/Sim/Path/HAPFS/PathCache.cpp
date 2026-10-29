@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "PathCache.h"
-#include "PathStateIO.h"
 #include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Misc/GlobalSynced.h"
 #include "System/Log/ILog.h"
@@ -125,57 +124,6 @@ void CPathCache::Update()
 	RECOIL_DETAILED_TRACY_ZONE;
 	while (!cacheQue.empty() && (cacheQue.front().timeout) < gs->frameNum)
 		RemoveFrontQueItem();
-}
-
-void CPathCache::SaveState(std::ostream& os) const
-{
-	// every queue item names one cached path (AddPath queues a hash only when it adds it)
-	StateIO::Put(os, std::uint64_t(cacheQue.size()));
-
-	for (const CacheQueItem& qi: cacheQue) {
-		const auto it = cachedPaths.find(qi.hash);
-		assert(it != cachedPaths.end());
-		const CacheItem& ci = it->second;
-
-		StateIO::Put(os, qi.timeout);
-		StateIO::Put(os, qi.hash);
-		StateIO::Put(os, std::int32_t(ci.result));
-		StateIO::PutPath(os, ci.path);
-		StateIO::Put(os, ci.strtBlock);
-		StateIO::Put(os, ci.goalBlock);
-		StateIO::Put(os, ci.goalRadius);
-		StateIO::Put(os, ci.pathType);
-	}
-}
-
-void CPathCache::LoadState(std::istream& is)
-{
-	std::uint64_t n = 0;
-	StateIO::Get(is, n);
-
-	cacheQue.clear();
-	cachedPaths.clear();
-
-	for (std::uint64_t i = 0; i < n; i++) {
-		CacheQueItem qi;
-		CacheItem ci;
-		std::int32_t result = 0;
-
-		StateIO::Get(is, qi.timeout);
-		StateIO::Get(is, qi.hash);
-		StateIO::Get(is, result);
-		StateIO::GetPath(is, ci.path);
-		StateIO::Get(is, ci.strtBlock);
-		StateIO::Get(is, ci.goalBlock);
-		StateIO::Get(is, ci.goalRadius);
-		StateIO::Get(is, ci.pathType);
-		ci.result = IPath::SearchResult(result);
-
-		cacheQue.push_back(qi);
-		cachedPaths[qi.hash] = std::move(ci);
-	}
-
-	maxCacheSize = std::max<std::uint64_t>(maxCacheSize, cacheQue.size());
 }
 
 void CPathCache::RemoveFrontQueItem()
