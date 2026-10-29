@@ -16,6 +16,7 @@
 #include "Sim/Units/UnitHandler.h"
 #include "Sim/Units/CommandAI/Command.h"
 #include "System/SpringMath.h"
+#include "SupComMath.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -279,7 +280,7 @@ void CSupComAirMoveType::UpdateFlight()
 
 		// always forwards along the heading, turning towards the goal (round it when idle)
 		if (!passOut && aimDist > 1.0f)
-			wantedHeading = GetHeadingFromVector(toAim.x, toAim.z);
+			wantedHeading = SupComHeadingFromVector(toAim.x, toAim.z);
 
 		dir = GetVectorFromHeading(owner->heading);
 		horSpeed = topSpeed - (topSpeed - horSpeed) * math::exp(-riseRate);
@@ -296,7 +297,7 @@ void CSupComAirMoveType::UpdateFlight()
 			dir = (goalDist > 0.0f)? (toGoal / goalDist): ZeroVector;
 
 			if (goalDist > 1.0f)
-				wantedHeading = GetHeadingFromVector(dir.x, dir.z);
+				wantedHeading = SupComHeadingFromVector(dir.x, dir.z);
 		}
 	}
 
