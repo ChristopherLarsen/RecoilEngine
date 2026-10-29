@@ -149,7 +149,7 @@ struct MultithreadedSection {
 
 	// supcom hook (SupComThreading.h, PathCacheMainThreadOnly): restore the previous state instead of clearing it
 	~MultithreadedSection() {
-		ThreadPool::SetInMultiThreadedSection(wasInSection && SupComThreading::PathCacheMainThreadOnly());
+		ThreadPool::SetInMultiThreadedSection(wasInSection && SupComThreading::PathCacheMainThreadOnlyCached());
 	}
 
 	const bool wasInSection;
