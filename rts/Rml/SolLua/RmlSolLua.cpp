@@ -57,6 +57,7 @@ namespace Rml::SolLua
 		 * Global functions for Recoil's RmlUi implementation.
 		 * @table RmlUi
 		 */
+		SetMainThread(state->lua_state());
 		sol::table namespace_table = state->create_named_table("RmlUi");
 
 		bind_color(namespace_table);

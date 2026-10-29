@@ -63,6 +63,31 @@ struct sol::is_container<Rml::ElementList> : std::true_type {};
 namespace Rml::SolLua
 {
 
+	// supcom: C++ objects that keep a Lua reference (event listeners, data models) keep it on the Lua state's main
+	// thread. A sol2 reference holds the lua_State it was made on, and with Lua 5.1 sol2 cannot find the main thread
+	// by itself (sol::main_thread needs sol::set_default_state). A listener or data model made by Lua code running in
+	// a coroutine pointed at that coroutine's stack; once the coroutine was collected, the next event or data-model
+	// read pushed onto freed memory (heap corruption in the Lua GC, frontend-driver 2026-10-29).
+	inline char mainThreadKey = 0;
+
+	/// Records L, the state's main thread, in its registry (RegisterLua).
+	inline void SetMainThread(lua_State* L)
+	{
+		lua_pushlightuserdata(L, &mainThreadKey);
+		lua_pushthread(L);
+		lua_rawset(L, LUA_REGISTRYINDEX);
+	}
+
+	/// The main thread of L's state (L itself if none was recorded).
+	inline lua_State* MainThread(lua_State* L)
+	{
+		lua_pushlightuserdata(L, &mainThreadKey);
+		lua_rawget(L, LUA_REGISTRYINDEX);
+		lua_State* M = lua_tothread(L, -1);
+		lua_pop(L, 1);
+		return (M != nullptr)? M: L;
+	}
+
 	sol::object makeObjectFromVariant(const Rml::Variant* variant, sol::state_view s);
 	using SolObjectMap = std::unordered_map<std::string, sol::object>;
 

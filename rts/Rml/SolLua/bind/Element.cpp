@@ -46,7 +46,7 @@ namespace Rml::SolLua
 	{
 		void addEventListener(Rml::Element& self, const Rml::String& event, sol::protected_function func, const bool in_capture_phase = false)
 		{
-			auto e = new SolLuaEventListener{ func, &self };
+			auto e = new SolLuaEventListener{ sol::protected_function{ MainThread(func.lua_state()), func }, &self };
 			self.AddEventListener(event, e, in_capture_phase);
 		}
 
@@ -70,14 +70,14 @@ namespace Rml::SolLua
 
 		void addEventListener(Rml::Element& self, const Rml::String& event, const Rml::String& code, sol::this_state s)
 		{
-			auto state = sol::state_view{ s };
+			auto state = sol::state_view{ MainThread(s) };
 			auto e = new SolLuaEventListener{ state, code, &self };
 			self.AddEventListener(event, e, false);
 		}
 
 		void addEventListener(Rml::Element& self, const Rml::String& event, const Rml::String& code, sol::this_state s, const bool in_capture_phase)
 		{
-			auto state = sol::state_view{ s };
+			auto state = sol::state_view{ MainThread(s) };
 			auto e = new SolLuaEventListener{ state, code, &self };
 			self.AddEventListener(event, e, in_capture_phase);
 		}
