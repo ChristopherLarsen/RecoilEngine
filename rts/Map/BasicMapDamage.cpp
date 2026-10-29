@@ -14,6 +14,7 @@
 #include "Sim/Path/IPathManager.h"
 #include "Sim/Features/FeatureHandler.h"
 #include "Sim/Path/HAPFS/PathStateIO.h"
+#include "SupComTerrain.h"
 #include "System/TimeProfiler.h"
 
 #include <cinttypes>
@@ -272,9 +273,6 @@ void CBasicMapDamage::Update()
 
 		unsigned int expSquarePoolIdx = e.idx;
 
-		// supcom: the area whose heights this step changes, building footprints included
-		SRectangle changed(e.x1 - 1, e.y1 - 1, e.x2 + 1, e.y2 + 1);
-
 		for (int y = e.y1; y <= e.y2; ++y) {
 			for (int x = e.x1; x <= e.x2; ++x) {
 				readMap->AddHeight(y * mapDims.mapxp1 + x, explosionSquaresPool[ (expSquarePoolIdx++) % explosionSquaresPool.size() ]);
@@ -295,22 +293,22 @@ void CBasicMapDamage::Update()
 				}
 			}
 
-			changed.x1 = std::min(changed.x1, b.tx1 - 1); changed.x2 = std::max(changed.x2, b.tx2 + 1);
-			changed.y1 = std::min(changed.y1, b.tz1 - 1); changed.y2 = std::max(changed.y2, b.tz2 + 1);
-
 			unit->Move(UpVector * b.dif, true);
 		}
 
-		if (e.ttl != 0) {
-			// supcom: the derived terrain (centre heights, normals, slopes) follows the heights every step; the full
-			// recalculation (LOS, paths, smooth mesh) stays at the end. A loaded game rebuilds the derived terrain
-			// from the heights, so it must never lag behind them (save/load identity, Q69)
-			readMap->UpdateHeightMapSynced({std::max(changed.x1, 0), std::max(changed.y1, 0), std::min(changed.x2, mapDims.mapx), std::min(changed.y2, mapDims.mapy)});
+		// supcom hook (SupComTerrain.h, TerrainFollowHeights): the derived terrain follows each step, the final
+		// recalculation covers the building footprints
+		if (SupComTerrain::FollowHeights()) {
+			const auto area = SupComTerrain::ExplosionArea(e.x1, e.x2, e.y1, e.y2, e.buildings, [](int id) { return unitHandler.GetUnit(id) != nullptr; });
+			if (e.ttl != 0) { SupComTerrain::UpdateDerived(area); continue; }
+			SupComTerrain::Recalc(area, 0);
 			continue;
 		}
 
-		// supcom: with the building footprints, which can reach past the crater's own squares
-		RecalcArea(changed.x1, changed.x2, changed.y1, changed.y2);
+		if (e.ttl != 0)
+			continue;
+
+		RecalcArea(e.x1 - 1, e.x2 + 1, e.y1 - 1, e.y2 + 1);
 	}
 
 

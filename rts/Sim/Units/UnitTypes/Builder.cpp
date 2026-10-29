@@ -8,6 +8,7 @@
 #include "Game/GlobalUnsynced.h"
 #include "Map/Ground.h"
 #include "Map/MapDamage.h"
+#include "Map/SupComTerrain.h"
 #include "Map/ReadMap.h"
 #include "System/SpringMath.h"
 #include "Sim/Features/Feature.h"
@@ -158,13 +159,6 @@ bool CBuilder::UpdateTerraform(const Command&)
 
 	assert(!mapDamage->Disabled());
 
-	// supcom: the last step of a terraform is recalculated too; StopBuild only recalculates while terraforming is
-	// still set, so the derived terrain, LOS, paths and smooth mesh kept the heights of the last SlowUpdate
-	const auto RecalcTerraformArea = [this]() {
-		constexpr int tsr = TERRA_SMOOTHING_RADIUS;
-		mapDamage->RecalcArea(tx1 - tsr, tx2 + tsr, tz1 - tsr, tz2 + tsr);
-	};
-
 	const auto SmoothBorders = [this, heightmap, &terraformScale]() {
 		// smooth the x-borders
 		for (int z = tz1; z <= tz2; z++) {
@@ -238,7 +232,7 @@ bool CBuilder::UpdateTerraform(const Command&)
 			heightsChanged = true;
 
 			if (curBuildee->terraformLeft <= 0.0f) {
-				RecalcTerraformArea();
+				if (SupComTerrain::FollowHeights()) SupComTerrain::Recalc({tx1, tx2, tz1, tz2}, TERRA_SMOOTHING_RADIUS); // supcom hook: the last step
 				terraforming = false;
 				curBuildee->groundLevelled = true;
 
@@ -272,20 +266,16 @@ bool CBuilder::UpdateTerraform(const Command&)
 		heightsChanged = true;
 
 		if (myTerraformLeft <= 0.0f) {
-			RecalcTerraformArea();
+			if (SupComTerrain::FollowHeights()) SupComTerrain::Recalc({tx1, tx2, tz1, tz2}, TERRA_SMOOTHING_RADIUS); // supcom hook: the last step
 			terraforming = false;
 			StopBuild();
 		}
 	} break;
 	}
 
-	// supcom: the derived terrain (centre heights, normals, slopes) follows the heights every frame; the full
-	// recalculation (LOS, paths, smooth mesh) stays on SlowUpdate. A loaded game rebuilds the derived terrain from
-	// the heights, so it must never lag behind them (save/load identity, Q69)
-	if (heightsChanged && terraforming) {
-		constexpr int tsr = TERRA_SMOOTHING_RADIUS;
-		readMap->UpdateHeightMapSynced({std::max(tx1 - tsr, 0), std::max(tz1 - tsr, 0), std::min(tx2 + tsr, mapDims.mapx), std::min(tz2 + tsr, mapDims.mapy)});
-	}
+	// supcom hook (SupComTerrain.h, TerrainFollowHeights): the derived terrain follows every step
+	if (heightsChanged && terraforming && SupComTerrain::FollowHeights())
+		SupComTerrain::UpdateDerived({tx1 - TERRA_SMOOTHING_RADIUS, tx2 + TERRA_SMOOTHING_RADIUS, tz1 - TERRA_SMOOTHING_RADIUS, tz2 + TERRA_SMOOTHING_RADIUS});
 
 	ScriptDecloak(curBuildee, nullptr);
 	CreateNanoParticle(terraformCenter, terraformRadius * 0.5f, false);
