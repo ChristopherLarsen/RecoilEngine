@@ -13,14 +13,8 @@
 #include "Sim/Units/UnitHandler.h"
 #include "Sim/Path/IPathManager.h"
 #include "Sim/Features/FeatureHandler.h"
-#include "Sim/Path/HAPFS/PathStateIO.h"
 #include "SupComTerrain.h"
 #include "System/TimeProfiler.h"
-
-#include <cinttypes>
-#include <istream>
-#include <ostream>
-#include <string>
 
 #include "System/Misc/TracyDefs.h"
 
@@ -323,77 +317,5 @@ void CBasicMapDamage::Update()
 	// no more explosions left to process, clear queue for real
 	explosionUpdateQueue.clear();
 	explUpdateQueueIdx = 0;
-}
-
-
-// supcom (Q69): craters still being dug when the game is saved. Each explosion lowers its squares over
-// EXPLOSION_LIFETIME frames from the height steps it put in the square pool; without them a loaded game would
-// stop the crater part-way. Saves the queue and, for every explosion still running, its steps from the pool.
-namespace {
-	constexpr std::uint32_t MAP_DAMAGE_STATE_VERSION = 1;
-}
-
-void CBasicMapDamage::SaveState(std::ostream& os) const
-{
-	using namespace HAPFS::StateIO;
-	Put(os, MAP_DAMAGE_STATE_VERSION);
-	Put(os, std::uint64_t(explosionSquaresPool.size()));
-	Put(os, explSquaresPoolIdx);
-	Put(os, explUpdateQueueIdx);
-	Put(os, std::uint64_t(explosionUpdateQueue.size()));
-
-	for (const Explo& e: explosionUpdateQueue) {
-		Put(os, e.pos);
-		Put(os, e.strength);
-		Put(os, e.radius);
-		Put(os, e.ttl);
-		Put(os, e.x1); Put(os, e.x2);
-		Put(os, e.y1); Put(os, e.y2);
-		Put(os, e.idx);
-		PutVec(os, e.buildings);
-
-		const std::uint64_t n = (e.ttl > 0)? std::uint64_t(e.x2 - e.x1 + 1) * (e.y2 - e.y1 + 1): 0;
-		Put(os, n);
-		for (std::uint64_t k = 0; k < n; k++)
-			Put(os, explosionSquaresPool[(e.idx + k) % explosionSquaresPool.size()]);
-	}
-}
-
-void CBasicMapDamage::LoadState(std::istream& is)
-{
-	using namespace HAPFS::StateIO;
-	std::uint32_t version = 0;
-	Get(is, version);
-	if (version != MAP_DAMAGE_STATE_VERSION)
-		throw content_error("[BasicMapDamage] save game has map damage state version " + std::to_string(version));
-
-	std::uint64_t poolSize = 0;
-	std::uint64_t count = 0;
-	Get(is, poolSize);
-	if (poolSize != explosionSquaresPool.size())
-		throw content_error("[BasicMapDamage] explosion square pool size mismatch");
-
-	Get(is, explSquaresPoolIdx);
-	Get(is, explUpdateQueueIdx);
-	Get(is, count);
-
-	explosionUpdateQueue.clear();
-	explosionUpdateQueue.resize(count);
-
-	for (Explo& e: explosionUpdateQueue) {
-		Get(is, e.pos);
-		Get(is, e.strength);
-		Get(is, e.radius);
-		Get(is, e.ttl);
-		Get(is, e.x1); Get(is, e.x2);
-		Get(is, e.y1); Get(is, e.y2);
-		Get(is, e.idx);
-		GetVec(is, e.buildings);
-
-		std::uint64_t n = 0;
-		Get(is, n);
-		for (std::uint64_t k = 0; k < n; k++)
-			Get(is, explosionSquaresPool[(e.idx + k) % explosionSquaresPool.size()]);
-	}
 }
 

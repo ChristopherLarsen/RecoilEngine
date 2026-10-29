@@ -19,7 +19,6 @@
 #include "PathLog.h"
 #include "Sim/Path/HAPFS/PathGlobal.h"
 #include "PathMemPool.h"
-#include "PathStateIO.h"
 
 #include "System/Config/ConfigHandler.h"
 #include "System/FileSystem/Archives/IArchive.h"
@@ -942,38 +941,6 @@ std::uint32_t PathingState::CalcHash(const char* caller) const
 	LOG("[PathingState::%s][%s] estimatorHashCode=%x", __func__, caller, peHashCode);
 
 	return peHashCode;
-}
-
-void PathingState::SaveState(std::ostream& os) const
-{
-	StateIO::PutVec(os, vertexCosts);
-	StateIO::PutVec(os, blockStates.nodeMask);
-	StateIO::PutVec(os, blockStates.nodeLinksObsoleteFlags);
-
-	StateIO::Put(os, std::uint64_t(blockStates.peNodeOffsets.size()));
-	for (const auto& pathTypeOffsets: blockStates.peNodeOffsets)
-		StateIO::PutVec(os, pathTypeOffsets);
-
-	StateIO::PutDeque(os, updatedBlocks);
-	pathCache[true]->SaveState(os);
-}
-
-void PathingState::LoadState(std::istream& is)
-{
-	StateIO::GetVecSized(is, vertexCosts, "vertex costs");
-	StateIO::GetVecSized(is, blockStates.nodeMask, "node mask");
-	StateIO::GetVecSized(is, blockStates.nodeLinksObsoleteFlags, "node links");
-
-	std::uint64_t numPathTypes = 0;
-	StateIO::Get(is, numPathTypes);
-	if (numPathTypes != blockStates.peNodeOffsets.size())
-		throw content_error("[HAPFS::StateIO] path state size mismatch: path types");
-
-	for (auto& pathTypeOffsets: blockStates.peNodeOffsets)
-		StateIO::GetVecSized(is, pathTypeOffsets, "block offsets");
-
-	StateIO::GetDeque(is, updatedBlocks);
-	pathCache[true]->LoadState(is);
 }
 
 }

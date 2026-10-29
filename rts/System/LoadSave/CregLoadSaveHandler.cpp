@@ -51,6 +51,7 @@
 #include "System/creg/SerializeLuaState.h"
 #include "System/creg/Serializer.h"
 #include "System/GlobalRNG.h"
+#include "System/LoadSave/SupComSaveState.h"
 #include "Sim/Misc/GlobalSynced.h"
 #include "System/Exceptions.h"
 #include "System/Log/ILog.h"
@@ -83,8 +84,8 @@ CR_REG_METADATA(CGameStateCollector, (
 void CGameStateCollector::Serialize(creg::ISerializer* s)
 {
 	s->SerializeObjectInstance(gs, gs->GetClass());
-	{
-		// supcom: the synced random generator; without it a loaded game draws a different random stream
+	if (SupComSaveState::FullState()) {
+		// supcom hook (SaveGameFullState): the synced random generator; without it a loaded game draws a different random stream
 		// (idle hover drift, weapon spread, id pool) and stops being identical to the game that was saved
 		decltype(gsRNG.GetGenState()) val = 0, seq = 0, init = 0, last = 0;
 		gsRNG.GetFullState(val, seq, init, last);
@@ -303,6 +304,8 @@ void CCregLoadSaveHandler::SaveGame(const std::string& path)
 			os.SavePackage(&oss, &gsc, gsc.GetClass());
 			PrintSize("Game", ((int)oss.tellp()) - gameStart);
 
+			// supcom hook (SaveGameFullState): the synced path state, the smooth mesh and the running craters (Q69)
+			if (SupComSaveState::FullState()) {
 			// supcom: the synced path state, after the units it refers to (Q69)
 			const int pathStart = oss.tellp();
 			pathManager->SaveState(oss);
@@ -313,6 +316,7 @@ void CCregLoadSaveHandler::SaveGame(const std::string& path)
 			smoothGround.SaveState(oss);
 			mapDamage->SaveState(oss);
 			PrintSize("Terrain", ((int)oss.tellp()) - terrainStart);
+			}
 
 
 			// save AI state
@@ -423,6 +427,8 @@ void CCregLoadSaveHandler::LoadGame()
 		CGameStateCollector* gsc = static_cast<CGameStateCollector*>(pGSC);
 		spring::SafeDelete(gsc);
 
+		// supcom hook (SaveGameFullState): path state, smooth mesh, craters, LOS rebuild (Q69, Q73)
+		if (SupComSaveState::FullState()) {
 		// supcom: the synced path state; units are loaded, so its unit ids resolve (Q69)
 		pathManager->LoadState(iss);
 
@@ -436,6 +442,7 @@ void CCregLoadSaveHandler::LoadGame()
 		// sight for one frame (a gun dropped its held target as unseen, Q73). Rebuilt now from the loaded units, as the
 		// saving run's maps were at the end of the saved frame (the LOS update runs after all movement).
 		losHandler->Update();
+		}
 	}
 
 	LEAVE_SYNCED_CODE();

@@ -82,6 +82,7 @@ add_library(engineSim STATIC
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/PathingState.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/PathManager.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/Registry.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/SupComPathState.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/IPathController.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/IPathManager.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Projectiles/ExpGenSpawnable.cpp"
