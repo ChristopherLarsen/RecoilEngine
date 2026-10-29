@@ -78,7 +78,7 @@ namespace Rml::SolLua
 		lua_rawset(L, LUA_REGISTRYINDEX);
 	}
 
-	/// The main thread of L's state (L itself if none was recorded).
+	/// The main thread of L's state (L itself if none was recorded: RmlLuaMainThreadRefs = 0 gives stock behaviour).
 	inline lua_State* MainThread(lua_State* L)
 	{
 		lua_pushlightuserdata(L, &mainThreadKey);

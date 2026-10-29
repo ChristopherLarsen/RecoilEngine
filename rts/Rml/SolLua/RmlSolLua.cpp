@@ -37,6 +37,10 @@
 #include "bind/bind.h"
 
 
+#include "System/Config/ConfigHandler.h"
+
+CONFIG(bool, RmlLuaMainThreadRefs).defaultValue(true).description("supcom: RmlUi Lua event listeners and data models keep their Lua references on the Lua state's main thread (1), or on the thread that made them as stock RmlSolLua does (0; a listener or data model made inside a coroutine then points at freed memory once the coroutine is collected).");
+
 namespace Rml::SolLua
 {
 	SolLuaPlugin* Initialise(sol::state_view* state, const Rml::String& lua_environment_identifier)
@@ -57,7 +61,10 @@ namespace Rml::SolLua
 		 * Global functions for Recoil's RmlUi implementation.
 		 * @table RmlUi
 		 */
-		SetMainThread(state->lua_state());
+		// supcom: springsetting RmlLuaMainThreadRefs (default 1); 0 keeps stock RmlSolLua (references on the calling thread)
+		if (configHandler->GetBool("RmlLuaMainThreadRefs"))
+			SetMainThread(state->lua_state());
+
 		sol::table namespace_table = state->create_named_table("RmlUi");
 
 		bind_color(namespace_table);
