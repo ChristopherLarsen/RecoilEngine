@@ -270,11 +270,11 @@ sol::table openDataModel(Rml::Context& self, const Rml::String& name, sol::objec
 			return sol::lua_nil;
 	}
 
-	auto data = std::make_shared<SolLuaDataModel>(bindings);
+	auto data = std::make_shared<SolLuaDataModel>(sol::state_view{ MainThread(s) });
 	data->Constructor = constructor;
 	data->Handle = constructor.GetModelHandle();
 	data->ObjectDef = std::make_unique<SolLuaObjectDef>(data.get());
-	data->Table = model.as<sol::table>();
+	data->Table = sol::table{ MainThread(s), model.as<sol::table>() };
 	datamodel::bindTable(data.get(), data->Table);
 
 	auto new_index_func =
