@@ -66,6 +66,9 @@ public:
 	float GetContactLift() const override { return contactLift; }
 	bool HeadingLocked() const override;
 	bool GetHeadingFree() const { return headingFree; }
+	/// true while SetWaypointDir steers straight at the goal instead of along the path's waypoints (read-only: the
+	/// last straight-line answer for this goal, never a new test)
+	bool GetDirectSteer() const;
 	/// the footprint this move type drives with (elmos)
 	float GetFootprintX() const { return footprintX; }
 	float GetFootprintZ() const { return footprintZ; }

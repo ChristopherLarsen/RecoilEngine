@@ -409,6 +409,13 @@ bool CSupComGroundMoveType::DirectLineClear()
 	return (directClear = true);
 }
 
+bool CSupComGroundMoveType::GetDirectSteer() const
+{
+	// the same conditions as SetWaypointDir, with the cached answer of DirectLineClear (re-checked at most
+	// DIRECT_CHECK_FRAMES later); calling DirectLineClear here would change the cache, which is synced state
+	return (progressState == Active && owner->commandAI->commandQue.size() <= 1 && directClear && goalPos.equals(directGoal));
+}
+
 void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos)
 {
 	// a clear straight line to the goal is driven directly, not through the path's waypoints
