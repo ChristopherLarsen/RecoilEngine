@@ -140,16 +140,16 @@ namespace ThreadPool {
 }
 
 
+#include "System/Threading/SupComThreading.h"
+
 struct MultithreadedSection {
 	MultithreadedSection(): wasInSection(ThreadPool::IsInMultiThreadedSection() != 0) {
 		ThreadPool::SetInMultiThreadedSection(true);
 	}
 
-	// supcom: restore the previous state instead of clearing it. Worker threads keep the flag set for their whole
-	// life; a parallel section entered on a worker used to clear it for good, so code testing the flag behaved
-	// differently on worker threads than on the main thread (the HAPFS path cache, see IPathFinder::GetPath)
+	// supcom hook (SupComThreading.h, PathCacheMainThreadOnly): restore the previous state instead of clearing it
 	~MultithreadedSection() {
-		ThreadPool::SetInMultiThreadedSection(wasInSection);
+		ThreadPool::SetInMultiThreadedSection(wasInSection && SupComThreading::PathCacheMainThreadOnly());
 	}
 
 	const bool wasInSection;
