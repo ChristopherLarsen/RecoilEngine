@@ -53,6 +53,11 @@ static bool commandAsCtrl = false;
 
 static std::vector<SDL_Scancode> heldKeys;
 static std::vector<Alias> heldAliases;
+// Control+click is the trackpad's right click (the Mac convention): the left button becomes the right one, and the
+// physical Control key is hidden from the modifiers until it is released, so the order does not take the Control
+// option. Command keeps the Control meanings (MacCommandAsCtrl), so Command+click still selects by kind.
+static bool ctrlClickRight = false;
+static bool ctrlClickHeld = false;
 
 using SendEventFunc = void (*)(id, SEL, id);
 static SendEventFunc sdlSendEvent = nullptr;
@@ -236,6 +241,22 @@ void TranslateEvent(SDL_Event& event)
 	if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
 		heldKeys.clear();
 		heldAliases.clear();
+		ctrlClickRight = ctrlClickHeld = false;
+		return;
+	}
+
+	if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && (SDL_GetModState() & KMOD_CTRL) != 0) {
+		event.button.button = SDL_BUTTON_RIGHT;
+		ctrlClickRight = ctrlClickHeld = true;
+		return;
+	}
+	if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && ctrlClickRight) {
+		event.button.button = SDL_BUTTON_RIGHT;
+		ctrlClickRight = false;
+		return;
+	}
+	if (event.type == SDL_MOUSEMOTION && ctrlClickRight && (event.motion.state & SDL_BUTTON_LMASK) != 0) {
+		event.motion.state = (event.motion.state & ~SDL_BUTTON_LMASK) | SDL_BUTTON_RMASK;
 		return;
 	}
 
@@ -280,6 +301,13 @@ void TranslateEvent(SDL_Event& event)
 
 SDL_Keymod TranslateMods(SDL_Keymod mods)
 {
+	// the Control of a Control+click stays hidden until the key is let go
+	if (ctrlClickHeld) {
+		if ((mods & KMOD_CTRL) == 0)
+			ctrlClickHeld = false;
+		mods = SDL_Keymod(mods & ~KMOD_CTRL);
+	}
+
 	// an alias stands in for a key pressed on its own
 	if (!heldAliases.empty())
 		return SDL_Keymod(mods & ~(KMOD_GUI | KMOD_CTRL));
