@@ -19,6 +19,7 @@
 #include "System/FileSystem/FileSystem.h"
 #include "System/Log/ILog.h"
 #include "System/Platform/Misc.h"
+#include "System/Threading/ThreadPool.h"
 
 // minimal EGL declarations; libEGL is dlopen()ed so there is no build-time dependency on Mesa
 namespace {
@@ -496,12 +497,21 @@ void MacEGLBridge::SwapWindow(SDL_Window* window)
 			void* pixels = nullptr;
 			int pitch = 0;
 			if (texture != nullptr && SDL_LockTexture(texture, nullptr, &pixels, &pitch) == 0) {
-				if (pitch == px * 4) {
-					memcpy(pixels, data, px * py * 4);
-				} else {
-					for (int y = 0; y < py; ++y)
-						memcpy(static_cast<uint8_t*>(pixels) + y * pitch, static_cast<const uint8_t*>(data) + y * px * 4, px * 4);
-				}
+				// a Retina frame is tens of MB read from GPU-mapped memory, slow on one core (about 11 ms at
+				// 3840x2160 on a discrete AMD GPU): copy row bands on the worker threads
+				constexpr int BANDS = 8;
+				const int rowsPerBand = (py + BANDS - 1) / BANDS;
+				for_mt(0, BANDS, [&](const int b) {
+					const int y0 = b * rowsPerBand;
+					const int y1 = std::min(py, y0 + rowsPerBand);
+					if (pitch == px * 4) {
+						if (y1 > y0)
+							memcpy(static_cast<uint8_t*>(pixels) + y0 * pitch, static_cast<const uint8_t*>(data) + y0 * px * 4, (y1 - y0) * px * 4);
+					} else {
+						for (int y = y0; y < y1; ++y)
+							memcpy(static_cast<uint8_t*>(pixels) + y * pitch, static_cast<const uint8_t*>(data) + y * px * 4, px * 4);
+					}
+				});
 				SDL_UnlockTexture(texture);
 			}
 
