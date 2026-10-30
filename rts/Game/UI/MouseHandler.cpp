@@ -53,7 +53,13 @@
 using namespace GL::State;
 
 
-CONFIG(bool, HardwareCursor).defaultValue(false).description("Sets hardware mouse cursor rendering. If you have a low framerate, your mouse cursor will seem \"laggy\". Setting hardware cursor will render the mouse cursor separately from spring and the mouse will behave normally. Note, not all GPU drivers support it in fullscreen mode!");
+// macOS: the EGL bridge presents a frame late, so a cursor drawn into the frame lags; the SDL cursor does not (supcom)
+#if defined(__APPLE__)
+	#define MAC_DEFAULT_HW_CURSOR true
+#else
+	#define MAC_DEFAULT_HW_CURSOR false
+#endif
+CONFIG(bool, HardwareCursor).defaultValue(MAC_DEFAULT_HW_CURSOR).description("Sets hardware mouse cursor rendering. If you have a low framerate, your mouse cursor will seem \"laggy\". Setting hardware cursor will render the mouse cursor separately from spring and the mouse will behave normally. Note, not all GPU drivers support it in fullscreen mode!");
 CONFIG(bool, InvertMouse).defaultValue(false);
 CONFIG(bool, MouseRelativeModeWarp).defaultValue(true);
 CONFIG(bool, MiniMapMouseWheel).defaultValue(false).description("Whether MiniMap responds to MouseWheel events");
