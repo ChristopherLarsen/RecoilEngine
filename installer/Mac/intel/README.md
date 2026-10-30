@@ -45,3 +45,14 @@ after the game ended. Engine content: copy `cont/fonts`, `cont/cmdcolors.txt`, `
 - `gfx_display.lua` (game) compares the window in Retina pixels (`GetWindowGeometry`) with the display in points
   (`GetScreenGeometry`), sees a window 28 % on screen, and re-applies window geometry every second. Not Intel specific:
   any Mac with MacHighDPI=1. The engine knows the ratio (`globalRendering->pixelRatio`) but does not expose it to Lua.
+
+### Load screen pop-in and frame rate (2026-10-30)
+Apply all `000*.patch` to Mesa 26.3.0-rc1 before building (`patch -p1` in the Mesa source).
+- Pop-in was not slow loading: for ~5 s the load screen's glass panels drew as opaque white (frame dumps of what the
+  bridge presented). Cause: Zink's command reordering on MoltenVK; uploads reached draws late, so translucent fills
+  lost their colour. `0002` keeps the command stream in order on MoltenVK (as `ZINK_DEBUG=noreorder`): white frames
+  21/37 -> 0/37, no FPS cost (48.1 vs 47.7). `0002` also binds a zeroed dummy buffer where Zink would bind a null
+  vertex/uniform/storage buffer (no nullDescriptor).
+- The 2 failed pipelines: Mesa's tgsi_to_nir names its texture "sampler", which MoltenVK's MSL output cannot use
+  (`texture2d<float> sampler` hides Metal's `sampler` type). `0003` renames it; failures 2 -> 0.
+- Retina 36 -> ~48 FPS: the bridge's frame copy on worker threads (fork branch `supcom-mac-present`, cherry-picked here).

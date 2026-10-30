@@ -1,0 +1,109 @@
+--- a/src/gallium/drivers/zink/zink_types.h
++++ b/src/gallium/drivers/zink/zink_types.h
+@@ -1974,6 +1974,8 @@
+    } hud;
+ 
+    struct pipe_resource *dummy_xfb_buffer;
++   /* mac-intel: bound instead of VK_NULL_HANDLE when the device lacks robustness2 nullDescriptor (MoltenVK on Intel/AMD Macs) */
++   struct pipe_resource *null_buffer;
+ 
+    unsigned buffer_rebind_counter;
+    unsigned image_rebind_counter;
+--- a/src/gallium/drivers/zink/zink_context.c
++++ b/src/gallium/drivers/zink/zink_context.c
+@@ -157,6 +157,7 @@
+       util_blitter_destroy(ctx->blitter);
+ 
+    pipe_resource_reference(&ctx->dummy_xfb_buffer, NULL);
++   pipe_resource_reference(&ctx->null_buffer, NULL);
+ 
+    zink_descriptors_deinit_bindless(ctx);
+ 
+@@ -698,6 +699,15 @@
+       ctx->di.db.ubos[shader][slot].range = VK_WHOLE_SIZE;
+    }
+    return res;
++}
++
++
++#define ZINK_NULL_BUFFER_SIZE 65536
++/* the dummy buffer standing in for a null buffer binding, or VK_NULL_HANDLE when the device has nullDescriptor */
++static inline VkBuffer
++zink_null_buffer(const struct zink_context *ctx)
++{
++   return ctx->null_buffer ? zink_resource(ctx->null_buffer)->obj->buffer : VK_NULL_HANDLE;
+ }
+ 
+ ALWAYS_INLINE static struct zink_resource *
+@@ -717,8 +727,9 @@
+       }
+ #endif
+    } else {
+-      ctx->di.t.ubos[shader][slot].buffer = VK_NULL_HANDLE;
+-      ctx->di.t.ubos[shader][slot].range = VK_WHOLE_SIZE;
++      ctx->di.t.ubos[shader][slot].buffer = zink_null_buffer(ctx);
++      ctx->di.t.ubos[shader][slot].offset = 0;
++      ctx->di.t.ubos[shader][slot].range = ctx->null_buffer ? MIN2(ZINK_NULL_BUFFER_SIZE, screen->info.props.limits.maxUniformBufferRange) : VK_WHOLE_SIZE;
+    }
+    return res;
+ }
+@@ -746,8 +757,9 @@
+       ctx->di.t.ssbos[shader][slot].buffer = res->obj->buffer;
+       ctx->di.t.ssbos[shader][slot].range = ctx->ssbos[shader][slot].buffer_size;
+    } else {
+-      ctx->di.t.ssbos[shader][slot].buffer = VK_NULL_HANDLE;
+-      ctx->di.t.ssbos[shader][slot].range = VK_WHOLE_SIZE;
++      ctx->di.t.ssbos[shader][slot].buffer = zink_null_buffer(ctx);
++      ctx->di.t.ssbos[shader][slot].offset = 0;
++      ctx->di.t.ssbos[shader][slot].range = ctx->null_buffer ? ZINK_NULL_BUFFER_SIZE : VK_WHOLE_SIZE;
+    }
+    return res;
+ }
+@@ -1609,7 +1621,7 @@
+          buffers[i] = res->obj->buffer;
+          buffer_offsets[i] = vb->buffer_offset;
+       } else {
+-         buffers[i] = VK_NULL_HANDLE;
++         buffers[i] = zink_null_buffer(ctx);
+          buffer_offsets[i] = 0;
+       }
+    }
+@@ -6108,6 +6120,12 @@
+       ctx->dummy_xfb_buffer = pipe_buffer_create(&screen->base,
+          PIPE_BIND_STREAM_OUTPUT, PIPE_USAGE_IMMUTABLE, sizeof(data));
+       if (!ctx->dummy_xfb_buffer)
++         goto fail;
++   }
++   if (!is_copy_only && !screen->info.rb2_feats.nullDescriptor) {
++      ctx->null_buffer = pipe_buffer_create(&screen->base,
++         PIPE_BIND_VERTEX_BUFFER | PIPE_BIND_CONSTANT_BUFFER | PIPE_BIND_SHADER_BUFFER, PIPE_USAGE_DEFAULT, ZINK_NULL_BUFFER_SIZE);
++      if (!ctx->null_buffer)
+          goto fail;
+    }
+    if (!is_copy_only) {
+@@ -6168,6 +6186,13 @@
+       ctx->invalidate_descriptor_state = zink_context_invalidate_descriptor_state;
+    if (!is_copy_only && !is_compute_only) {
+       pipe_buffer_write_nooverlap(&ctx->base, ctx->dummy_xfb_buffer, 0, sizeof(data), data);
++      if (ctx->null_buffer) {
++         void *zeros = calloc(1, ZINK_NULL_BUFFER_SIZE);
++         if (zeros) {
++            pipe_buffer_write_nooverlap(&ctx->base, ctx->null_buffer, 0, ZINK_NULL_BUFFER_SIZE, zeros);
++            free(zeros);
++         }
++      }
+       if (screen->info.have_EXT_color_write_enable)
+          reapply_color_write(ctx);
+ 
+@@ -6258,7 +6283,10 @@
+       zink_batch_rp(ctx);
+    }
+ 
+-   if (is_compute_only || zink_debug & ZINK_DEBUG_NOREORDER)
++   /* mac-intel: on MoltenVK, reordered uploads reach draws late (stale vertex data: panels drawn without their
++    * colour); keep the command stream in order there */
++   if (is_compute_only || zink_debug & ZINK_DEBUG_NOREORDER ||
++       screen->info.driver_props.driverID == VK_DRIVER_ID_MOLTENVK)
+       ctx->no_reorder = true;
+ 
+    if (!(flags & PIPE_CONTEXT_PREFER_THREADED) || flags & PIPE_CONTEXT_COMPUTE_ONLY) {
