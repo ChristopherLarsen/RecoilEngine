@@ -1,0 +1,48 @@
+diff --git a/src/Version.cpp b/src/Version.cpp
+index efd31ca..866eb98 100644
+--- a/src/Version.cpp
++++ b/src/Version.cpp
+@@ -36,6 +36,8 @@ const char* platformToString(Platform platform)
+ 			return "windows_arm64";
+ 		case Platform::MacOS_arm64:
+ 			return "macos_arm64";
++		case Platform::MacOS_x64:
++			return "macos64";
+ 		case Platform::Linux_arm64:
+ 			return "linux_arm64";
+ 		default:
+diff --git a/src/Version.h b/src/Version.h
+index 6bc999d..3aeaaaa 100644
+--- a/src/Version.h
++++ b/src/Version.h
+@@ -5,7 +5,7 @@
+ const char* getVersion();
+ const char* getAgent();
+ 
+-enum class Platform { Windows_x64, Windows_arm64, Linux_x64, Linux_arm64, MacOS_arm64 };
++enum class Platform { Windows_x64, Windows_arm64, Linux_x64, Linux_arm64, MacOS_arm64, MacOS_x64 };
+ 
+ #if defined(_WIN64) && defined(_M_AMD64)
+ constexpr Platform PRD_CURRENT_PLATFORM = Platform::Windows_x64;
+@@ -15,6 +15,8 @@ constexpr Platform PRD_CURRENT_PLATFORM = Platform::Windows_arm64;
+ constexpr Platform PRD_CURRENT_PLATFORM = Platform::Linux_x64;
+ #elif defined(__linux__) && defined(__aarch64__)
+ constexpr Platform PRD_CURRENT_PLATFORM = Platform::Linux_arm64;
++#elif defined(__APPLE__) && defined(__x86_64__)
++constexpr Platform PRD_CURRENT_PLATFORM = Platform::MacOS_x64;
+ #elif defined(__APPLE__) && defined(__aarch64__)
+ constexpr Platform PRD_CURRENT_PLATFORM = Platform::MacOS_arm64;
+ #endif
+diff --git a/src/pr-downloader.cpp b/src/pr-downloader.cpp
+index b0bb557..aca7fca 100644
+--- a/src/pr-downloader.cpp
++++ b/src/pr-downloader.cpp
+@@ -51,6 +51,8 @@ DownloadEnum::Category getPlatformEngineCat()
+ 			return DownloadEnum::CAT_ENGINE_LINUX_ARM64;
+ 		case Platform::MacOS_arm64:
+ 			return DownloadEnum::CAT_ENGINE_MACOSX_ARM64;
++		case Platform::MacOS_x64:
++			return DownloadEnum::CAT_ENGINE_MACOSX;
+ 		default:
+ 			// unreachable
+ 			std::abort();
