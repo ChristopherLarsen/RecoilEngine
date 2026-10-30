@@ -6,6 +6,9 @@
 #ifdef __APPLE__
 #include "System/Platform/Mac/Keyboard.h"
 #endif
+#if defined(__APPLE__) && !defined(HEADLESS)
+#include "System/Input/MouseInput.h"
+#endif
 #include "Rendering/GL/MacEGLBridge.h"
 #ifdef MAC_EGL_BRIDGE_AVAILABLE
 #include "Rendering/GlobalRendering.h"
@@ -74,6 +77,9 @@ void InputHandler::PushEvents()
 #endif
 		PushEvent(event);
 	}
+#if defined(__APPLE__) && !defined(HEADLESS)
+	MacPinchToWheel();
+#endif
 }
 
 InputHandler::HandlerTokenT InputHandler::AddHandler(InputHandler::HandlerFuncT func)

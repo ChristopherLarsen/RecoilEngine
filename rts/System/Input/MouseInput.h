@@ -37,4 +37,9 @@ protected:
 
 extern IMouseInput* mouseInput;
 
+#if defined(__APPLE__) && !defined(HEADLESS)
+// macOS trackpad pinch: the scale changes gathered since the last call, as wheel zoom (MouseInput.cpp)
+void MacPinchToWheel();
+#endif
+
 #endif
