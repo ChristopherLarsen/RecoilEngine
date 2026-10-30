@@ -1,6 +1,7 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 
 #include "MacEGLBridge.h"
+#include "MacMetalPresenter.h"
 
 #ifdef MAC_EGL_BRIDGE_AVAILABLE
 
@@ -158,7 +159,9 @@ namespace {
 	}
 
 	bool CreatePresenter(SDL_Window* window) {
-		if (renderer != nullptr)
+		if (renderer != nullptr || MacMetalPresenter::Active())
+			return true;
+		if (MacMetalPresenter::Init(window))
 			return true;
 
 		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "metal");
@@ -383,6 +386,7 @@ void MacEGLBridge::DestroyContext()
 		SDL_DestroyTexture(texture);
 	if (renderer != nullptr)
 		SDL_DestroyRenderer(renderer);
+	MacMetalPresenter::Kill();
 
 	texture = nullptr;
 	renderer = nullptr;
@@ -420,6 +424,7 @@ void MacEGLBridge::SetSwapInterval(int interval)
 {
 	if (renderer != nullptr)
 		SDL_RenderSetVSync(renderer, interval != 0);
+	MacMetalPresenter::SetVSync(interval != 0);
 }
 
 void MacEGLBridge::PresentNextSync()
@@ -429,7 +434,8 @@ void MacEGLBridge::PresentNextSync()
 
 void MacEGLBridge::SwapWindow(SDL_Window* window)
 {
-	if (context == nullptr || renderer == nullptr)
+	const bool metal = MacMetalPresenter::Active();
+	if (context == nullptr || (renderer == nullptr && !metal))
 		return;
 
 	GLint prevPackBuf = 0, prevReadFBO = 0, prevAlign = 4, prevRowLen = 0, prevReadBuf = GL_BACK;
@@ -458,7 +464,7 @@ void MacEGLBridge::SwapWindow(SDL_Window* window)
 		pboSizes[cur][0] = surfSizeX;
 		pboSizes[cur][1] = surfSizeY;
 	}
-	glReadPixels(0, 0, surfSizeX, surfSizeY, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glReadPixels(0, 0, surfSizeX, surfSizeY, metal ? GL_BGRA : GL_RGBA, GL_UNSIGNED_BYTE, nullptr);   // a CAMetalLayer takes BGRA only
 
 	if (fences[cur] != nullptr)
 		glDeleteSync(fences[cur]);
@@ -485,7 +491,10 @@ void MacEGLBridge::SwapWindow(SDL_Window* window)
 		glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[shw]);
 		const void* data = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, px * py * 4, GL_MAP_READ_BIT);
 
-		if (data != nullptr) {
+		if (data != nullptr && metal) {
+			MacMetalPresenter::Present(data, px, py);
+			glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+		} else if (data != nullptr) {
 			if (texture == nullptr || texSizeX != px || texSizeY != py) {
 				if (texture != nullptr)
 					SDL_DestroyTexture(texture);
@@ -525,7 +534,7 @@ void MacEGLBridge::SwapWindow(SDL_Window* window)
 	glPixelStorei(GL_PACK_ROW_LENGTH, prevRowLen);
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
 
-	if (texture != nullptr) {
+	if (!metal && texture != nullptr) {
 		SDL_RenderCopyEx(renderer, texture, nullptr, nullptr, 0.0, nullptr, SDL_FLIP_VERTICAL);
 		SDL_RenderPresent(renderer);
 	}
