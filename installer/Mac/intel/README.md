@@ -14,7 +14,7 @@ Machine: iMac20,2 (i9-10910, Radeon Pro 5700 XT), macOS 26.7.1, Homebrew in /usr
 Streflop configures in x86 SSE mode, like the Windows build. Homebrew's old gcc 13.2 bottle fails against the
 macOS 26 SDK (`stdio.h`), so use gcc 16.
 
-## Graphical engine (blocked)
+## Graphical engine (runs, experimental)
 Mesa EGL + Zink on MoltenVK (KosmicKrisp is Apple Silicon only). `make-mesa-zink-only.sh` is Leon Seemann's
 `make-mesa.sh` (branch `macos-port-2026.07.04`) with the KosmicKrisp half removed. Open question: Zink needs
 `robustness2.nullDescriptor`, which MoltenVK lacks.
@@ -24,3 +24,11 @@ Result 2026-10-30: `engine-legacy` builds. Mesa 26.3.0-rc1 EGL + Zink builds wit
 Run with `VK_DRIVER_FILES=/usr/local/etc/vulkan/icd.d/MoltenVK_icd.json`. MoltenVK 1.4.2 on the Radeon Pro 5700 XT
 exposes VK_EXT/KHR_robustness2 but `nullDescriptor = false`, and Zink stops at init:
 `Zink requires the nullDescriptor feature of KHR/EXT robustness2.` (engine exits: could not create Mesa EGL/Zink GL context).
+
+Result 2026-10-30, with `0001-zink-allow-no-null-descriptor.patch` and `ZINK_ALLOW_NO_NULL_DESCRIPTOR=1`
+(`run-intel.sh`): GL `4.6 (Compatibility Profile) Mesa 26.3.0-rc1`, renderer `zink Vulkan 1.4(AMD Radeon Pro 5700 XT
+(MOLTENVK))`. A 1800-frame skirmish against KardashevAI on T0 Tiny, fullscreen 5120x2880, played to the end. Owner's
+look: "pretty good"; delayed texture loading, a subtle flicker, short stutters. Known: 2x
+`vkCreateGraphicsPipelines failed (VK_ERROR_INITIALIZATION_FAILED)`; Mesa warns of no depth_clip_enable, logicOp,
+custom_border_color on this device; `[DISPLAY] window off the displays` repeats (Retina size); exit code 21 at shutdown
+after the game ended. Engine content: copy `cont/fonts`, `cont/cmdcolors.txt`, `cont/ctrlpanel.txt` next to `spring`.
