@@ -9,6 +9,7 @@
 #include "CommandColors.h"
 #include "GuiHandler.h"
 #include "MiniMap.h"
+#include "Game/SupComLocalView.h"
 #include "MouseHandler.h"
 #include "TooltipConsole.h"
 #include "Game/Camera.h"
@@ -866,7 +867,7 @@ CUnit* CMiniMap::GetSelectUnit(const float3& pos) const
 	if (unit == nullptr)
 		return unit;
 
-	if ((unit->losStatus[gu->myAllyTeam] & (LOS_INLOS | LOS_INRADAR)) || gu->spectatingFullView)
+	if ((unit->losStatus[gu->myAllyTeam] & (LOS_INLOS | LOS_INRADAR)) || SupComLocalView::OrderFullView())
 		return unit;
 
 	return nullptr;
@@ -924,7 +925,7 @@ void CMiniMap::ProxyMousePress(int x, int y, int button)
 	const CUnit* unit = GetSelectUnit(mapPos);
 
 	if (unit != nullptr) {
-		if (gu->spectatingFullView) {
+		if (SupComLocalView::OrderFullView()) {
 			mapPos = unit->midPos;
 		} else {
 			mapPos = unit->GetObjDrawErrorPos(gu->myAllyTeam);
@@ -947,7 +948,7 @@ void CMiniMap::ProxyMouseRelease(int x, int y, int button)
 	const CUnit* unit = GetSelectUnit(mapPos);
 
 	if (unit != nullptr) {
-		if (gu->spectatingFullView) {
+		if (SupComLocalView::OrderFullView()) {
 			mapPos = unit->midPos;
 		} else {
 			mapPos = unit->GetObjDrawErrorPos(gu->myAllyTeam);

@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "GuiHandler.h"
+#include "Game/SupComLocalView.h"
 
 #include <Rml/Backends/RmlUi_Backend.h>
 #include "CommandColors.h"
@@ -3801,11 +3802,11 @@ void CGuiHandler::DrawMapStuff(bool onMiniMap)
 			TraceRay::GuiTraceRay(tracePos, traceDir, maxTraceDist, nullptr, unit, feature, false);
 		}
 
-		if (unit != nullptr && (gu->spectatingFullView || unit->IsInLosForAllyTeam(gu->myAllyTeam))) {
+		if (unit != nullptr && (SupComLocalView::OrderFullView() || unit->IsInLosForAllyTeam(gu->myAllyTeam))) {
 			pointeeUnit = unit;
 
 			const UnitDef* unitdef = unit->unitDef;
-			const bool enemyUnit = ((unit->allyteam != gu->myAllyTeam) && !gu->spectatingFullView);
+			const bool enemyUnit = ((unit->allyteam != gu->myAllyTeam) && !SupComLocalView::OrderFullView());
 
 			if (enemyUnit && unitdef->decoyDef != nullptr)
 				unitdef = unitdef->decoyDef;

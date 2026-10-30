@@ -2,6 +2,7 @@
 
 
 #include "TooltipConsole.h"
+#include "Game/SupComLocalView.h"
 #include "MouseHandler.h"
 #include "Game/GlobalUnsynced.h"
 #include "Game/Players/PlayerHandler.h"
@@ -159,7 +160,7 @@ std::string CTooltipConsole::MakeUnitString(const CUnit* unit)
 	std::string s;
 	s.reserve(512);
 
-	const bool enemyUnit = (teamHandler.AllyTeam(unit->team) != gu->myAllyTeam) && !gu->spectatingFullView;
+	const bool enemyUnit = (teamHandler.AllyTeam(unit->team) != gu->myAllyTeam) && !SupComLocalView::OrderFullView();
 
 	const UnitDef* unitDef = unit->unitDef;
 	const UnitDef* decoyDef = enemyUnit ? unitDef->decoyDef : nullptr;

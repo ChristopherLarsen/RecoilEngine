@@ -4,6 +4,7 @@
 
 
 #include "Player.h"
+#include "Game/SupComLocalView.h"
 #include "PlayerHandler.h"
 #include "Game/Camera.h"
 #include "Game/CameraHandler.h"
@@ -135,6 +136,7 @@ void CPlayer::JoinTeam(int newTeam)
 		gu->spectating           = false;
 		gu->spectatingFullView   = false;
 		gu->spectatingFullSelect = false;
+		SupComLocalView::Apply(); // supcom: a player of a game with fog of war off keeps the local full view
 
 		CLuaUI::UpdateTeams();
 		selectedUnitsHandler.ClearSelected();
