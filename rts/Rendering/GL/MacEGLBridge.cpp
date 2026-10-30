@@ -6,6 +6,7 @@
 
 #include <dlfcn.h>
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <cstdint>
@@ -74,6 +75,7 @@ namespace {
 	GLsync fences[NUM_PBOS] = {};
 	int pboSizes[NUM_PBOS][2] = {};
 	unsigned int frameIdx = 0;
+	std::chrono::steady_clock::time_point lastSwap = {};
 
 	std::mutex surfMutex;
 
@@ -456,15 +458,23 @@ void MacEGLBridge::SwapWindow(SDL_Window* window)
 	fences[cur] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 	glFlush();
 
-	const int px = pboSizes[prv][0];
-	const int py = pboSizes[prv][1];
+	// Frames far apart (a load screen redraws only when its message changes): present this frame now instead of the
+	// previous one, which would keep the screen one redraw behind. Waiting costs nothing there; normal frame rates keep
+	// the asynchronous path.
+	const auto now = std::chrono::steady_clock::now();
+	const bool slowFrames = (frameIdx == 0) || (now - lastSwap > std::chrono::milliseconds(100));
+	lastSwap = now;
+	const unsigned int shw = slowFrames ? cur : prv;
 
-	if (fences[prv] != nullptr && px > 0 && py > 0) {
-		glClientWaitSync(fences[prv], 0, GL_TIMEOUT_IGNORED);
-		glDeleteSync(fences[prv]);
-		fences[prv] = nullptr;
+	const int px = pboSizes[shw][0];
+	const int py = pboSizes[shw][1];
 
-		glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[prv]);
+	if (fences[shw] != nullptr && px > 0 && py > 0) {
+		glClientWaitSync(fences[shw], 0, GL_TIMEOUT_IGNORED);
+		glDeleteSync(fences[shw]);
+		fences[shw] = nullptr;
+
+		glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[shw]);
 		const void* data = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, px * py * 4, GL_MAP_READ_BIT);
 
 		if (data != nullptr) {
