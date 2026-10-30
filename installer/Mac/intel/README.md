@@ -56,3 +56,14 @@ Apply all `000*.patch` to Mesa 26.3.0-rc1 before building (`patch -p1` in the Me
 - The 2 failed pipelines: Mesa's tgsi_to_nir names its texture "sampler", which MoltenVK's MSL output cannot use
   (`texture2d<float> sampler` hides Metal's `sampler` type). `0003` renames it; failures 2 -> 0.
 - Retina 36 -> ~48 FPS: the bridge's frame copy on worker threads (fork branch `supcom-mac-present`, cherry-picked here).
+
+### Play profiling (2026-10-30, 15 min against KardashevAI, Retina 1920x1080 window)
+- Main thread: about 58 % in the bridge's frame copy. Timed per step: read 3.8 ms, copy into SDL's lock buffer 9.7 ms
+  (SDL allocates a fresh Metal buffer per frame), SDL_UpdateTexture 22 ms. Fork `supcom-mac-present` now presents through
+  a CAMetalLayer with three persistent upload buffers (`MacMetalPresent`, default on for x86_64): 47 -> 57 FPS.
+- Commander deaths: no hitch when reproduced (local test gadget). The big hitches were the game's step-down ladder
+  (`gfx_ladder.lua`): water_basic 2.7-3.1 s and shadows back on at game over 0.2-0.5 s (shader rebuilds). Game branch
+  `mac-retina-display`: restore at shutdown instead of game over. The ladder and effects guard use a 60 FPS threshold, which a
+  vsync-capped 60 Hz display averages just under, so they always step down there (owner decision pending).
+- The "every 22 s" hitch was the profiler (sample in 20 s slices); absent in unsampled runs.
+- HardwareCursor on by default on macOS (fork `supcom-mac-present`): the software cursor lagged by the presented frame.
