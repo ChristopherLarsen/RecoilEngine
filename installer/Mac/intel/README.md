@@ -14,7 +14,13 @@ Machine: iMac20,2 (i9-10910, Radeon Pro 5700 XT), macOS 26.7.1, Homebrew in /usr
 Streflop configures in x86 SSE mode, like the Windows build. Homebrew's old gcc 13.2 bottle fails against the
 macOS 26 SDK (`stdio.h`), so use gcc 16.
 
-## Graphical engine (in progress)
+## Graphical engine (blocked)
 Mesa EGL + Zink on MoltenVK (KosmicKrisp is Apple Silicon only). `make-mesa-zink-only.sh` is Leon Seemann's
 `make-mesa.sh` (branch `macos-port-2026.07.04`) with the KosmicKrisp half removed. Open question: Zink needs
 `robustness2.nullDescriptor`, which MoltenVK lacks.
+
+Result 2026-10-30: `engine-legacy` builds. Mesa 26.3.0-rc1 EGL + Zink builds with `make-mesa-zink-only.sh` (link
+`/usr/local/lib/libvulkan.1.dylib` into the Mesa prefix's `lib/`, or Zink cannot load the loader through `@rpath`).
+Run with `VK_DRIVER_FILES=/usr/local/etc/vulkan/icd.d/MoltenVK_icd.json`. MoltenVK 1.4.2 on the Radeon Pro 5700 XT
+exposes VK_EXT/KHR_robustness2 but `nullDescriptor = false`, and Zink stops at init:
+`Zink requires the nullDescriptor feature of KHR/EXT robustness2.` (engine exits: could not create Mesa EGL/Zink GL context).
