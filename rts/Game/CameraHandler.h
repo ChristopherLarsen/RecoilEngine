@@ -28,8 +28,9 @@ public:
 		CAMERA_MODE_FREE        = 4,
 		CAMERA_MODE_OVERVIEW    = 5,
 		CAMERA_MODE_DOLLY       = 6,
-		CAMERA_MODE_DUMMY       = 7,
-		CAMERA_MODE_LAST        = 8,
+		CAMERA_MODE_KARDASHEV   = 7, // supcom: our own controller (KardashevCamera.h), springsetting KardashevCamera
+		CAMERA_MODE_DUMMY       = 8,
+		CAMERA_MODE_LAST        = 9,
 	};
 	enum {
 		CAMERA_TRANSITION_MODE_EXP_DECAY = 0,

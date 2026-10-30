@@ -3,6 +3,7 @@
 
 #include "UnitTracker.h"
 #include "Game/Camera/FPSController.h"
+#include "Game/Camera/KardashevCamera.h"
 #include "Game/CameraHandler.h"
 #include "Game/Camera.h"
 #include "Game/SelectedUnitsHandler.h"
@@ -64,6 +65,8 @@ int CUnitTracker::GetMode() const
 void CUnitTracker::IncMode()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (camHandler->GetCurrentControllerNum() == CCameraHandler::CAMERA_MODE_KARDASHEV)
+		return; // supcom: our camera tracks one unit only
 	trackMode = (trackMode + 1) % TrackModeCount;
 	LOG("TrackMode: %s", modeNames[trackMode]);
 }
@@ -89,6 +92,12 @@ void CUnitTracker::Track(std::vector<int>&& unitIDs)
 
 	for (int unitID : unitIDs) {
 		selectedUnitsHandler.AddUnit(unitHandler.GetUnit(unitID));
+	}
+
+	// supcom: our camera tracks by itself, one unit (the first selected), no group modes
+	if (camHandler->GetCurrentControllerNum() == CCameraHandler::CAMERA_MODE_KARDASHEV) {
+		static_cast<CKardashevCamera&>(camHandler->GetCurrentController()).ToggleTrack();
+		return;
 	}
 
 	const auto& su = selectedUnitsHandler.selectedUnits;

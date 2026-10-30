@@ -17,6 +17,7 @@
 #include "Camera/FreeController.h"
 #include "Camera/OverviewController.h"
 #include "Camera/SpringController.h"
+#include "Camera/KardashevCamera.h"
 #include "Players/Player.h"
 #include "System/MathConstants.h"
 #include "UI/UnitTracker.h"
@@ -93,7 +94,8 @@ CCameraHandler* camHandler = nullptr;
 // cameras[ACTIVE] is just used to store which of the others is active
 static CCamera cameras[CCamera::CAMTYPE_COUNT];
 
-alignas (CDollyController) static std::byte camControllerMem[CCameraHandler::CAMERA_MODE_LAST][sizeof(CDollyController)];
+static constexpr size_t camControllerMemSize = std::max(sizeof(CDollyController), sizeof(CKardashevCamera)); // supcom: our controller may be the largest
+alignas (CDollyController) alignas (CKardashevCamera) static std::byte camControllerMem[CCameraHandler::CAMERA_MODE_LAST][camControllerMemSize];
 alignas (CCameraHandler) static std::byte camHandlerMem[sizeof(CCameraHandler)];
 
 
@@ -184,7 +186,11 @@ void CCameraHandler::Init()
 
 	ConfigNotify("", "");
 
-	SetCameraMode(configHandler->GetString("CamModeName"));
+	// supcom: our own camera by default (springsetting KardashevCamera); 0, or a CamModeName, starts as stock
+	if (configHandler->GetBool("KardashevCamera") && configHandler->GetString("CamModeName").empty())
+		SetCameraMode(CAMERA_MODE_KARDASHEV);
+	else
+		SetCameraMode(configHandler->GetString("CamModeName"));
 
 	for (CCameraController* cc: camControllers) {
 		cc->Update();
@@ -209,6 +215,7 @@ void CCameraHandler::InitControllers()
 	static_assert(sizeof(       CFreeController) <= sizeof(camControllerMem[CAMERA_MODE_FREE       ]), "");
 	static_assert(sizeof(   COverviewController) <= sizeof(camControllerMem[CAMERA_MODE_OVERVIEW   ]), "");
 	static_assert(sizeof(      CDollyController) <= sizeof(camControllerMem[CAMERA_MODE_DOLLY      ]), "");
+	static_assert(sizeof(      CKardashevCamera) <= sizeof(camControllerMem[CAMERA_MODE_KARDASHEV  ]), "");
 
 	// FPS camera must always be the first one in the list
 	camControllers[CAMERA_MODE_FIRSTPERSON] = new (camControllerMem[CAMERA_MODE_FIRSTPERSON])         CFPSController();
@@ -218,6 +225,7 @@ void CCameraHandler::InitControllers()
 	camControllers[CAMERA_MODE_FREE       ] = new (camControllerMem[CAMERA_MODE_FREE       ])        CFreeController();
 	camControllers[CAMERA_MODE_OVERVIEW   ] = new (camControllerMem[CAMERA_MODE_OVERVIEW   ])    COverviewController();
 	camControllers[CAMERA_MODE_DOLLY      ] = new (camControllerMem[CAMERA_MODE_DOLLY      ])    CDollyController();
+	camControllers[CAMERA_MODE_KARDASHEV  ] = new (camControllerMem[CAMERA_MODE_KARDASHEV  ])    CKardashevCamera();
 }
 
 void CCameraHandler::KillControllers()
