@@ -33,8 +33,74 @@
 #include <SDL_hints.h>
 #include <SDL_syswm.h>
 
+#if defined(__APPLE__) && !defined(HEADLESS)
+#include <cstdint>
+#include <cstring>
+#include <dlfcn.h>
+#include <mach-o/dyld.h>
+#endif
+
 
 IMouseInput* mouseInput = nullptr;
+
+#if defined(__APPLE__) && !defined(HEADLESS)
+// Trackpad pinch on macOS. Homebrew's SDL2 is sdl2-compat on SDL3: SDL3 turns the magnify gesture into
+// SDL_EVENT_PINCH_* events, which SDL2 has no type for, so sdl2-compat drops them and SDL_MULTIGESTURE never
+// comes. A watch on SDL3's own queue (looked up at run time; with a real SDL2 there is no SDL3 and this does
+// nothing) adds up the scale changes, and MacPinchToWheel hands the sum to the wheel once per event pump.
+// The watch and the drain both run on the main thread (Cocoa delivers the gesture there).
+namespace {
+	struct SDL3PinchEvent { uint32_t type; uint32_t reserved; uint64_t timestamp; float scale; uint32_t windowID; };
+	constexpr uint32_t SDL3_EVENT_PINCH_UPDATE = 0x711;
+	constexpr float PINCH_WHEEL_SCALE = 10.0f; // a pinch update of 1-5 % gives a wheel share of 0.1-0.5, like a two-finger scroll
+
+	using SDL3EventFilter = bool (*)(void*, void*);
+	using SDL3AddEventWatch = bool (*)(SDL3EventFilter, void*);
+	using SDL3RemoveEventWatch = void (*)(SDL3EventFilter, void*);
+
+	float pinchSum = 0.0f;
+	SDL3RemoveEventWatch removeWatch = nullptr;
+
+	bool OnSDL3Event(void*, void* event)
+	{
+		const auto* pinch = static_cast<const SDL3PinchEvent*>(event);
+		if (pinch->type == SDL3_EVENT_PINCH_UPDATE)
+			pinchSum += pinch->scale - 1.0f;
+		return true;
+	}
+
+	void* LoadedSDL3()
+	{
+		for (uint32_t i = 0, n = _dyld_image_count(); i < n; ++i) {
+			const char* name = _dyld_get_image_name(i);
+			if (name != nullptr && std::strstr(name, "libSDL3") != nullptr)
+				return dlopen(name, RTLD_LAZY | RTLD_NOLOAD);
+		}
+		return nullptr;
+	}
+
+	void WatchSDL3Pinch()
+	{
+		void* sdl3 = LoadedSDL3();
+		if (sdl3 == nullptr)
+			return;
+		const auto add = reinterpret_cast<SDL3AddEventWatch>(dlsym(sdl3, "SDL_AddEventWatch"));
+		removeWatch = reinterpret_cast<SDL3RemoveEventWatch>(dlsym(sdl3, "SDL_RemoveEventWatch"));
+		if (add == nullptr || removeWatch == nullptr || !add(OnSDL3Event, nullptr))
+			removeWatch = nullptr;
+	}
+}
+
+void MacPinchToWheel()
+{
+	if (pinchSum == 0.0f)
+		return;
+	// spreading the fingers (scale > 1) zooms in like wheel-up
+	if (mouse != nullptr)
+		mouse->MouseWheel(pinchSum * PINCH_WHEEL_SCALE);
+	pinchSum = 0.0f;
+}
+#endif
 
 IMouseInput::IMouseInput(bool relModeWarp)
 {
@@ -54,12 +120,21 @@ IMouseInput::IMouseInput(bool relModeWarp)
 	// the SDL patch in WarpPos
 	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, relModeWarp? "1": "0");
 	#endif
+	#if defined(__APPLE__) && !defined(HEADLESS)
+	WatchSDL3Pinch();
+	#endif
 }
 
 IMouseInput::~IMouseInput()
 {
 	#ifndef HEADLESS
 	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
+	#endif
+	#if defined(__APPLE__) && !defined(HEADLESS)
+	if (removeWatch != nullptr)
+		removeWatch(OnSDL3Event, nullptr);
+	removeWatch = nullptr;
+	pinchSum = 0.0f;
 	#endif
 }
 
