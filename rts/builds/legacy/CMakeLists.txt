@@ -60,6 +60,9 @@ if (APPLE)
 	list(APPEND engineLibraries ${COREFOUNDATION_LIBRARY})
 	if (MAC_EGL_ZINK)
 		# Zink dlopen()s @rpath/libvulkan.1.dylib; Mesa libs are dlopen()ed at runtime
+		# MacMetalPresenter: Metal for the device, the Objective-C runtime for messaging
+		find_library(METAL_LIBRARY Metal)
+		list(APPEND engineLibraries ${METAL_LIBRARY} objc)
 		list(APPEND engineLibraries "-Wl,-rpath,@executable_path/mesa/lib" "-Wl,-rpath,${MAC_VULKAN_LIBDIR}" "-Wl,-rpath,${MAC_MESA_PREFIX}/lib")
 	endif ()
 endif (APPLE)
