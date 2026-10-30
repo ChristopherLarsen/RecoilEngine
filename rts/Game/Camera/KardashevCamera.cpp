@@ -41,22 +41,10 @@ CONFIG(float, KardashevCamPanSpeed).defaultValue(1.0f).minimumValue(0.1f).maximu
 CONFIG(float, KardashevCamRotateSpeed).defaultValue(1.0f).minimumValue(0.1f).maximumValue(4.0f).description("supcom: KardashevCamera rotation speed, times the default.");
 CONFIG(bool,  KardashevCamInvertPan).defaultValue(false).description("supcom: KardashevCamera middle-drag pans the other way.");
 
-// Every feel number of the camera, in one place. DESIGN (2026-10-29): chosen by us and tuned by feel and screenshots
-// (docs/ui/camera.md in the game repository); no outside numbers.
+// The fixed numbers of the camera. DESIGN (2026-10-29): chosen by us and tuned by feel and screenshots (docs/ui/camera.md
+// in the game repository); no outside numbers. The numbers the game tunes (proportions and pacing: limits, the curve, the
+// wheel step, the glide, pan speeds, terrain clearance) are CKardashevCamera::Feel in the header, settable from Lua.
 namespace kcam {
-	// limits
-	constexpr float MIN_DIST         = 100.0f;                  // closest view (elmos focus to camera): one unit with ground round it
-	constexpr float MARGIN           = 1.04f;                   // free border round the playable area at the furthest view (4 %)
-	// the curve
-	constexpr float ELEV_NEAR        = 20.0f * math::DEG_TO_RAD; // close: across the ground, horizon in frame
-	constexpr float ELEV_FAR         = 84.0f * math::DEG_TO_RAD; // far: about 6 degrees off straight down
-	constexpr float FOV_NEAR         = 56.0f;                   // vertical fov close (degrees): a little wide
-	constexpr float FOV_FAR          = 44.0f;                   // vertical fov far: a little narrow, a flat plan
-	constexpr float SHAPE            = 0.35f;                   // eases the curve's ends; slope there 1 - SHAPE (never 0)
-	constexpr float CENTRE_FROM      = 0.70f;                   // above this u, zooming out slides the focus to the middle
-	// the wheel and the glide
-	constexpr float STEP_OUT         = 0.20f;                   // a notch out adds 20 % of the distance; in removes 16.7 %
-	constexpr float TAU              = 0.07f;                   // glide time constant (s): fast start, soft landing
 	constexpr float SNAP             = 0.002f;                  // the glide ends inside 0.2 % of the distance
 	constexpr float KEY_ZOOM         = 8.0f;                    // zoom keys: notches per second
 	constexpr float KEY_ZOOM_FAST    = 2.5f;                    // Shift on the zoom keys
@@ -72,13 +60,9 @@ namespace kcam {
 	constexpr float KEY_ROT          = 1.5f;                    // modifier+keys (rad/s)
 	constexpr float DEFAULT_HEADING  = 0.0f;                    // the reset heading (north up)
 	// pan
-	constexpr float KEY_PAN          = 1.0f;                    // keys and edge: view heights per second
-	constexpr float KEY_FAST         = 2.5f;                    // Shift on the pan keys
-	constexpr float DRAG_PAN         = 2.0f;                    // middle-drag: view pixels per pointer pixel
 	constexpr int   EDGE_PX          = 2;                       // edge scroll only this close to the screen edge (pixels)
 	constexpr float PAN_TOL          = 1.0f;                    // a focus set further than this (elmos) is a move (ends tracking)
 	// terrain
-	constexpr float CLEARANCE        = 16.0f;                   // camera and its line to the focus stay this far above the ground
 	constexpr int   CLEAR_SAMPLES    = 16;
 	constexpr float CLEAR_STEP       = 1.0f * math::DEG_TO_RAD; // over a hill the view steepens in steps of this
 	// tracking
@@ -96,8 +80,7 @@ namespace {
 	enum TrackEnd { END_NONE = 0, END_PAN = 1, END_DESELECTED = 2, END_DIED = 3, END_KEY = 4, END_SCRIPT = 5, END_LOST = 6 };
 
 	float Smooth(float t) { t = std::clamp(t, 0.0f, 1.0f); return t * t * (3.0f - 2.0f * t); }
-	float Shape(float u) { u = std::clamp(u, 0.0f, 1.0f); return (1.0f - kcam::SHAPE) * u + kcam::SHAPE * Smooth(u); }
-	float CentreWeight(float u) { return Smooth((u - kcam::CENTRE_FROM) / (1.0f - kcam::CENTRE_FROM)); }
+	float Shape(float u, float shape) { u = std::clamp(u, 0.0f, 1.0f); return (1.0f - shape) * u + shape * Smooth(u); }
 
 	// the view's axes for elevation e and ground heading h: forward D, right R (on the ground), up U (as CCamera's)
 	struct Basis {
@@ -130,7 +113,7 @@ CKardashevCamera::CKardashevCamera()
 	clearIns = float4(0.0f, 0.0f, 0.0f, 0.0f);
 	pos = float3(playRect.x + playRect.z, 0.0f, playRect.y + playRect.w) * 0.5f;
 	curU = tgtU = kcam::START_U;
-	fov = kcam::FOV_NEAR;
+	fov = feel.fovNear;
 
 	configHandler->NotifyOnChange(this, {"KardashevCamera", "KardashevCamWheelSensitivity", "KardashevCamPanSpeed", "KardashevCamRotateSpeed", "KardashevCamInvertPan", "ScrollWheelSpeed"});
 	ConfigUpdate();
@@ -162,24 +145,25 @@ void CKardashevCamera::ConfigNotify(const std::string& key, const std::string& v
 
 float CKardashevCamera::DistOf(float u) const { return lim.dMin * std::pow(lim.dMax / lim.dMin, std::clamp(u, 0.0f, 1.0f)); }
 float CKardashevCamera::UOf(float d) const { return std::clamp(std::log(std::max(d, 1.0f) / lim.dMin) / std::log(lim.dMax / lim.dMin), 0.0f, 1.0f); }
-float CKardashevCamera::ElevCurve(float u) const { return kcam::ELEV_NEAR + (kcam::ELEV_FAR - kcam::ELEV_NEAR) * Shape(u); }
-float CKardashevCamera::FovCurve(float u) const { return kcam::FOV_NEAR + (kcam::FOV_FAR - kcam::FOV_NEAR) * Shape(u); }
+float CKardashevCamera::ElevCurve(float u) const { return feel.elevNear + (feel.elevFar - feel.elevNear) * Shape(u, feel.shape); }
+float CKardashevCamera::FovCurve(float u) const { return feel.fovNear + (feel.fovFar - feel.fovNear) * Shape(u, feel.shape); }
+float CKardashevCamera::CentreWeight(float u) const { return Smooth((u - feel.centreFrom) / std::max(1e-3f, 1.0f - feel.centreFrom)); }
 float CKardashevCamera::Elev() const { return (heldElev >= 0.0f)? heldElev: ElevCurve(curU); }
 float CKardashevCamera::Aspect() const { return globalRendering->viewSizeX / std::max(1.0f, float(globalRendering->viewSizeY)); }
 float3 CKardashevCamera::Heading() const { return float3(std::sin(rotY), 0.0f, -std::cos(rotY)); }
 
-// the furthest view: the least distance that shows the playable area round its middle at the far angle and fov, every
-// corner MARGIN in from the screen border and off the insets Lua keeps clear (the HUD's frame panels)
+// the furthest view: the least distance that shows the playable area round its middle at the far angle and fov, north up,
+// every corner margin in from the screen border and off the insets Lua keeps clear (the HUD's frame panels). From the
+// playable area and the viewport only: a turn changes neither the limits nor the zoom
 void CKardashevCamera::Refit()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
 	fitAspect = Aspect();
-	fitHeading = rotY;
 	refitNeeded = false;
 
-	const float3 h = Heading();
-	const Basis b(kcam::ELEV_FAR, h);
-	const float ta = std::tan(kcam::FOV_FAR * 0.5f * math::DEG_TO_RAD);
+	const float3 h(0.0f, 0.0f, -1.0f);
+	const Basis b(feel.elevFar, h);
+	const float ta = std::tan(feel.fovFar * 0.5f * math::DEG_TO_RAD);
 	const float3 c((playRect.x + playRect.z) * 0.5f, 0.0f, (playRect.y + playRect.w) * 0.5f);
 	const float3 corners[4] = {{playRect.x, 0.0f, playRect.y}, {playRect.z, 0.0f, playRect.y}, {playRect.x, 0.0f, playRect.w}, {playRect.z, 0.0f, playRect.w}};
 	const float xl = -1.0f + 2.0f * clearIns.x, xr = 1.0f - 2.0f * clearIns.y;
@@ -192,8 +176,8 @@ void CKardashevCamera::Refit()
 			const float depth = v.dot(b.D);
 			if (depth <= 0.0f)
 				return false;
-			const float x = v.dot(b.R) / (depth * ta * fitAspect) * kcam::MARGIN;
-			const float y = v.dot(b.U) / (depth * ta) * kcam::MARGIN;
+			const float x = v.dot(b.R) / (depth * ta * fitAspect) * feel.margin;
+			const float y = v.dot(b.U) / (depth * ta) * feel.margin;
 			if (x < xl || x > xr || y < yb || y > yt)
 				return false;
 		}
@@ -206,8 +190,8 @@ void CKardashevCamera::Refit()
 		(Fits(mid)? hi: lo) = mid;
 	}
 
-	lim.dMin = kcam::MIN_DIST;
-	lim.dMax = std::max(hi, kcam::MIN_DIST * 1.5f);
+	lim.dMin = feel.minDist;
+	lim.dMax = std::max(hi, feel.minDist * 1.5f);
 }
 
 
@@ -224,7 +208,7 @@ void CKardashevCamera::Notches(float n)
 	else if (n < 0.0f)
 		anchorOn = false;
 
-	tgtU = std::clamp(tgtU + n * std::log(1.0f + kcam::STEP_OUT) / std::log(lim.dMax / lim.dMin), 0.0f, 1.0f);
+	tgtU = std::clamp(tgtU + n * std::log(1.0f + feel.stepOut) / std::log(lim.dMax / lim.dMin), 0.0f, 1.0f);
 
 	if (glideScale <= 0.0f)
 		curU = tgtU;
@@ -250,7 +234,7 @@ void CKardashevCamera::KeyMove(float3 move)
 	RECOIL_DETAILED_TRACY_ZONE;
 	const bool* ms = camHandler->GetActiveCamera()->GetMovState();
 
-	if (ms[CCamera::MOVE_STATE_RTT]) {
+	if (ms[CCamera::MOVE_STATE_RTT] && feel.freeRotate) {
 		rotY += move.x * kcam::KEY_ROT * rotSpeed;
 		if (move.y != 0.0f)
 			Tilt(move.y * kcam::KEY_TILT);
@@ -260,7 +244,7 @@ void CKardashevCamera::KeyMove(float3 move)
 
 	// move.xy are seconds of key hold this frame
 	const float viewH = 2.0f * curDist * std::tan(fov * 0.5f * math::DEG_TO_RAD);
-	const float rate = viewH * kcam::KEY_PAN * panSpeed * (ms[CCamera::MOVE_STATE_FST]? kcam::KEY_FAST: 1.0f);
+	const float rate = viewH * feel.keyPan * panSpeed * (ms[CCamera::MOVE_STATE_FST]? feel.keyFast: 1.0f);
 	Pan(move.x * rate, move.y * rate);
 	Update();
 }
@@ -270,7 +254,7 @@ void CKardashevCamera::MouseMove(float3 move)
 	RECOIL_DETAILED_TRACY_ZONE;
 	const bool* ms = camHandler->GetActiveCamera()->GetMovState();
 
-	if (ms[CCamera::MOVE_STATE_RTT]) {
+	if (ms[CCamera::MOVE_STATE_RTT] && feel.freeRotate) {
 		// modifier+drag: across turns (a screen width is ROT_DRAG turns), up and down tilts (up: steeper)
 		rotY += move.x / std::max(1.0f, float(globalRendering->viewSizeX)) * math::TWOPI * kcam::ROT_DRAG * rotSpeed;
 		if (move.y != 0.0f)
@@ -281,7 +265,7 @@ void CKardashevCamera::MouseMove(float3 move)
 
 	// z is the engine's InvertMouse sign; a drag moves the same share of the view at any height
 	const float epp = 2.0f * curDist * std::tan(fov * 0.5f * math::DEG_TO_RAD) / std::max(1.0f, float(globalRendering->viewSizeY));
-	const float s = move.z * (invertPan? -1.0f: 1.0f) * epp * kcam::DRAG_PAN * panSpeed;
+	const float s = move.z * (invertPan? -1.0f: 1.0f) * epp * feel.dragPan * panSpeed;
 	Pan(move.x * s, -move.y * s);
 	Update();
 }
@@ -301,7 +285,7 @@ void CKardashevCamera::ScreenEdgeMove(float3 move)
 	const bool* ms = camHandler->GetActiveCamera()->GetMovState();
 	const float secs = globalRendering->lastFrameTime * 0.001f;
 	const float viewH = 2.0f * curDist * std::tan(fov * 0.5f * math::DEG_TO_RAD);
-	const float rate = viewH * kcam::KEY_PAN * panSpeed * (ms[CCamera::MOVE_STATE_FST]? kcam::KEY_FAST: 1.0f) * secs;
+	const float rate = viewH * feel.keyPan * panSpeed * (ms[CCamera::MOVE_STATE_FST]? feel.keyFast: 1.0f) * secs;
 	Pan(dx * rate, dy * rate);
 	Update();
 }
@@ -322,7 +306,7 @@ void CKardashevCamera::MouseWheelMove(float move)
 	// the wheel: ScrollWheelSpeed per notch, negative in (precise scrolling gives shares of a notch)
 	const float n = move / scrollWheelSpeed * wheelSens;
 
-	if (ms[CCamera::MOVE_STATE_TLT]) {
+	if (ms[CCamera::MOVE_STATE_TLT] && feel.freeRotate) {
 		Tilt(n * kcam::TILT_STEP);
 		Update();
 		return;
@@ -480,11 +464,13 @@ bool CKardashevCamera::TrackFocus(float dt, float3& focus)
 
 float3 CKardashevCamera::ClampFocus(float3 p, float u) const
 {
-	// inside the playable area, and over the top of the range inside a box round its middle that shrinks to the middle
-	// itself at the full-map view (so the furthest view always frames the whole area)
-	const float w = 1.0f - CentreWeight(u);
-	const float cx = (playRect.x + playRect.z) * 0.5f, hx = (playRect.z - playRect.x) * 0.5f * w;
-	const float cz = (playRect.y + playRect.w) * 0.5f, hz = (playRect.w - playRect.y) * 0.5f * w;
+	// inside the playable area; over the top of the range (phased in from centreFrom) only as far from its middle as keeps
+	// the view's ground footprint (north up, as seen from above) over the area, so the furthest view frames the whole area
+	// round its middle and a mid-range view is not pulled off the point it shows
+	const float w = CentreWeight(u);
+	const float vh = DistOf(u) * std::tan(FovCurve(u) * 0.5f * math::DEG_TO_RAD), vw = vh * Aspect();
+	const float cx = (playRect.x + playRect.z) * 0.5f, hx = std::max(0.0f, (playRect.z - playRect.x) * 0.5f - vw * w);
+	const float cz = (playRect.y + playRect.w) * 0.5f, hz = std::max(0.0f, (playRect.w - playRect.y) * 0.5f - vh * w);
 	p.x = std::clamp(p.x, cx - hx, cx + hx);
 	p.z = std::clamp(p.z, cz - hz, cz + hz);
 	return p;
@@ -500,7 +486,7 @@ float CKardashevCamera::ClearElev(const float3& f, float d, float e) const
 		for (int i = 1; i <= kcam::CLEAR_SAMPLES; i++) {
 			const float s = d * i / kcam::CLEAR_SAMPLES;
 			const float3 q(f.x - s * ce * h.x, f.y + s * se, f.z - s * ce * h.z);
-			if (q.y < CGround::GetHeightAboveWater(q.x, q.z, false) + kcam::CLEARANCE * i / kcam::CLEAR_SAMPLES)
+			if (q.y < CGround::GetHeightAboveWater(q.x, q.z, false) + feel.clearance * i / kcam::CLEAR_SAMPLES)
 				return false;
 		}
 		return true;
@@ -517,14 +503,14 @@ void CKardashevCamera::Update()
 	const float dt = (lastTick < 0.0f)? 0.0f: std::clamp(now - lastTick, 0.0f, 0.1f);
 	lastTick = now;
 
-	if (refitNeeded || std::abs(Aspect() - fitAspect) > 1e-3f || std::abs(rotY - fitHeading) > 0.002f)
+	if (refitNeeded || std::abs(Aspect() - fitAspect) > 1e-3f)
 		Refit(); // u stays: the view keeps its place on the curve
 
 	// the lock lets go when its unit leaves the selection or dies (TrackFocus); Lua arms it (SetState "commander")
 	const float u0 = curU;
 
 	if (curU != tgtU) {
-		const float tau = kcam::TAU * glideScale;
+		const float tau = feel.tau * glideScale;
 		if (tau <= 0.0f) {
 			curU = tgtU;
 		} else {
@@ -547,7 +533,6 @@ void CKardashevCamera::Update()
 		if (anchorOn) {
 			// the focus that keeps the anchor's ground point on its screen spot, solved with the focus height and the
 			// angle the terrain allows at the answer (three passes settle both over relief)
-			const float w = (1.0f - CentreWeight(curU)) / std::max(1e-4f, 1.0f - anchorC0);
 			const float3 h = Heading();
 			const float ta = std::tan(vfov * 0.5f * math::DEG_TO_RAD), aspect = Aspect();
 			float fy = pos.y, eUse = ClearElev(pos, dist, elev);
@@ -560,7 +545,7 @@ void CKardashevCamera::Update()
 				if (t <= 0.0f)
 					break;
 				const float3 a = anchorG + b.D * dist - wv * t + anchorOff;
-				f = ClampFocus(float3(c.x + (a.x - c.x) * w, 0.0f, c.z + (a.z - c.z) * w), curU);
+				f = ClampFocus(float3(a.x, 0.0f, a.z), curU);
 				fy = FocusHeight(f.x, f.z);
 				eUse = ClearElev(float3(f.x, fy, f.z), dist, elev);
 			}
@@ -671,6 +656,10 @@ void CKardashevCamera::GetState(StateMap& sm) const
 //   px py pz, dist, rx, ry, tiltHeld   the view; a focus moved further than PAN_TOL ends tracking (unless "track" is given)
 // Settings (never in GetState):
 //   playX0 playZ0 playX1 playZ1        the playable rectangle (elmos; default the whole map)
+//   minDist margin elevNear elevFar fovNear fovFar shape centreFrom stepOut tau keyPan keyFast dragPan clearance
+//                                      the feel values (Feel in the header; angles in degrees), the game's own numbers
+//   freeRotate                         1: the rotate modifier with drag or keys turns and the tilt modifier with the wheel
+//                                      tilts (stock-like free rotation); 0: neither (Lua's "rotate" and "tilt" still do)
 //   clearL clearR clearT clearB        screen insets (0..1) the furthest view keeps the map clear of (the HUD's panels)
 //   glide                              1 normal, 0 every zoom instant (reduced motion)
 // Commands (never in GetState):
@@ -699,12 +688,37 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 		}
 		if (Has("glide"))
 			glideScale = std::max(0.0f, sm["glide"]);
+
+		// the feel values (CKardashevCamera::Feel; angles in degrees here)
+		bool feelSet = false;
+		const auto SetFeel = [&](const char* k, float& v, float lo, float hi, float scale) {
+			if (Has(k)) { v = std::clamp(sm[k], lo, hi) * scale; feelSet = true; }
+		};
+		SetFeel("minDist", feel.minDist, 5.0f, 2000.0f, 1.0f);
+		SetFeel("margin", feel.margin, 1.0f, 1.5f, 1.0f);
+		SetFeel("elevNear", feel.elevNear, 3.0f, 89.5f, math::DEG_TO_RAD);
+		SetFeel("elevFar", feel.elevFar, 3.0f, 89.9f, math::DEG_TO_RAD);
+		SetFeel("fovNear", feel.fovNear, 10.0f, 120.0f, 1.0f);
+		SetFeel("fovFar", feel.fovFar, 10.0f, 120.0f, 1.0f);
+		SetFeel("shape", feel.shape, 0.0f, 0.95f, 1.0f);
+		SetFeel("centreFrom", feel.centreFrom, 0.0f, 0.99f, 1.0f);
+		SetFeel("stepOut", feel.stepOut, 0.01f, 3.0f, 1.0f);
+		SetFeel("tau", feel.tau, 0.0f, 2.0f, 1.0f);
+		SetFeel("keyPan", feel.keyPan, 0.0f, 20.0f, 1.0f);
+		SetFeel("keyFast", feel.keyFast, 1.0f, 20.0f, 1.0f);
+		SetFeel("dragPan", feel.dragPan, 0.0f, 20.0f, 1.0f);
+		SetFeel("clearance", feel.clearance, 0.0f, 200.0f, 1.0f);
+		if (Has("freeRotate"))
+			feel.freeRotate = sm["freeRotate"] != 0.0f;
+		if (feelSet) {
+			const float d = curDist;
+			Refit();
+			curU = tgtU = UOf(d);    // the view keeps its distance where the new limits allow
+		}
 	}
 
 	if (Has("ry"))
 		rotY = sm["ry"];
-	if (rotY != fitHeading)
-		Refit();
 
 	if (Has("px") || Has("pz")) {
 		const float3 np(Has("px")? sm["px"]: pos.x, pos.y, Has("pz")? sm["pz"]: pos.z);

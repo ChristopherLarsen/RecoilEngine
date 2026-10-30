@@ -9,6 +9,7 @@
 
 #include "CameraController.h"
 #include "System/float4.h"
+#include "System/MathConstants.h"
 
 class CUnit;
 
@@ -52,6 +53,28 @@ public:
 private:
 	struct Limits { float dMin = 100.0f; float dMax = 5000.0f; };
 
+	// the proportions and pacing the game tunes (Lua SetCameraState settings of the same names, angles in degrees there).
+	// DESIGN (2026-10-30, camera feel pass 2): defaults are the game's values (code/LuaUI/config/camera.lua), so a
+	// game that sends none gets the same camera
+	struct Feel {
+		float minDist    = 32.0f;                        // closest view (elmos focus to camera): one unit large and readable
+		float margin     = 1.04f;                        // free border round the playable area at the furthest view (4 %)
+		float elevNear   = 30.0f * math::DEG_TO_RAD;     // close: low and oblique, horizon in frame
+		float elevFar    = 89.0f * math::DEG_TO_RAD;     // far: practically straight down, a flat plan
+		float fovNear    = 64.0f;                        // vertical fov close (degrees): wide
+		float fovFar     = 60.0f;                        // vertical fov far: close to the near one, no long-lens look
+		float shape      = 0.35f;                        // eases the curve's ends; slope there 1 - shape (never 0)
+		float centreFrom = 0.45f;                        // above this u the framing box round the middle starts to shrink
+		float stepOut    = 0.50f;                        // a notch out adds 50 % of the distance; in removes 33 %
+		float tau        = 0.22f;                        // glide time constant (s): fast start, long soft landing
+		float keyPan     = 2.0f;                         // keys and edge: view heights per second
+		float keyFast    = 4.0f;                         // the fast modifier on the pan keys
+		float dragPan    = 0.5f;                         // middle-drag: view pixels per pointer pixel
+		float clearance  = 8.0f;                         // camera and its line to the focus stay this far above the ground
+		bool freeRotate  = false;                        // the engine's rotate and tilt modifiers turn and tilt (an option; the
+		                                                 // game's own look key turns through Lua either way)
+	};
+
 	float DistOf(float u) const;
 	float UOf(float d) const;
 	float ElevCurve(float u) const;
@@ -59,6 +82,7 @@ private:
 	float Elev() const;
 	float Aspect() const;
 	float3 Heading() const;
+	float CentreWeight(float u) const;
 
 	void Refit();
 	void Notches(float n);
@@ -85,9 +109,9 @@ private:
 	float heldElev = -1.0f;       // manual tilt (elevation), < 0: the zoom curve owns the angle
 	float glideScale = 1.0f;      // 0: every zoom is instant (reduced motion)
 
+	Feel feel;
 	Limits lim;
 	float fitAspect = 0.0f;
-	float fitHeading = -1000.0f;
 	float4 playRect;              // x0, z0, x1, z1 in elmos
 	float4 clearIns;              // screen insets the furthest view keeps the map clear of (left, right, top, bottom; 0..1)
 	bool refitNeeded = true;
