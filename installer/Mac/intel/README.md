@@ -32,3 +32,16 @@ look: "pretty good"; delayed texture loading, a subtle flicker, short stutters. 
 `vkCreateGraphicsPipelines failed (VK_ERROR_INITIALIZATION_FAILED)`; Mesa warns of no depth_clip_enable, logicOp,
 custom_border_color on this device; `[DISPLAY] window off the displays` repeats (Retina size); exit code 21 at shutdown
 after the game ended. Engine content: copy `cont/fonts`, `cont/cmdcolors.txt`, `cont/ctrlpanel.txt` next to `spring`.
+
+### Stutter measurements (2026-10-30, 1920x1080 window, T0 Tiny, 1800 frames, temp frame-time gadget)
+| Setting | Avg FPS | Hitches > 50 ms (not counting autotest screenshots) | Window "rescues" |
+|---|---|---|---|
+| MacHighDPI=1 (Retina, 3840x2160 px), cold shader cache | 37.8 | 7 | 58 |
+| MacHighDPI=1, warm cache | 37.0 | 5 | 58 |
+| MacHighDPI=0 (1x) | 59.4 (vsync) | 4 | 0 |
+- The 1-3.4 s stalls in both Retina runs are the m0 autotest's own `/screenshot` PNG saves, not gameplay.
+- The Mesa shader disk cache does not remove the hitches (cold and warm runs match); the late ones are probably first
+  draws of new units/effects (MSL conversion and Metal pipeline compile in MoltenVK).
+- `gfx_display.lua` (game) compares the window in Retina pixels (`GetWindowGeometry`) with the display in points
+  (`GetScreenGeometry`), sees a window 28 % on screen, and re-applies window geometry every second. Not Intel specific:
+  any Mac with MacHighDPI=1. The engine knows the ratio (`globalRendering->pixelRatio`) but does not expose it to Lua.
