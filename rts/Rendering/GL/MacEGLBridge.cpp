@@ -76,6 +76,7 @@ namespace {
 	int pboSizes[NUM_PBOS][2] = {};
 	unsigned int frameIdx = 0;
 	std::chrono::steady_clock::time_point lastSwap = {};
+	bool presentNextSync = false;
 
 	std::mutex surfMutex;
 
@@ -420,6 +421,11 @@ void MacEGLBridge::SetSwapInterval(int interval)
 		SDL_RenderSetVSync(renderer, interval != 0);
 }
 
+void MacEGLBridge::PresentNextSync()
+{
+	presentNextSync = true;
+}
+
 void MacEGLBridge::SwapWindow(SDL_Window* window)
 {
 	if (context == nullptr || renderer == nullptr)
@@ -462,8 +468,9 @@ void MacEGLBridge::SwapWindow(SDL_Window* window)
 	// previous one, which would keep the screen one redraw behind. Waiting costs nothing there; normal frame rates keep
 	// the asynchronous path.
 	const auto now = std::chrono::steady_clock::now();
-	const bool slowFrames = (frameIdx == 0) || (now - lastSwap > std::chrono::milliseconds(100));
+	const bool slowFrames = presentNextSync || (frameIdx == 0) || (now - lastSwap > std::chrono::milliseconds(100));
 	lastSwap = now;
+	presentNextSync = false;
 	const unsigned int shw = slowFrames ? cur : prv;
 
 	const int px = pboSizes[shw][0];

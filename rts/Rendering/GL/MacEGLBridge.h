@@ -23,5 +23,8 @@ namespace MacEGLBridge {
 	// reads back the pbuffer and presents it; resizes the pbuffer to track the window
 	void SwapWindow(SDL_Window* window);
 	void SetSwapInterval(int interval);
+
+	// the next SwapWindow presents its own frame instead of the previous one (a load screen frame)
+	void PresentNextSync();
 }
 #endif

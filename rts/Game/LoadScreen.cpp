@@ -16,6 +16,7 @@
 #include "Map/MapInfo.h"
 #include "Rendering/Fonts/glFont.h"
 #include "Rendering/GlobalRendering.h"
+#include "Rendering/GL/MacEGLBridge.h"
 #include "Rendering/Textures/NamedTextures.h"
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/Path/IPathManager.h"
@@ -322,8 +323,14 @@ bool CLoadScreen::Draw()
 		luaIntro->DrawLoadScreen();
 	}
 
-	if (!mtLoading)
+	if (!mtLoading) {
+	#ifdef MAC_EGL_BRIDGE_AVAILABLE
+		// the next draw may be seconds away: show this frame now, not one load step late
+		if (MacEGLBridge::Active())
+			MacEGLBridge::PresentNextSync();
+	#endif
 		globalRendering->SwapBuffers(true, false);
+	}
 
 	return true;
 }
