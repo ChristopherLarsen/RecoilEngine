@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaHandle.h"
+#include "Game/SupComLocalView.h"
 #include "lua_privileges.h"
 
 #include "LuaGaia.h"
@@ -2467,7 +2468,7 @@ void CLuaHandle::HandleLuaMsg(int playerID, int script, int mode, const std::vec
 						if (player == nullptr)
 							return;
 
-						if (gu->spectatingFullView) {
+						if (SupComLocalView::OrderFullView()) {
 							sendMsg = true;
 						} else if (player->spectator) {
 							sendMsg = gu->spectating;

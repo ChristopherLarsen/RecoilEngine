@@ -6,6 +6,7 @@
  */
 
 #include "GlobalUnsynced.h"
+#include "Game/SupComLocalView.h"
 
 #include "Game/Players/Player.h"
 #include "Game/Players/PlayerHandler.h"
@@ -112,6 +113,7 @@ void CGlobalUnsynced::SetMyPlayer(const int myNumber)
 	spectating           = myPlayer->spectator;
 	spectatingFullView   = myPlayer->spectator;
 	spectatingFullSelect = myPlayer->spectator;
+	SupComLocalView::Apply(); // supcom: the game's local full view for this player's allyTeam
 
 	if (spectating)
 		return;

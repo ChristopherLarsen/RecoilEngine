@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "GameHelper.h"
+#include "Game/SupComLocalView.h"
 
 #include "Camera.h"
 #include "GameSetup.h"
@@ -479,7 +480,7 @@ namespace {
 			bool Unit(const CUnit* u) const {
 				return (u->allyteam == gu->myAllyTeam) ||
 					   (u->losStatus[gu->myAllyTeam] & (LOS_INLOS | LOS_INRADAR)) ||
-					   gu->spectatingFullView;
+					   SupComLocalView::OrderFullView();
 			}
 		};
 
@@ -559,7 +560,7 @@ namespace {
 
 			void AddUnit(CUnit* u) {
 				float3 unitPos;
-				if (gu->spectatingFullView) {
+				if (SupComLocalView::OrderFullView()) {
 					unitPos = u->midPos;
 				} else {
 					unitPos = u->GetErrorPos(gu->myAllyTeam);

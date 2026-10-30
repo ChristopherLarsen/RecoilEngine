@@ -2,6 +2,7 @@
 
 
 #include "TraceRay.h"
+#include "Game/SupComLocalView.h"
 #include "Camera.h"
 #include "GlobalUnsynced.h"
 #include "Map/Ground.h"
@@ -438,7 +439,7 @@ float GuiTraceRay(
 			const bool unitIsEnemy = !teamHandler.Ally(u->allyteam, gu->myAllyTeam);
 			const bool unitOnRadar = (useRadar && losHandler->InRadar(u, gu->myAllyTeam));
 			const bool unitInSight = (u->losStatus[gu->myAllyTeam] & (LOS_INLOS | LOS_CONTRADAR));
-			const bool unitVisible = !unitIsEnemy || unitOnRadar || unitInSight || gu->spectatingFullView;
+			const bool unitVisible = !unitIsEnemy || unitOnRadar || unitInSight || SupComLocalView::OrderFullView();
 
 			if (u == exclude)
 				continue;
@@ -484,7 +485,7 @@ float GuiTraceRay(
 
 		// Feature Intersection
 		for (const CFeature* f: quad.features) {
-			if (!gu->spectatingFullView && !f->IsInLosForAllyTeam(gu->myAllyTeam))
+			if (!SupComLocalView::OrderFullView() && !f->IsInLosForAllyTeam(gu->myAllyTeam))
 				continue;
 			#if 0
 			// test this bit only in synced traces, rely on noSelect here
