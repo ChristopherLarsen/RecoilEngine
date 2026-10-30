@@ -1,0 +1,17 @@
+--- a/src/gallium/drivers/zink/zink_screen.c
++++ b/src/gallium/drivers/zink/zink_screen.c
+@@ -3587,8 +3587,12 @@
+    }
+ 
+    if (!screen->info.rb2_feats.nullDescriptor) {
+-      mesa_loge("Zink requires the nullDescriptor feature of KHR/EXT robustness2.");
+-      goto fail;
++      /* mac-intel experiment: MoltenVK on Intel/AMD Macs lacks nullDescriptor; continue and see what breaks */
++      if (!debug_get_bool_option("ZINK_ALLOW_NO_NULL_DESCRIPTOR", false)) {
++         mesa_loge("Zink requires the nullDescriptor feature of KHR/EXT robustness2.");
++         goto fail;
++      }
++      mesa_logw("ZINK: nullDescriptor missing; continuing (ZINK_ALLOW_NO_NULL_DESCRIPTOR)");
+    }
+ 
+    if (zink_set_driver_strings(screen)) {
