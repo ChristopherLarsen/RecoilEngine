@@ -1,0 +1,44 @@
+--- a/src/gallium/drivers/zink/zink_resource.c
++++ b/src/gallium/drivers/zink/zink_resource.c
+@@ -2671,6 +2671,11 @@
+    struct zink_resource *res = zink_resource(pres);
+    struct zink_transfer *trans = create_transfer(ctx, pres, usage, box);
+    struct zink_clientptr_heap *clientptr_heap = zink_clientptr_heap(res->base.b.clientptr_heap);
++   /* mac-intel: nothing to read back when the map is write-only and the range was never written, is discarded, or is
++    * buffer_subdata (it writes the whole box); on MoltenVK an invalidate waits for the whole GPU */
++   const bool no_readback = !(usage & PIPE_MAP_READ) &&
++                            (!util_ranges_intersect(&res->valid_buffer_range, box->x, box->x + box->width) ||
++                             (usage & (PIPE_MAP_DISCARD_RANGE | PIPE_MAP_DISCARD_WHOLE_RESOURCE)) || res->subdata);
+ 
+    if (!trans)
+       return NULL;
+@@ -2872,7 +2877,7 @@
+          ptr = ((uint8_t *)ptr) + trans->offset;
+    }
+ 
+-   if ((!res->obj->coherent && ptr != PIPE_TRANSFER_CLIENT_POINTER)
++   if (((!res->obj->coherent && ptr != PIPE_TRANSFER_CLIENT_POINTER)
+ #if defined(MVK_VERSION)
+       // Work around for MoltenVk limitation specifically on coherent memory
+       // MoltenVk returns blank memory ranges when there should be data present
+@@ -2881,7 +2886,7 @@
+ 
+        || screen->instance_info->have_MVK_moltenvk
+ #endif
+-      ) {
++      ) && !no_readback) {   /* mac-intel: see no_readback; this stalled every new VBO (glBufferData) */
+       VkDeviceSize size = box->width;
+       VkDeviceSize offset = res->obj->offset + trans->offset;
+       VkMappedMemoryRange range = zink_resource_init_mem_range(screen, res->obj, offset, size);
+@@ -3784,7 +3789,10 @@
+          return NULL;
+       }
+ 
+-      if (!res->obj->coherent) {
++      /* mac-intel: as in the map above, a discarding write-only map reads nothing back */
++      if (!res->obj->coherent &&
++          !(!(trans->base.b.usage & PIPE_MAP_READ) &&
++            (res->subdata || (trans->base.b.usage & (PIPE_MAP_DISCARD_RANGE | PIPE_MAP_DISCARD_WHOLE_RESOURCE))))) {
+          VkDeviceSize size = trans->base.b.box.width;
+          VkDeviceSize offset = res->obj->offset + trans->offset;
+          VkMappedMemoryRange range = zink_resource_init_mem_range(screen, res->obj, offset, size);

@@ -67,3 +67,10 @@ Apply all `000*.patch` to Mesa 26.3.0-rc1 before building (`patch -p1` in the Me
   vsync-capped 60 Hz display averages just under, so they always step down there (owner decision pending).
 - The "every 22 s" hitch was the profiler (sample in 20 s slices); absent in unsampled runs.
 - HardwareCursor on by default on macOS (fork `supcom-mac-present`): the software cursor lagged by the presented frame.
+
+### After the vsync change (2026-10-30)
+- `0004`: Zink on MoltenVK invalidated every buffer map, and MoltenVK turns an invalidate into a full GPU wait; skipped
+  when nothing can be read back (write-only map of a never-written, discarded or subdata range). It removes the waits
+  from `VBO::New`; the frame rate did not change measurably (52.3 -> 52.8 FPS in the commander-death test).
+- The slow seconds after a commander dies are GPU fill rate at Retina: 6 s at 7-20 FPS at 2x, a 2 s dip to 31 FPS and no
+  hitches at 1x (MacHighDPI=0). A Retina-sized effect pass on a Radeon Pro 5700 XT through MoltenVK.
