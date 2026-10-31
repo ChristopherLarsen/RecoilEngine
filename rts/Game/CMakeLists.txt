@@ -53,6 +53,7 @@ make_global_var(sources_engine_Game
 		"${CMAKE_CURRENT_SOURCE_DIR}/UI/GameInfo.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/UI/GameSetupDrawer.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/UI/GuiHandler.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/UI/SupComBuildPreview.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/UI/Groups/Group.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/UI/Groups/GroupHandler.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/UI/HwMouseCursor.cpp"

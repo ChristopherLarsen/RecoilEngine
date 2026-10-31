@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "GuiHandler.h"
+#include "SupComBuildPreview.h"
 #include "Game/SupComLocalView.h"
 
 #include <Rml/Backends/RmlUi_Backend.h>
@@ -3897,6 +3898,8 @@ void CGuiHandler::DrawMapStuff(bool onMiniMap)
 				}
 
 
+				// supcom: the game may draw placement itself (SupComBuildPreview)
+				if (!SupComBuildPreview::Hidden())
 				for (const BuildInfo& bi: buildInfos) {
 					const float3& buildPos = bi.pos;
 					DrawUnitDefRanges(nullptr, buildeeDef, buildPos);

@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaUnsyncedCtrl.h"
+#include "Game/UI/SupComBuildPreview.h"
 
 #include "Game/Camera/DollyController.h"
 #include "LuaConfig.h"
@@ -261,6 +262,7 @@ bool LuaUnsyncedCtrl::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(LoadCtrlPanelConfig);
 
 	REGISTER_LUA_CFUNC(SetActiveCommand);
+	SupComBuildPreview::PushUnsyncedCtrl(L); // supcom: SetEngineBuildPreview
 	REGISTER_LUA_CFUNC(ForceLayoutUpdate);
 
 	REGISTER_LUA_CFUNC(SetMouseCursor);
