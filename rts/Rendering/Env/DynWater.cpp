@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include <algorithm>
 #include <bit>
 
 #include "DynWater.h"
@@ -851,7 +852,9 @@ void CDynWater::DrawWaterSurface()
 			const int yhlod = y + hlod;
 
 			const int nloop = (xe - xs) / lod + 1;
-			va->EnlargeArrays(nloop*13);
+			// supcom: a camera far out leaves no tile in the row (xe < xs); the negative count read as unsigned grew the
+			// array without end (a hang, then a crash; stock too, water mode 2 at camera height 4200 on Sandline)
+			va->EnlargeArrays(std::max(nloop, 0) * 13);
 			for (int x = xs; x < xe; x += lod) {
 				const int xlod = x + lod;
 				const int xhlod = x + hlod;
