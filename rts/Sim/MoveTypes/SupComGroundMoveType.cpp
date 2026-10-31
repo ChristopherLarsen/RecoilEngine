@@ -221,6 +221,8 @@ bool CSupComGroundMoveType::FootprintFitsAt(const float3& pos) const
 	return ((CMoveMath::RangeIsBlocked(sx0, sx1, sz0, sz1, &collisionQuery, 0) & CMoveMath::BLOCK_STRUCTURE) == 0);
 }
 
+bool CSupComGroundMoveType::ExactGoalEnabled() { return ExactGoalOn(); }
+
 void CSupComGroundMoveType::ExactGoalRadius()
 {
 	if (ExactGoalOn() && extraRadius > 0.0f && FootprintFitsAt(goalPos))

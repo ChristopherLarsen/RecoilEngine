@@ -77,6 +77,8 @@ public:
 	int GetStepPhase() const { return scPhase; }
 	bool GetStepBraking() const { return scBraking; }
 	int GetBlockedFrames() const { return scBlockedFrames; }
+	/// springsetting SupComExactGoal (synced Lua reads it: an order aimed at a point the footprint fits ends there)
+	static bool ExactGoalEnabled();
 	/// a submarine's current depth below the water surface (elmos)
 	float GetDepth() const { return CurrentDepth(); }
 	bool IsSubmarine() const { return submarine; }

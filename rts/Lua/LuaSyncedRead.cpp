@@ -6197,6 +6197,7 @@ int LuaSyncedRead::GetUnitMoveTypeData(lua_State* L)
 			LuaPushNamedBool(L, "supcomHeadingFree", scmt->GetHeadingFree());
 			LuaPushNamedBool(L, "supcomDirect", scmt->GetDirectSteer());
 			LuaPushNamedNumber(L, "supcomBlockedFrames", scmt->GetBlockedFrames());
+			LuaPushNamedBool(L, "supcomExactGoal", CSupComGroundMoveType::ExactGoalEnabled());
 			LuaPushNamedNumber(L, "supcomPhysState", unit->physicalState);
 		}
 
