@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaSyncedRead.h"
+#include "Rendering/Units/SupComGhosts.h"
 
 #include "LuaInclude.h"
 
@@ -242,6 +243,7 @@ bool LuaSyncedRead::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(GetUnitBuildeeRadius);
 	REGISTER_LUA_CFUNC(GetUnitMass);
 	REGISTER_LUA_CFUNC(GetUnitPosition);
+	SupComGhosts::PushSyncedRead(L); // supcom: GetDeadGhosts
 	REGISTER_LUA_CFUNC(GetUnitBasePosition);
 	REGISTER_LUA_CFUNC(GetUnitVectors);
 	REGISTER_LUA_CFUNC(GetUnitRotation);
