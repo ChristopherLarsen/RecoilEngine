@@ -124,6 +124,11 @@ static bool PathSmoothOn() { static const bool on = configHandler->GetBool("SupC
 // path smoothing: waypoints looked ahead, and frames between re-checks of the target (PLACEHOLDER)
 static constexpr int SMOOTH_LOOKAHEAD = 32;
 static constexpr int SMOOTH_RECHECK_FRAMES = 8;
+
+CONFIG(bool, SupComCrowdArrive).defaultValue(true).description("supcom: a SupComGroundMoveType unit in a crowd keeps driving to its goal for a while before its order counts as arrived outside the goal radius (the engine ends it when it touches a unit near the goal, or widens the radius while it waits) (PTH-004 A and B); 0 arrives as before.");
+static bool CrowdArriveOn() { static const bool on = configHandler->GetBool("SupComCrowdArrive"); return on; }
+// the longest an order's early arrivals are held back in all (PLACEHOLDER: under PTH-004's stuck.time plus stuck.recover)
+static constexpr int CROWD_MAX_FRAMES = GAME_SPEED * 5;
 // path smoothing: the room a cut-across line keeps on each side of the footprint, elmos (PLACEHOLDER: one square)
 static constexpr float SMOOTH_CLEARANCE = SQUARE_SIZE * 1.0f;
 
@@ -188,6 +193,7 @@ void CSupComGroundMoveType::ResetForNewOrder()
 	smoothPathID = 0;
 	smoothFrame = -1;
 	smoothPts.clear();
+	crowdFrames = 0;
 
 	// a new order during braking or the settle replaces it
 	if (scSpeed > 0.0f)
@@ -678,9 +684,36 @@ void CSupComGroundMoveType::UpdateTurnRate()
 }
 
 
+void CSupComGroundMoveType::HoldEarlyArrival()
+{
+	// the engine ends a move in a crowd outside the goal radius: on touching a unit at or near the goal, or with the
+	// radius widened while the unit waits (PTH-004 A and B ended orders up to 6 squares short): the arrival waits
+	if (!CrowdArriveOn() || progressState != Active || !pathingArrived || pathingFailed || crowdFrames >= CROWD_MAX_FRAMES)
+		return;
+	if (owner->pos.SqDistance2D(goalPos) <= Square(goalRadius + extraRadius))
+		return;
+
+	pathingArrived = false;
+	atGoal = false;
+	atEndOfPath = false;
+	crowdFrames++;
+}
+
+bool CSupComGroundMoveType::IsAtGoal() const
+{
+	// the command AI finishes the order on this: a crowd arrival set by this frame's collisions waits as in HoldEarlyArrival
+	if (atGoal && CrowdArriveOn() && progressState == Active && crowdFrames < CROWD_MAX_FRAMES)
+		return (owner->pos.SqDistance2D(goalPos) <= Square(goalRadius + extraRadius));
+
+	return atGoal;
+}
+
 void CSupComGroundMoveType::UpdateUnitPosition()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+
+	// before the engine acts on this frame's arrival flags (UpdatePreCollisions)
+	HoldEarlyArrival();
 
 	if (owner->UnderFirstPersonControl()) {
 		CGroundMoveType::UpdateUnitPosition();

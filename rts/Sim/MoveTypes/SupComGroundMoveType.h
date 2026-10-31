@@ -85,6 +85,7 @@ public:
 
 protected:
 	bool ArrivalAllowed() const override;
+	bool IsAtGoal() const override;
 	void AdjustPosToWaterLine() override;
 
 private:
@@ -96,6 +97,7 @@ private:
 	};
 
 	void ResetForNewOrder();
+	void HoldEarlyArrival();
 
 	/// distance needed to come to rest from speed v (elmos, v in elmos per frame)
 	float StoppingDistance(float v) const;
@@ -142,6 +144,8 @@ private:
 	float3 scLogTarget; ///< diagnosis only (SupComYieldLog): the last steering target logged
 	// SupComPathSmooth: the path's points (rebuilt from the path, not saved), the target and when it is re-checked
 	std::vector<float3> smoothPts;
+	// SupComCrowdArrive: frames this order's early arrival was held back (not saved: a load restarts it)
+	int crowdFrames = 0;
 	unsigned int smoothPathID = 0;
 	int smoothFrame = -1;
 	float3 smoothTarget;
