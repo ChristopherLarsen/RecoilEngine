@@ -97,6 +97,8 @@ private:
 	};
 
 	void ResetForNewOrder();
+	void ExactGoalRadius();
+	bool FootprintFitsAt(const float3& pos) const;
 	void HoldEarlyArrival();
 
 	/// distance needed to come to rest from speed v (elmos, v in elmos per frame)

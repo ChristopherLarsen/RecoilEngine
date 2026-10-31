@@ -125,6 +125,9 @@ static bool PathSmoothOn() { static const bool on = configHandler->GetBool("SupC
 static constexpr int SMOOTH_LOOKAHEAD = 32;
 static constexpr int SMOOTH_RECHECK_FRAMES = 8;
 
+CONFIG(bool, SupComExactGoal).defaultValue(true).description("supcom: a SupComGroundMoveType unit's move ends at its goal when its own footprint fits there; the engine widens the arrival radius by the footprint radius whenever its wider move class does not fit (PTH-001-F, PTH-003); 0 widens as before.");
+static bool ExactGoalOn() { static const bool on = configHandler->GetBool("SupComExactGoal"); return on; }
+
 CONFIG(bool, SupComCrowdArrive).defaultValue(true).description("supcom: a SupComGroundMoveType unit in a crowd keeps driving to its goal for a while before its order counts as arrived outside the goal radius (the engine ends it when it touches a unit near the goal, or widens the radius while it waits) (PTH-004 A and B); 0 arrives as before.");
 static bool CrowdArriveOn() { static const bool on = configHandler->GetBool("SupComCrowdArrive"); return on; }
 // the longest an order's early arrivals are held back in all (PLACEHOLDER: under PTH-004's stuck.time plus stuck.recover)
@@ -200,15 +203,41 @@ void CSupComGroundMoveType::ResetForNewOrder()
 		scPhase = PHASE_DRIVE;
 }
 
+bool CSupComGroundMoveType::FootprintFitsAt(const float3& pos) const
+{
+	if (FootprintBlocked(pos))
+		return false;
+
+	// no structure under the footprint (the facing at the goal is not known: the larger side both ways)
+	const float h = std::max(footprintX, footprintZ) * 0.5f - FOOTPRINT_SIDE_EPS;
+	const int sx0 = std::clamp(int((pos.x - h) / SQUARE_SIZE), 0, mapDims.mapxm1);
+	const int sz0 = std::clamp(int((pos.z - h) / SQUARE_SIZE), 0, mapDims.mapym1);
+	const int sx1 = std::clamp(std::max(sx0, int(math::ceil((pos.x + h) / SQUARE_SIZE)) - 1), 0, mapDims.mapxm1);
+	const int sz1 = std::clamp(std::max(sz0, int(math::ceil((pos.z + h) / SQUARE_SIZE)) - 1), 0, mapDims.mapym1);
+
+	MoveTypes::CheckCollisionQuery collisionQuery(owner);
+	collisionQuery.UpdateElevationForPos(int2{(sx0 + sx1) / 2, (sz0 + sz1) / 2});
+
+	return ((CMoveMath::RangeIsBlocked(sx0, sx1, sz0, sz1, &collisionQuery, 0) & CMoveMath::BLOCK_STRUCTURE) == 0);
+}
+
+void CSupComGroundMoveType::ExactGoalRadius()
+{
+	if (ExactGoalOn() && extraRadius > 0.0f && FootprintFitsAt(goalPos))
+		extraRadius = 0.0f;
+}
+
 void CSupComGroundMoveType::StartMovingRaw(const float3 moveGoalPos, float moveGoalRadius)
 {
 	CGroundMoveType::StartMovingRaw(moveGoalPos, moveGoalRadius);
+	ExactGoalRadius();
 	ResetForNewOrder();
 }
 
 void CSupComGroundMoveType::StartMoving(float3 moveGoalPos, float moveGoalRadius)
 {
 	CGroundMoveType::StartMoving(moveGoalPos, moveGoalRadius);
+	ExactGoalRadius();
 	ResetForNewOrder();
 }
 
@@ -475,7 +504,8 @@ bool CSupComGroundMoveType::LineOpen(const float3& a, const float3& b) const
 	// open ground only: a costly square is left to the path (PTH-001-D)
 	const float3 d = (b - a) * XZVector;
 	const int steps = std::max(1, int(math::ceil(d.Length2D() / (SQUARE_SIZE * 0.5f))));
-	// and clear of walls: the footprint moved sideways by the clearance fits too (PTH-002 A and B)
+	// and clear of walls and structures: the footprint moved sideways by the clearance fits too (PTH-002 A and B,
+	// PTH-004-D)
 	const float3 side = float3(-d.z, 0.0f, d.x).SafeNormalize2D() * SMOOTH_CLEARANCE;
 
 	for (int k = 1; k <= steps; k++) {
@@ -483,7 +513,7 @@ bool CSupComGroundMoveType::LineOpen(const float3& a, const float3& b) const
 
 		if (CMoveMath::GetPosSpeedMod(*owner->moveDef, p) < 0.99f)
 			return false;
-		if (FootprintBlocked(p + side) || FootprintBlocked(p - side))
+		if (!FootprintFitsAt(p + side) || !FootprintFitsAt(p - side))
 			return false;
 	}
 
