@@ -228,7 +228,7 @@ static void CreatePathMetatable(lua_State* L)
  * @param goalZ number
  * @param maxSquares integer? (Default: 65536)
  * @return boolean? reachable true when the goal's square was reached; false when the fill ended without it; nil when the limit was hit first
- * @return number nearX centre of the visited square nearest the goal
+ * @return number nearX centre of the unit's footprint on the visited square nearest the goal
  * @return number nearZ
  * @return integer visited squares visited
  */
@@ -391,8 +391,10 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 	else
 		lua_pushboolean(L, false);
 
-	lua_pushnumber(L, ((best % W) + 0.5f) * SQUARE_SIZE);
-	lua_pushnumber(L, ((best / W) + 0.5f) * SQUARE_SIZE);
+	// the centre of the footprint standing on the square (an even footprint's centre is the square's corner): the
+	// point a move order can reach (PTH-001-F; half a square off, the order to it stopped short)
+	lua_pushnumber(L, ((best % W) - (fx >> 1) + fx * 0.5f) * SQUARE_SIZE);
+	lua_pushnumber(L, ((best / W) - (fz >> 1) + fz * 0.5f) * SQUARE_SIZE);
 	lua_pushnumber(L, int(queue.size()));
 	return 4;
 }
