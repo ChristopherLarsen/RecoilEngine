@@ -11,6 +11,8 @@
 #include "System/float4.h"
 #include "System/MathConstants.h"
 
+#include <vector>
+
 class CUnit;
 
 class CKardashevCamera : public CCameraController
@@ -85,16 +87,19 @@ private:
 	float CentreWeight(float u) const;
 
 	void Refit();
-	void Notches(float n);
+	void Notches(float n, bool pointer);
 	void Tilt(float dElev);
 	void Pan(float dRight, float dFwd);
 	void ResetView();
 	void ZoomPop();
-	void SetAnchor();
+	bool PointerGround(float3& g) const;
+	bool PointerAnchor(float3& g, float& sx, float& sy) const;
 
-	void StartTrack(int unitID, int mode);
+	void StartTrack(std::vector<int> set, int mode);
+	std::vector<int> SortedSelection() const;
+	int FirstLive(const std::vector<int>& set) const;
+	bool TrackDrawPos(const CUnit* u, float3& p) const;
 	void StopTrack(int reason);
-	const CUnit* TrackedUnit() const;
 	bool TrackFocus(float dt, float3& focus);
 
 	float3 ClampFocus(float3 p, float u) const;
@@ -116,18 +121,19 @@ private:
 	float4 clearIns;              // screen insets the furthest view keeps the map clear of (left, right, top, bottom; 0..1)
 	bool refitNeeded = true;
 
-	// zoom-out anchor: the ground point under the pointer stays on its screen spot
-	bool anchorOn = false;
-	float3 anchorG;
-	float anchorSX = 0.0f, anchorSY = 0.0f, anchorC0 = 0.0f;
-	float3 anchorOff;
+	// wheel in: dive at the ground under the pointer while the glide runs
+	bool diveOn = false;
+	bool diveHeld = false;        // the pivot below, taken while the pointer stays where it was
+	float3 diveG;
+	float diveSX = 0.0f, diveSY = 0.0f;
+	int diveMX = -1, diveMY = -1;
 
 	// tracking and the lock
 	int trackUnit = -1;
 	int trackMode = TRACK_NONE;
 	int lastEnd = 0;              // why the last track ended (state key "trackEnd")
-	float3 trackOff;              // focus off the unit, easing to 0
-	float3 trackLast;
+	std::vector<int> trackSet;    // the followed set (unit ids, sorted); its first live unit is followed
+	float3 trackLast;             // the followed unit's last drawn position (held while it cannot be seen)
 	int lockUnit = -1;            // the unit the lock arms on while selected (the player's commander; set by Lua)
 	bool lockWasSelected = false;
 

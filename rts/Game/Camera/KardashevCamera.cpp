@@ -33,6 +33,7 @@
 
 #include "System/Misc/TracyDefs.h"
 
+#include <algorithm>
 #include <cmath>
 
 CONFIG(bool,  KardashevCamera).defaultValue(true).description("supcom: start in our own camera (KardashevCamera); 0 starts the stock spring camera (CamMode) as in Recoil.");
@@ -66,9 +67,6 @@ namespace kcam {
 	constexpr int   CLEAR_SAMPLES    = 16;
 	constexpr float CLEAR_STEP       = 1.0f * math::DEG_TO_RAD; // over a hill the view steepens in steps of this
 	// tracking
-	constexpr float FOLLOW_TAU       = 0.25f;                   // eases onto the unit at the start and after a jump (s)
-	constexpr float FOLLOW_MIN_SPEED = 400.0f;                  // that ease closes at no less than this (elmos/s)
-	constexpr float FOLLOW_JUMP      = 160.0f;                  // a move over this in one frame is a jump (teleport)
 	// keys
 	constexpr float START_U          = 0.55f;                   // the view before anything sets one
 	constexpr float POP_U            = 0.12f;                   // zoom pop: the close view at the pointer
@@ -77,7 +75,8 @@ namespace kcam {
 }
 
 namespace {
-	enum TrackEnd { END_NONE = 0, END_PAN = 1, END_DESELECTED = 2, END_DIED = 3, END_KEY = 4, END_SCRIPT = 5, END_LOST = 6 };
+	// 2 (deselected) and 6 (lost from sight) are retired (wheel-zoom 2026-10-31): tracking is a latched follow
+	enum TrackEnd { END_NONE = 0, END_PAN = 1, END_DIED = 3, END_KEY = 4, END_SCRIPT = 5 };
 
 	float Smooth(float t) { t = std::clamp(t, 0.0f, 1.0f); return t * t * (3.0f - 2.0f * t); }
 	float Shape(float u, float shape) { u = std::clamp(u, 0.0f, 1.0f); return (1.0f - shape) * u + shape * Smooth(u); }
@@ -198,15 +197,14 @@ void CKardashevCamera::Refit()
 /******************************************************************************/
 // input
 
-void CKardashevCamera::Notches(float n)
+// n notches (< 0 in); pointer: the wheel (in dives at the ground under the pointer), false for keys (never anchor)
+void CKardashevCamera::Notches(float n, bool pointer)
 {
 	if (n == 0.0f)
 		return;
 
-	if (n > 0.0f && trackMode == TRACK_NONE)
-		SetAnchor();
-	else if (n < 0.0f)
-		anchorOn = false;
+	diveOn = (n < 0.0f && pointer && trackMode == TRACK_NONE);
+	diveHeld = false;
 
 	tgtU = std::clamp(tgtU + n * std::log(1.0f + feel.stepOut) / std::log(lim.dMax / lim.dMin), 0.0f, 1.0f);
 
@@ -222,7 +220,7 @@ void CKardashevCamera::Tilt(float dElev)
 void CKardashevCamera::Pan(float dRight, float dFwd)
 {
 	StopTrack(END_PAN);
-	anchorOn = false;
+	diveOn = false;
 
 	const float3 h = Heading();
 	pos += (float3(-h.z, 0.0f, h.x) * dRight + h * dFwd);
@@ -298,7 +296,7 @@ void CKardashevCamera::MouseWheelMove(float move)
 	if (ms[CCamera::MOVE_STATE_UP] || ms[CCamera::MOVE_STATE_DWN]) {
 		// the zoom keys (moveup / movedown): move is 0.2 per millisecond of hold, positive out
 		const float secs = std::abs(move) / 0.2f * 0.001f;
-		Notches(std::copysign(kcam::KEY_ZOOM * secs * (ms[CCamera::MOVE_STATE_FST]? kcam::KEY_ZOOM_FAST: 1.0f), move));
+		Notches(std::copysign(kcam::KEY_ZOOM * secs * (ms[CCamera::MOVE_STATE_FST]? kcam::KEY_ZOOM_FAST: 1.0f), move), false);
 		Update();
 		return;
 	}
@@ -312,7 +310,7 @@ void CKardashevCamera::MouseWheelMove(float move)
 		return;
 	}
 
-	Notches(n);
+	Notches(n, true);
 	Update();
 }
 
@@ -337,67 +335,90 @@ void CKardashevCamera::ZoomPop()
 	} else {
 		curU = tgtU = 1.0f;
 	}
-	anchorOn = false;
+	diveOn = false;
 	Update();
 	camHandler->CameraTransition(kcam::POP_GLIDE * glideScale);
 }
 
-// zoom out about the pointer: remember the ground point under it and where on the screen it is (in the view's own axes)
-void CKardashevCamera::SetAnchor()
+// the ground or water surface under the pointer (a unit there: the ground at its base, which the ground ray finds); false
+// for the sky or a point off the map
+// the pointer's ground point and its spot on the screen in the view's own axes (the view as it is now, before this frame's
+// zoom step)
+bool CKardashevCamera::PointerAnchor(float3& g, float& sx, float& sy) const
 {
-	anchorOn = false;
+	if (!PointerGround(g))
+		return false;
+	const float3 md = mouse->dir;
+	const Basis b(rotX - math::HALFPI, Heading());
+	const float depth = md.dot(b.D);
+	if (depth <= 1e-4f)
+		return false;
+	const float ta = std::tan(fov * 0.5f * math::DEG_TO_RAD);
+	sx = md.dot(b.R) / depth / (ta * Aspect());
+	sy = md.dot(b.U) / depth / ta;
+	return true;
+}
 
-	if (CentreWeight(curU) >= 1.0f)
-		return;
-
+bool CKardashevCamera::PointerGround(float3& g) const
+{
 	const float3 cam = GetPos();
 	const float3 md = mouse->dir;
 	const float t = CGround::LineGroundCol(cam, cam + md * 1e6f, false);
 	if (t <= 0.0f)
-		return;
-
-	const Basis b(rotX - math::HALFPI, Heading());
-	const float depth = md.dot(b.D);
-	if (depth <= 1e-4f)
-		return;
-
-	const float ta = std::tan(fov * 0.5f * math::DEG_TO_RAD);
-	anchorG = cam + md * t;
-	anchorSX = md.dot(b.R) / depth / (ta * Aspect());
-	anchorSY = md.dot(b.U) / depth / ta;
-	anchorC0 = CentreWeight(curU);
-	anchorOff = ZeroVector;
-	anchorOn = true;
+		return false;
+	g = cam + md * t;
+	if (g.y < 0.0f && md.y < -1e-4f && cam.y > 0.0f)
+		g = cam + md * (-cam.y / md.y);                      // water: the surface (water level 0)
+	return g.x >= 0.0f && g.z >= 0.0f && g.x <= mapDims.mapx * SQUARE_SIZE && g.z <= mapDims.mapy * SQUARE_SIZE;
 }
 
 
 /******************************************************************************/
 // tracking and the lock
 
-const CUnit* CKardashevCamera::TrackedUnit() const
+// the selection in a fixed order (unit id), so the same selection always gives the same unit
+std::vector<int> CKardashevCamera::SortedSelection() const
 {
-	if (trackUnit < 0)
-		return nullptr;
-	const CUnit* u = unitHandler.GetUnit(trackUnit);
-	if (u == nullptr || u->isDead || !CanSee(u))
-		return nullptr;
-	return u;
+	std::vector<int> v(selectedUnitsHandler.selectedUnits.begin(), selectedUnitsHandler.selectedUnits.end());
+	std::sort(v.begin(), v.end());
+	return v;
 }
 
-void CKardashevCamera::StartTrack(int unitID, int mode)
+// the first live unit of a set, or -1
+int CKardashevCamera::FirstLive(const std::vector<int>& set) const
 {
-	const CUnit* u = unitHandler.GetUnit(unitID);
-	if (u == nullptr || u->isDead || !CanSee(u))
+	for (const int id: set) {
+		const CUnit* u = unitHandler.GetUnit(id);
+		if (u != nullptr && !u->isDead)
+			return id;
+	}
+	return -1;
+}
+
+// the drawn position of the followed unit (or its transport's); false while the viewer cannot see it
+bool CKardashevCamera::TrackDrawPos(const CUnit* u, float3& p) const
+{
+	if (u == nullptr || !CanSee(u))
+		return false;
+	const CUnit* t = u->GetTransporter();
+	p = (t != nullptr)? t->GetDrawPos(globalRendering->timeOffset): u->GetDrawPos(globalRendering->timeOffset);
+	return true;
+}
+
+// follow the first live unit of `set` (sorted); no glide: the focus is on it from the next frame
+void CKardashevCamera::StartTrack(std::vector<int> set, int mode)
+{
+	std::sort(set.begin(), set.end());
+	const int id = FirstLive(set);
+	if (id < 0)
 		return;
 
-	const CUnit* t = u->GetTransporter();
-	const float3 p = (t != nullptr)? t->GetDrawPos(globalRendering->timeOffset): u->GetDrawPos(globalRendering->timeOffset);
-
-	trackUnit = unitID;
+	trackSet = std::move(set);
+	trackUnit = id;
 	trackMode = mode;
-	trackOff = float3(pos.x - p.x, 0.0f, pos.z - p.z);
-	trackLast = p;
-	anchorOn = false;
+	float3 p;
+	trackLast = TrackDrawPos(unitHandler.GetUnit(id), p)? p: pos;
+	diveOn = false;
 }
 
 void CKardashevCamera::StopTrack(int reason)
@@ -406,55 +427,46 @@ void CKardashevCamera::StopTrack(int reason)
 		return;
 	trackUnit = -1;
 	trackMode = TRACK_NONE;
+	trackSet.clear();
 	lastEnd = reason;
 }
 
+// the track key: stops when the selection is empty or its first unit is the one followed; otherwise follows the
+// selection (a new set switches the follow in one press)
 void CKardashevCamera::ToggleTrack()
 {
-	if (trackMode != TRACK_NONE) {
+	std::vector<int> sel = SortedSelection();
+	const int first = FirstLive(sel);
+	if (trackMode != TRACK_NONE && (first < 0 || first == trackUnit)) {
 		StopTrack(END_KEY);
 		return;
 	}
-	for (const int id: selectedUnitsHandler.selectedUnits) {
-		const CUnit* u = unitHandler.GetUnit(id);
-		if (u != nullptr && !u->isDead) {
-			StartTrack(id, TRACK_FOLLOW);
-			return;
-		}
-	}
+	if (first >= 0)
+		StartTrack(std::move(sel), TRACK_FOLLOW);
 }
 
-// the focus for this frame while tracking; false (and tracking off, the focus left where it is) when it ends
+// the focus for this frame while tracking; false (and tracking off, the focus left where it is) when it ends. A latched
+// follow: leaving or clearing the selection, losing sight, cloak, a dive or fog do not end it (the focus stays on the last
+// drawn position until the unit shows again); its death moves it to the next live unit of the set; it ends (died) when all
+// are dead
 bool CKardashevCamera::TrackFocus(float dt, float3& focus)
 {
-	const CUnit* u = TrackedUnit();
-
-	if (u == nullptr) {
-		StopTrack((trackUnit >= 0 && unitHandler.GetUnit(trackUnit) != nullptr && !unitHandler.GetUnit(trackUnit)->isDead)? END_LOST: END_DIED);
-		return false;
+	const CUnit* u = unitHandler.GetUnit(trackUnit);
+	if (u == nullptr || u->isDead) {
+		const int next = FirstLive(trackSet);
+		if (next < 0) {
+			StopTrack(END_DIED);
+			return false;
+		}
+		trackUnit = next;
+		u = unitHandler.GetUnit(next);
 	}
 
-	// a unit loaded into a transport may leave the selection; that is not a deselect, the view rides along
-	const CUnit* t = u->GetTransporter();
-	if (t == nullptr && !IsSelected(trackUnit)) {
-		StopTrack(END_DESELECTED);
-		return false;
-	}
+	float3 p;
+	if (TrackDrawPos(u, p))
+		trackLast = p;
 
-	const float3 p = (t != nullptr)? t->GetDrawPos(globalRendering->timeOffset): u->GetDrawPos(globalRendering->timeOffset);
-
-	if (std::abs(p.x - trackLast.x) + std::abs(p.z - trackLast.z) > kcam::FOLLOW_JUMP)
-		trackOff += float3(trackLast.x - p.x, 0.0f, trackLast.z - p.z);
-	trackLast = p;
-
-	// exponential, but never slower than FOLLOW_MIN_SPEED so that it ends
-	const float mag = trackOff.Length2D();
-	if (mag > 0.0f) {
-		const float to = (glideScale <= 0.0f)? 0.0f: std::max(0.0f, std::min(mag * std::exp(-dt / kcam::FOLLOW_TAU), mag - kcam::FOLLOW_MIN_SPEED * dt));
-		trackOff *= (to / mag);
-	}
-
-	focus = float3(p.x + trackOff.x, 0.0f, p.z + trackOff.z);
+	focus = float3(trackLast.x, 0.0f, trackLast.z);
 	return true;
 }
 
@@ -527,39 +539,49 @@ void CKardashevCamera::Update()
 
 	if (trackMode != TRACK_NONE && TrackFocus(dt, f)) {
 		// tracking: the unit at the centre, zoom and angle stay with the player
-	} else if (curU > u0) {
-		const float3 c((playRect.x + playRect.z) * 0.5f, 0.0f, (playRect.y + playRect.w) * 0.5f);
-
-		if (anchorOn) {
-			// the focus that keeps the anchor's ground point on its screen spot, solved with the focus height and the
-			// angle the terrain allows at the answer (three passes settle both over relief)
+	} else if (curU < u0 && diveOn) {
+		// wheel in: dive at the pointer; the ground or water under it (sampled every frame) keeps its place while the distance
+		// shrinks. Sky or off the map: around the focus
+		// (the focus that keeps that point on the pointer's screen spot at this frame's distance, angle and fov; the angle the
+		// terrain allows is settled with it in three passes)
+		// the pivot is taken again only when the pointer has moved (no drift over uneven ground)
+		if (!diveHeld || mouse->lastx != diveMX || mouse->lasty != diveMY) {
+			diveHeld = PointerAnchor(diveG, diveSX, diveSY);
+			diveMX = mouse->lastx;
+			diveMY = mouse->lasty;
+		}
+		const float3 g = diveG;
+		const float sx = diveSX, sy = diveSY;
+		if (diveHeld) {
 			const float3 h = Heading();
 			const float ta = std::tan(vfov * 0.5f * math::DEG_TO_RAD), aspect = Aspect();
 			float fy = pos.y, eUse = ClearElev(pos, dist, elev);
 			for (int i = 0; i < 3; i++) {
 				const Basis b(eUse, h);
-				const float3 wv = b.D + b.R * (anchorSX * ta * aspect) + b.U * (anchorSY * ta);
+				const float3 wv = b.D + b.R * (sx * ta * aspect) + b.U * (sy * ta);
 				if (wv.y >= -1e-6f)
 					break;
-				const float t = (dist * std::sin(eUse) + fy - anchorG.y) / -wv.y;
+				const float t = (dist * std::sin(eUse) + fy - g.y) / -wv.y;
 				if (t <= 0.0f)
 					break;
-				const float3 a = anchorG + b.D * dist - wv * t + anchorOff;
+				const float3 a = g + b.D * dist - wv * t;
 				f = ClampFocus(float3(a.x, 0.0f, a.z), curU);
 				fy = FocusHeight(f.x, f.z);
 				eUse = ClearElev(float3(f.x, fy, f.z), dist, elev);
 			}
-		} else {
-			const float c0 = CentreWeight(u0), c1 = CentreWeight(curU);
-			if (c1 > c0) {
-				const float r = (c0 < 1.0f)? (1.0f - c1) / (1.0f - c0): 0.0f;
-				f = float3(c.x + (f.x - c.x) * r, 0.0f, c.z + (f.z - c.z) * r);
-			}
+		}
+	} else if (curU > u0) {
+		// wheel or keys out: back from the focus; over the top of the range the focus slides to the middle
+		const float3 c((playRect.x + playRect.z) * 0.5f, 0.0f, (playRect.y + playRect.w) * 0.5f);
+		const float c0 = CentreWeight(u0), c1 = CentreWeight(curU);
+		if (c1 > c0) {
+			const float r = (c0 < 1.0f)? (1.0f - c1) / (1.0f - c0): 0.0f;
+			f = float3(c.x + (f.x - c.x) * r, 0.0f, c.z + (f.z - c.z) * r);
 		}
 	}
 
 	if (curU == tgtU)
-		anchorOn = false;
+		diveOn = false;
 
 	f = ClampFocus(f, curU);
 	f.y = FocusHeight(f.x, f.z);
@@ -580,7 +602,7 @@ void CKardashevCamera::SetPos(const float3& newPos)
 	// a move from outside (minimap, SetCameraTarget, the engine): ends tracking and any zoom anchor
 	if (std::abs(newPos.x - pos.x) + std::abs(newPos.z - pos.z) > kcam::PAN_TOL)
 		StopTrack(END_SCRIPT);
-	anchorOn = false;
+	diveOn = false;
 	pos = ClampFocus(newPos, curU);
 	Update();
 }
@@ -663,7 +685,8 @@ void CKardashevCamera::GetState(StateMap& sm) const
 //   clearL clearR clearT clearB        screen insets (0..1) the furthest view keeps the map clear of (the HUD's panels)
 //   glide                              1 normal, 0 every zoom instant (reduced motion)
 // Commands (never in GetState):
-//   zoomTo (distance, glides), wheel (notches; < 0 in), tilt (notches; < 0 toward the horizon), reset, pop,
+//   zoomTo (distance, glides), wheel (notches; < 0 in: dives at the pointer), zoomKey (notches, never anchored: the zoom
+//   keys), tilt (notches; < 0 toward the horizon), reset, pop,
 //   panR panF (view heights right and forward, as a player's pan: ends tracking), rotate (radians, as a player's turn),
 //   track (unit id: follow it; 0: stop; -1: toggle on the first selected unit), commander (unit id the lock arms on
 //   when selected: arms now if it is selected; -1: none)
@@ -725,7 +748,7 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 		if (std::abs(np.x - pos.x) + std::abs(np.z - pos.z) > kcam::PAN_TOL) {
 			if (!Has("track"))
 				StopTrack(END_SCRIPT);
-			anchorOn = false;
+			diveOn = false;
 			pos = np;
 		}
 	}
@@ -734,7 +757,7 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 		const float d = sm["dist"];
 		if (std::abs(d - curDist) > curDist * 0.005f) {
 			curU = tgtU = UOf(d);
-			anchorOn = false;
+			diveOn = false;
 		}
 	}
 
@@ -748,12 +771,14 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 
 	if (Has("zoomTo")) {
 		tgtU = UOf(sm["zoomTo"]);
-		anchorOn = false;
+		diveOn = false;
 		if (glideScale <= 0.0f)
 			curU = tgtU;
 	}
 	if (Has("wheel"))
-		Notches(sm["wheel"]);
+		Notches(sm["wheel"], true);
+	if (Has("zoomKey"))
+		Notches(sm["zoomKey"], false);
 	if (Has("tilt"))
 		Tilt(sm["tilt"] * kcam::TILT_STEP);
 	if (Has("panR") || Has("panF")) {
@@ -771,7 +796,7 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 		const int id = int(sm["track"]);
 		if (id > 0) {
 			StopTrack(END_KEY);
-			StartTrack(id, TRACK_FOLLOW);
+			StartTrack({ id }, TRACK_FOLLOW);
 		} else if (id == 0) {
 			StopTrack(END_KEY);
 		} else {
@@ -783,7 +808,7 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 		lockUnit = int(sm["commander"]);
 		if (lockUnit >= 0 && IsSelected(lockUnit) && !(trackMode == TRACK_LOCK && trackUnit == lockUnit)) {
 			StopTrack(END_KEY);
-			StartTrack(lockUnit, TRACK_LOCK);
+			StartTrack({ lockUnit }, TRACK_LOCK);
 		}
 	}
 
