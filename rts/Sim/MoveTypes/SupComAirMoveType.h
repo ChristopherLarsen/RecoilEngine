@@ -3,6 +3,7 @@
 #pragma once
 
 #include "HoverAirMoveType.h"
+#include "Sim/Misc/GlobalConstants.h"
 
 struct UnitDef;
 
@@ -48,6 +49,18 @@ public:
 	void StopMoving(bool callScript = false, bool hardStop = false, bool cancelRaw = false) override;
 	void KeepPointingTo(float3 pos, float distance, bool aggressive) override;
 
+	/// Lua (Spring.MoveCtrl.SetGunshipMoveTypeData): supcomRise90 (winged: seconds to 90 % of the top speed),
+	/// supcomSpeedResponse (hovering: speed response per second) and supcomClimbRate (elmos per second), so the game
+	/// can change them at run time (SPC-012 R10: an empty aircraft accelerates and climbs slower); every other key
+	/// goes to the base class
+	bool SetMemberValue(unsigned int memberHash, void* memberValue) override;
+	float GetRise90() const;
+	float GetClimbRate() const { return climbRate * GAME_SPEED; }
+	float GetSpeedResponse() const { return speedResponse * GAME_SPEED; }
+	/// Lua supcomLuaAttackGoal (default false): while attacking a unit, keep the goal the command AI or Lua gives
+	/// (a Lua orbit, CMB-019 R2) instead of steering at the target itself
+	bool GetLuaAttackGoal() const { return luaAttackGoal; }
+
 	/// the height a transport loads and unloads at over pos: the reference plus the load height, or the
 	/// command AI's own height when no load height is set
 	float TransportHeight(const float3& pos, float engineHeight) const;
@@ -80,6 +93,7 @@ private:
 private:
 	// per-unit values, engine units (elmos, frames)
 	bool winged = false;
+	bool luaAttackGoal = false;
 	float speedResponse = 0.0f;  ///< per frame (hovering)
 	float riseRate = 0.0f;       ///< per frame (winged: ln 10 / rise_90)
 	float climbRate = 0.0f;      ///< elmos per frame
