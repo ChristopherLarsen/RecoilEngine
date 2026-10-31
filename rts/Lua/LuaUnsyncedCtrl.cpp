@@ -2,6 +2,7 @@
 
 #include "LuaUnsyncedCtrl.h"
 #include "Game/UI/SupComBuildPreview.h"
+#include "Game/UI/SupComMiniMapZoom.h"
 
 #include "Game/Camera/DollyController.h"
 #include "LuaConfig.h"
@@ -346,6 +347,7 @@ bool LuaUnsyncedCtrl::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(SetWindowMinimized);
 	REGISTER_LUA_CFUNC(SetWindowMaximized);
 	REGISTER_LUA_CFUNC(SetMiniMapRotation);
+	SupComMiniMapZoom::PushUnsyncedCtrl(L); // supcom: SetMiniMapZoom
 
 	REGISTER_LUA_CFUNC(RequestStartPosition);
 

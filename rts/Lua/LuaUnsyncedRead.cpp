@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaUnsyncedRead.h"
+#include "Game/UI/SupComMiniMapZoom.h"
 
 #include "LuaConfig.h"
 #include "LuaInclude.h"
@@ -133,6 +134,7 @@ bool LuaUnsyncedRead::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(GetMiniMapGeometry);
 	REGISTER_LUA_CFUNC(GetMiniMapDualScreen);
 	REGISTER_LUA_CFUNC(GetMiniMapRotation);
+	SupComMiniMapZoom::PushUnsyncedRead(L); // supcom: GetMiniMapZoom, MiniMapToWorld, WorldToMiniMap
 	REGISTER_LUA_CFUNC(GetSelectionBox);
 	REGISTER_LUA_CFUNC(IsAboveMiniMap);
 	REGISTER_LUA_CFUNC(IsGUIHidden);

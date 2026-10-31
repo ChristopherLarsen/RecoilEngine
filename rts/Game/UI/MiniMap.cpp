@@ -9,6 +9,7 @@
 #include "CommandColors.h"
 #include "GuiHandler.h"
 #include "MiniMap.h"
+#include "SupComMiniMapZoom.h"
 #include "Game/SupComLocalView.h"
 #include "MouseHandler.h"
 #include "TooltipConsole.h"
@@ -531,6 +532,10 @@ void CMiniMap::UpdateGeometry()
 		// worldmap (elmos) to minimap
 		// viewMats[1].Scale({1.0f / (mapDims.mapx * SQUARE_SIZE), -1.0f / (mapDims.mapy * SQUARE_SIZE), 1.0f});
 
+		// supcom: Lua's minimap drawing shows the zoomed region (SupComMiniMapZoom)
+		SupComMiniMapZoom::ApplyToViewMat(viewMats[0]);
+		SupComMiniMapZoom::ApplyToViewMat(viewMats[1]);
+
 		viewMats[2].LoadIdentity();
 		viewMats[2].Scale({ 1.0f / curDim.x, 1.0f / curDim.y, 1.0f });
 
@@ -893,6 +898,14 @@ float3 CMiniMap::GetMapPosition(int x, int y) const
 	float sx = std::clamp(float(x - tmpPos.x) / curDim.x, 0.0f, 1.0f);
 	float sz = std::clamp(float(y + tmpPos.y) / curDim.y, 0.0f, 1.0f);
 
+	// supcom: through the minimap zoom (SupComMiniMapZoom; sz grows downwards, the zoom works y up)
+	if (SupComMiniMapZoom::Active()) {
+		float gy = 1.0f - sz;
+		SupComMiniMapZoom::Unzoom(sx, gy);
+		sx = std::clamp(sx, 0.0f, 1.0f);
+		sz = std::clamp(1.0f - gy, 0.0f, 1.0f);
+	}
+
 	switch (rotation)
 	{
 	case ROTATION_0:
@@ -1203,6 +1216,7 @@ void CMiniMap::UpdateTextureCache()
 	glMatrixMode(GL_MODELVIEW);
 	glPushMatrix();
 	glLoadIdentity();
+	SupComMiniMapZoom::ApplyGL(); // supcom: the cached minimap shows the zoomed region
 
 	{
 		curPos = {0, 0};
@@ -1370,6 +1384,13 @@ void CMiniMap::DrawForReal(bool useNormalizedCoors, bool updateTex, bool luaCall
 			glTranslatef(curPos.x * globalRendering->pixelX, curPos.y * globalRendering->pixelY, 0.0f);
 			glScalef(curDim.x * globalRendering->pixelX, curDim.y * globalRendering->pixelY, 1.0f);
 		}
+
+		// supcom: the zoomed region, clipped to the minimap (SupComMiniMapZoom)
+		if (SupComMiniMapZoom::Active()) {
+			SupComMiniMapZoom::ApplyGL();
+			glEnable(GL_SCISSOR_TEST);
+			glScissor(curPos.x, curPos.y, curDim.x, curDim.y);
+		}
 	}
 
 	cursorIcons.Enable(false);
@@ -1424,6 +1445,7 @@ void CMiniMap::DrawCameraFrustumAndMouseSelection()
 
 	// switch to top-down map/world coords (z is twisted with y compared to the real map/world coords)
 	glPushMatrix();
+	SupComMiniMapZoom::ApplyGL(); // supcom: the zoomed region
 
 	switch (rotation) 
 	{
@@ -1914,8 +1936,9 @@ void CMiniMap::DrawUnitIcons() const
 	glScalef(+1.0f / (mapDims.mapx * SQUARE_SIZE), -1.0f / (mapDims.mapy * SQUARE_SIZE), 1.0f);
 
 	MiniMapIconDrawParams params;
-	params.iconSizeX = unitSizeX;
-	params.iconSizeY = unitSizeY;
+	// supcom: icons keep their size in a zoomed minimap (SupComMiniMapZoom)
+	params.iconSizeX = unitSizeX / SupComMiniMapZoom::Zoom();
+	params.iconSizeY = unitSizeY / SupComMiniMapZoom::Zoom();
 	params.rotation = rotation;
 	params.viewAllyTeam = gu->myAllyTeam;
 	params.fullView = gu->spectatingFullView;
