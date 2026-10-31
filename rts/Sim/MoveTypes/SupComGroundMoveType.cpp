@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <limits>
 #include <vector>
+#include <string>
 
 #include "Map/Ground.h"
 #include "Map/ReadMap.h"
@@ -23,6 +24,8 @@
 #include "System/SpringHash.h"
 #include "System/SpringMath.h"
 #include "System/Threading/ThreadPool.h"
+#include "System/Config/ConfigHandler.h"
+#include "System/Log/ILog.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -103,6 +106,22 @@ static constexpr int STRUCT_HANDOVER_TIME = GAME_SPEED * 2;
 // frames an idle allied unit must stay in contact in front of a mover before it is asked to make way (PTH-002 R3:
 // the yield bound is PLACEHOLDER 30 ticks, and the idle unit still has to clear the mover's way)
 static constexpr int YIELD_DELAY_FRAMES = 4;
+CONFIG(bool, SupComYieldLog).defaultValue(false).description("supcom: log each make-way step of SupComGroundMoveType units (diagnosis; no effect on the game).");
+static bool yieldLogSquares = false;
+
+CONFIG(bool, SupComMakeWay).defaultValue(true).description("supcom: SupComGroundMoveType units line up with a gap their own width instead of stopping at its edge, and make way faster (PTH-002, PTH-004); 0 behaves as before.");
+static bool MakeWayOn() { static const bool on = configHandler->GetBool("SupComMakeWay"); return on; }
+// sideways search for a line that fits through a gap: up to this many elmos either side, in this step (PLACEHOLDER)
+static constexpr float LINEUP_MAX = SQUARE_SIZE;
+static constexpr float LINEUP_STEP = 0.25f;
+// a mover asks an idle unit on its line ahead to make way this many frames of travel before it reaches it, so the
+// yield is under way before contact (PTH-002 R3: yield_delay_max 30 ticks; PLACEHOLDER)
+static constexpr float YIELD_LOOKAHEAD_FRAMES = 20.0f;
+
+CONFIG(bool, SupComDirectCost).defaultValue(true).description("supcom: a straight line to the goal is driven directly only if no square on it is slower than open ground (PTH-001-D: costly areas are left to the path); 0 checks only impassable squares, as before.");
+static bool DirectCostOn() { static const bool on = configHandler->GetBool("SupComDirectCost"); return on; }
+static bool YieldLog() { static const bool on = configHandler->GetBool("SupComYieldLog"); return on; }
+
 // a spot made way to: up to this many footprints ahead along the mover's direction and to either side
 static constexpr int YIELD_STEPS_AHEAD = 6;
 static constexpr int YIELD_STEPS_SIDE = 4;
@@ -369,8 +388,11 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 
 	for (int sz = sz0; sz <= sz1; sz++) {
 		for (int sx = sx0; sx <= sx1; sx++) {
-			if (CMoveMath::GetPosSpeedMod(*md, sx, sz) <= 0.0f)
+			if (CMoveMath::GetPosSpeedMod(*md, sx, sz) <= 0.0f) {
+				if (YieldLog() && yieldLogSquares)
+					LOG("[SupComYield]   blocked square (%d, %d) of footprint x %.2f..%.2f z %.2f..%.2f (squares %d..%d, %d..%d), along x %d", sx, sz, x0, x1, z0, z1, sx0, sx1, sz0, sz1, int(alongX));
 				return true;
+			}
 		}
 	}
 
@@ -397,15 +419,26 @@ bool CSupComGroundMoveType::DirectLineClear()
 	const int thread = ThreadPool::GetThreadNum();
 	const int steps = std::max(1, int(math::ceil(len / (SQUARE_SIZE * 0.5f))));
 
+	// a square slower than open ground (a costly area or a slope, PTH-001-D) is left to the path, which goes round
+	// it; the start square too (a unit on the edge of a costly area otherwise drove straight back across it)
+	const float startMod = CMoveMath::GetPosSpeedMod(*md, owner->pos);
+
 	for (int i = 1; i <= steps; i++) {
 		const float3 p = owner->pos + delta * (float(i) / steps);
 
 		if (FootprintBlocked(p))
 			return false;
+		if (DirectCostOn() && CMoveMath::GetPosSpeedMod(*md, p) < 0.99f)
+			return false;
 		if (CMoveMath::IsBlockedStructure(*md, int(p.x / SQUARE_SIZE), int(p.z / SQUARE_SIZE), owner, thread))
 			return false;
 	}
 
+	if (YieldLog()) {
+		float lo = startMod;
+		for (int i = 1; i <= steps; i++) lo = std::min(lo, CMoveMath::GetPosSpeedMod(*md, owner->pos + delta * (float(i) / steps)));
+		LOG("[SupComSteer] f=%d unit %d direct line clear: start mod %.3f, lowest on the line %.3f, %d samples, cost check %d", gs->frameNum, owner->id, startMod, lo, steps, int(DirectCostOn()));
+	}
 	return (directClear = true);
 }
 
@@ -420,6 +453,10 @@ void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos
 {
 	// a clear straight line to the goal is driven directly, not through the path's waypoints
 	if (progressState == Active && owner->commandAI->commandQue.size() <= 1 && DirectLineClear()) {
+		if (YieldLog() && !goalPos.same(scLogTarget)) {
+			scLogTarget = goalPos;
+			LOG("[SupComSteer] f=%d unit %d direct to goal (%.0f, %.0f) from (%.0f, %.0f)", gs->frameNum, owner->id, goalPos.x, goalPos.z, opos.x, opos.z);
+		}
 		CGroundMoveType::SetWaypointDir(goalPos, opos);
 		return;
 	}
@@ -427,6 +464,10 @@ void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos
 	// the engine's waypoints can lie where this move type's centred footprint does not fit (beside a wall: the engine
 	// places an even-sized footprint off its centre), or round a corner the footprint cannot cut: repair them locally
 	float3 target = FitWaypoint(cwp);
+	if (YieldLog() && !target.same(scLogTarget)) {
+		scLogTarget = target;
+		LOG("[SupComSteer] f=%d unit %d path waypoint (%.0f, %.0f) fitted (%.0f, %.0f) from (%.0f, %.0f)", gs->frameNum, owner->id, cwp.x, cwp.z, target.x, target.z, opos.x, opos.z);
+	}
 
 	// at a repaired waypoint the engine does not see its own as reached (it skips only within 7 elmos): ask it to
 	// move on to the next one
@@ -692,6 +733,56 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		if (!positionStuck) {
 			blocked = (FootprintBlocked(owner->pos + moveRequest) && !FootprintBlocked(owner->pos));
 
+			// a refused step lines up first (PTH-002: a unit at a gap its own width, a few elmos off its line, or
+			// grazing the wall face by a hundredth of an elmo, was refused every step): the nearest sideways offset,
+			// across the step's main axis, from which the forward part of the step fits, approached by at most the
+			// step's length. Nearest first, the positive side first on a tie (deterministic).
+			if (blocked && MakeWayOn()) {
+				const bool alongX = (math::fabs(moveRequest.x) >= math::fabs(moveRequest.z));
+				const float3 fwd = alongX? float3(moveRequest.x, 0.0f, 0.0f): float3(0.0f, 0.0f, moveRequest.z);
+				const float3 lat = alongX? float3(0.0f, 0.0f, 1.0f): float3(1.0f, 0.0f, 0.0f);
+				const float stepLen = moveRequest.Length2D();
+
+				// candidates: 0 (the forward part alone: a heading a little off a gap's axis grazes its walls), then the
+				// footprint's lower edge snapped onto the square boundary below or above it (a gap exactly its own width
+				// leaves only FOOTPRINT_SIDE_EPS of play), the smaller shift first, then a grid either side
+				const float latPos = alongX? owner->pos.z: owner->pos.x;
+				const float lowEdge = latPos - std::max(footprintX, footprintZ) * 0.5f + FOOTPRINT_SIDE_EPS;
+				const float below = math::floor(lowEdge / SQUARE_SIZE) * SQUARE_SIZE - lowEdge + 0.001f;
+				const float above = below + SQUARE_SIZE;
+				std::vector<float> cands = {0.0f};
+				if (math::fabs(below) <= math::fabs(above)) { cands.push_back(below); cands.push_back(above); } else { cands.push_back(above); cands.push_back(below); }
+				for (int k = 1; k <= int(LINEUP_MAX / LINEUP_STEP) * 2; k++)
+					cands.push_back(LINEUP_STEP * float((k + 1) / 2) * ((k & 1)? 1.0f: -1.0f));
+
+				for (size_t k = 0; k < cands.size() && blocked; k++) {
+					const float d = cands[k];
+					const float3 off = lat * d;
+
+					if (math::fabs(d) > LINEUP_MAX)
+						continue;
+					if (FootprintBlocked(owner->pos + off + fwd) || (k > 0 && !LineFits(owner->pos, owner->pos + off)))
+						continue;
+
+					const float m = std::min(math::fabs(d), stepLen);
+					moveRequest = (k == 0)? fwd: lat * ((d > 0.0f)? m: -m);
+					moveRequest.x = GridStep(owner->pos.x, moveRequest.x);
+					moveRequest.z = GridStep(owner->pos.z, moveRequest.z);
+					blocked = FootprintBlocked(owner->pos + moveRequest);
+				}
+
+				// no line-up within reach (pressed against a wall face further from the gap): the step's other part alone,
+				// along the wall towards where the unit steers; the line-up above takes over once it is near the gap's line
+				if (blocked) {
+					const float3 side = alongX? float3(0.0f, 0.0f, moveRequest.z): float3(moveRequest.x, 0.0f, 0.0f);
+
+					if (!side.same(ZeroVector) && !FootprintBlocked(owner->pos + side)) {
+						moveRequest = side;
+						blocked = false;
+					}
+				}
+			}
+
 			if (!blocked) {
 				float3 resultantMove;
 				UpdatePos(owner, moveRequest, resultantMove, ThreadPool::GetThreadNum());
@@ -709,17 +800,33 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		}
 
 		if (blocked) {
+			if (YieldLog() && scBlockedFrames == 0 && !stop) {
+				const float3 next = owner->pos + moveRequest;
+				yieldLogSquares = true; FootprintBlocked(next); FootprintBlocked(owner->pos); yieldLogSquares = false;
+				QuadFieldQuery q;
+				quadField.GetUnitsExact(q, next, HalfSize() + SQUARE_SIZE, false);
+				std::string near;
+				for (const CUnit* u: *q.units) { if (u != owner) near += " " + std::to_string(u->id) + "@(" + std::to_string(int(u->pos.x)) + "," + std::to_string(int(u->pos.z)) + ")"; }
+				LOG("[SupComYield] f=%d unit %d wanted step (%.2f, %.2f) to (%.1f, %.1f); our footprint %s; units near:%s", gs->frameNum, owner->id, moveRequest.x, moveRequest.z, next.x, next.z, FootprintBlocked(next)? "blocked": "fits", near.c_str());
+			}
 			// the step is not taken and the speed is lost
 			moveRequest = ZeroVector;
 			scSpeed = 0.0f;
 			scPhase = PHASE_DRIVE;
 			scRestart = (!stop && !scBraking);
+			if (YieldLog() && scBlockedFrames == 0 && !stop) {
+				const bool byTerrain = FootprintBlocked(owner->pos + moveRequest) && !FootprintBlocked(owner->pos);
+				LOG("[SupComYield] f=%d unit %d step refused by %s at (%.1f, %.1f) heading (%.2f, %.2f) step (%.2f, %.2f) wp (%.0f, %.0f)", gs->frameNum, owner->id,
+					byStructure? "a structure": (byTerrain? "terrain": "a unit or the engine"), owner->pos.x, owner->pos.z, flatFrontDir.x, flatFrontDir.z, moveRequest.x, moveRequest.z, currWayPoint.x, currWayPoint.z);
+			}
 			scBlockedFrames += int(!stop);
 			scStructFrames = (byStructure && !stop)? scStructFrames + 1: 0;
 
 			ReRequestPath(false);
 		} else {
 			positionStuck = false;
+			if (YieldLog() && scBlockedFrames > 0)
+				LOG("[SupComYield] f=%d unit %d moves again after %d refused frames", gs->frameNum, owner->id, scBlockedFrames);
 			scBlockedFrames = 0;
 			scStructFrames = 0;
 		}
@@ -936,8 +1043,11 @@ bool CSupComGroundMoveType::Update()
 	}
 
 	// arrived (or stopped) after making way: an ordinary idle unit again
-	if (scYielding && progressState != Active)
+	if (scYielding && progressState != Active) {
 		scYielding = false;
+		if (YieldLog())
+			LOG("[SupComYield] f=%d unit %d done making way at (%.0f, %.0f)", gs->frameNum, owner->id, owner->pos.x, owner->pos.z);
+	}
 
 	CheckYield();
 	return moved;
@@ -993,7 +1103,15 @@ void CSupComGroundMoveType::CheckYield()
 		const bool inFront = (dist <= 0.01f) || (d.dot(front) >= 0.5f * dist) ||
 			(toWp.SqLength2D() > 1.0f && d.dot(toWp) >= 0.5f * dist * toWp.Length2D());
 
-		if (dist > contact || !inFront)
+		// ahead on the mover's line (within the two footprints sideways) up to YIELD_LOOKAHEAD_FRAMES of travel further
+		bool onLineAhead = false;
+		if (MakeWayOn() && dist > contact && scSpeed > 0.0f) {
+			const float along = d.dot(front);
+			const float across = math::fabs(d.dot(float3(-front.z, 0.0f, front.x)));
+			onLineAhead = (along > 0.0f && along <= contact + scSpeed * YIELD_LOOKAHEAD_FRAMES && across <= HalfSize() + mt->HalfSize() + SQUARE_SIZE * 0.5f);
+		}
+
+		if ((dist > contact && !onLineAhead) || !inFront)
 			continue;
 		if (blocker == nullptr || u->id < blocker->owner->id)
 			blocker = mt;
@@ -1008,13 +1126,17 @@ void CSupComGroundMoveType::CheckYield()
 	if (blocker->owner->id != scYieldUnit) {
 		scYieldUnit = blocker->owner->id;
 		scYieldFrames = 0;
+		if (YieldLog())
+			LOG("[SupComYield] f=%d mover %d in contact with idle %d (%.1f elmos)", gs->frameNum, owner->id, blocker->owner->id, owner->pos.distance2D(blocker->owner->pos));
 	}
 
 	if (++scYieldFrames < YIELD_DELAY_FRAMES)
 		return;
 
 	scYieldFrames = 0;
-	blocker->MakeWay(this);
+	const bool made = blocker->MakeWay(this);
+	if (YieldLog())
+		LOG("[SupComYield] f=%d mover %d asks %d to make way: %s", gs->frameNum, owner->id, blocker->owner->id, made? "moving": "no spot");
 }
 
 // distance from p to the segment a-b, in the horizontal plane
@@ -1081,6 +1203,8 @@ bool CSupComGroundMoveType::MakeWay(const CSupComGroundMoveType* mover)
 				if (!LineFits(pos, mid) || !LineFits(mid, spot))
 					continue;
 
+				if (YieldLog())
+					LOG("[SupComYield] f=%d unit %d makes way to (%.0f, %.0f): %d ahead, %d side, heading dot %.2f", gs->frameNum, owner->id, spot.x, spot.z, a, b, ((spot - pos) * XZVector).SafeNormalize2D().dot(flatFrontDir));
 				StartMoving(spot, SQUARE_SIZE * 0.5f);
 				scYielding = true;
 				return true;

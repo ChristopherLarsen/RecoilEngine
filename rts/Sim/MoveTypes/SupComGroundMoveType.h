@@ -136,6 +136,7 @@ private:
 	float stopSpeed = 0.0f;      ///< elmos per frame
 	float blockedRestart = 0.0f; ///< fraction of the top speed
 	float uprightSink = 0.0f;
+	float3 scLogTarget; ///< diagnosis only (SupComYieldLog): the last steering target logged
 	float footprintX = 0.0f;     ///< elmos, along the unit's right axis
 	float footprintZ = 0.0f;     ///< elmos, along the unit's forward axis
 	bool sinkLower = false;
