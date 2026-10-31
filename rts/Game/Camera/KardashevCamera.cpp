@@ -46,7 +46,6 @@ CONFIG(bool,  KardashevCamInvertPan).defaultValue(false).description("supcom: Ka
 // in the game repository); no outside numbers. The numbers the game tunes (proportions and pacing: limits, the curve, the
 // wheel step, the glide, pan speeds, terrain clearance) are CKardashevCamera::Feel in the header, settable from Lua.
 namespace kcam {
-	constexpr float SNAP             = 0.002f;                  // the glide ends inside 0.2 % of the distance
 	constexpr float KEY_ZOOM         = 8.0f;                    // zoom keys: notches per second
 	constexpr float KEY_ZOOM_FAST    = 2.5f;                    // Shift on the zoom keys
 	// tilt
@@ -527,7 +526,7 @@ void CKardashevCamera::Update()
 			curU = tgtU;
 		} else {
 			curU += (tgtU - curU) * (1.0f - std::exp(-dt / tau));
-			if (std::abs(tgtU - curU) * std::log(lim.dMax / lim.dMin) < kcam::SNAP)
+			if (std::abs(tgtU - curU) * std::log(lim.dMax / lim.dMin) < feel.snap)
 				curU = tgtU;
 		}
 	}
@@ -678,7 +677,7 @@ void CKardashevCamera::GetState(StateMap& sm) const
 //   px py pz, dist, rx, ry, tiltHeld   the view; a focus moved further than PAN_TOL ends tracking (unless "track" is given)
 // Settings (never in GetState):
 //   playX0 playZ0 playX1 playZ1        the playable rectangle (elmos; default the whole map)
-//   minDist margin elevNear elevFar fovNear fovFar shape centreFrom stepOut tau keyPan keyFast dragPan clearance
+//   minDist margin elevNear elevFar fovNear fovFar shape centreFrom stepOut tau snap keyPan keyFast dragPan clearance
 //                                      the feel values (Feel in the header; angles in degrees), the game's own numbers
 //   freeRotate                         1: the rotate modifier with drag or keys turns and the tilt modifier with the wheel
 //                                      tilts (stock-like free rotation); 0: neither (Lua's "rotate" and "tilt" still do)
@@ -731,6 +730,7 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 		SetFeel("keyFast", feel.keyFast, 1.0f, 20.0f, 1.0f);
 		SetFeel("dragPan", feel.dragPan, 0.0f, 20.0f, 1.0f);
 		SetFeel("clearance", feel.clearance, 0.0f, 200.0f, 1.0f);
+		SetFeel("snap", feel.snap, 0.0001f, 0.5f, 1.0f);
 		if (Has("freeRotate"))
 			feel.freeRotate = sm["freeRotate"] != 0.0f;
 		if (feelSet) {

@@ -69,6 +69,7 @@ private:
 		float centreFrom = 0.45f;                        // above this u the framing box round the middle starts to shrink
 		float stepOut    = 0.50f;                        // a notch out adds 50 % of the distance; in removes 33 %
 		float tau        = 0.22f;                        // glide time constant (s): fast start, long soft landing
+		float snap       = 0.002f;                       // the glide ends (on the target) inside this share of the distance (log)
 		float keyPan     = 2.0f;                         // keys and edge: view heights per second
 		float keyFast    = 4.0f;                         // the fast modifier on the pan keys
 		float dragPan    = 0.5f;                         // middle-drag: view pixels per pointer pixel
