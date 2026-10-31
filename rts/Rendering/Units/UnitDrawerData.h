@@ -43,6 +43,8 @@ public:
 	uint8_t team;
 	uint16_t paletteIndex;
 
+	int unitID = -1; // supcom: the dead unit (SupComGhosts: the game removes its ghost by this id)
+
 	size_t currentIconIndex;
 
 	ScopedTransformMemAlloc worldTransformAlloc;
@@ -51,6 +53,7 @@ private:
 };
 
 class CUnitDrawerData : public CUnitDrawerDataBase {
+	friend struct SupComGhostsAccess; // supcom: the game's dead ghosts (SupComGhosts.cpp)
 public:
 	// CEventClient interface
 	bool WantsEvent(const std::string& eventName) override {

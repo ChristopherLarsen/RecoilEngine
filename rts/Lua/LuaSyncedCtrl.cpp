@@ -4,6 +4,7 @@
 #include <cctype>
 
 #include "LuaSyncedCtrl.h"
+#include "Rendering/Units/SupComGhosts.h"
 
 #include "LuaInclude.h"
 #include "LuaConfig.h"
@@ -385,6 +386,7 @@ bool LuaSyncedCtrl::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(SetExperienceGrade);
 
 	REGISTER_LUA_CFUNC(SetRadarErrorParams);
+	SupComGhosts::PushSyncedCtrl(L); // supcom: SetDeadGhostsByLua, RemoveDeadGhost, ShareDeadGhost
 
 	// Unfortunatly classes within classes does not work well in emmylua
 	/*** @field Spring.MoveCtrl MoveCtrl */

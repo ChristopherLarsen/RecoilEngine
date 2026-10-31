@@ -1,4 +1,5 @@
 #include "UnitDrawerData.h"
+#include "SupComGhosts.h"
 
 #include "System/MemPoolTypes.h"
 #include "System/ContainerUtil.h"
@@ -62,6 +63,7 @@ CR_REG_METADATA(GhostSolidObject, (
 	CR_MEMBER(facing),
 	CR_MEMBER(team),
 	CR_MEMBER(paletteIndex),
+	CR_MEMBER(unitID),
 	CR_IGNORED(currentIconIndex),
 
 	CR_IGNORED(worldTransformAlloc),
@@ -268,6 +270,9 @@ void CUnitDrawerData::Update()
 void CUnitDrawerData::UpdateGhostedBuildings()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (SupComGhosts::LuaOwned())
+		return; // supcom: the game removes dead ghosts itself (Spring.RemoveDeadGhost)
+
 	for (int allyTeam = 0; allyTeam < savedData.deadGhostBuildings.size(); ++allyTeam) {
 		for (int modelType = MODELTYPE_3DO; modelType < MODELTYPE_CNT; modelType++) {
 			auto& dgb = savedData.deadGhostBuildings[allyTeam][modelType];
@@ -655,6 +660,7 @@ bool CUnitDrawerData::UpdateUnitGhosts(const CUnit* unit, const bool addNewGhost
 				gso->dir = u->frontdir;
 				gso->team = u->team;
 				gso->paletteIndex = u->paletteIndex;
+				gso->unitID = u->id;
 				gso->radius = u->radius;
 				gso->GetModel();
 
