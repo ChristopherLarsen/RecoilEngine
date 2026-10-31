@@ -18,11 +18,19 @@
 #include "System/SpringMath.h"
 
 #include "System/Misc/TracyDefs.h"
+#include "System/SpringHash.h"
+
+// the per-frame approach rate to the top speed that reaches 90 % of it in rise90 seconds
+static float RiseRate(float rise90)
+{
+	return (math::log(10.0f) / std::max(1.0f / GAME_SPEED, rise90) / GAME_SPEED);
+}
 
 CR_BIND_DERIVED(CSupComAirMoveType, CHoverAirMoveType, (nullptr))
 CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(winged),
 	CR_MEMBER(speedResponse),
+	CR_MEMBER(luaAttackGoal),
 	CR_MEMBER(riseRate),
 	CR_MEMBER(climbRate),
 	CR_MEMBER(fallGravity),
@@ -81,7 +89,7 @@ CSupComAirMoveType::CSupComAirMoveType(CUnit* owner): CHoverAirMoveType(owner)
 
 	// per second -> per frame
 	speedResponse = std::max(0.0f, CustomParam(ud, "supcom_air_speed_response", 0.0f)) / GAME_SPEED;
-	riseRate = math::log(10.0f) / std::max(1.0f / GAME_SPEED, CustomParam(ud, "supcom_air_rise_90", 1.0f)) / GAME_SPEED;
+	riseRate = RiseRate(CustomParam(ud, "supcom_air_rise_90", 1.0f));
 	climbRate = std::max(0.0f, CustomParam(ud, "supcom_air_climb_rate", 0.0f)) / GAME_SPEED;
 	fallGravity = std::max(0.0f, CustomParam(ud, "supcom_air_fall_gravity", 0.0f)) / (GAME_SPEED * GAME_SPEED);
 	tumbleRate = CustomParam(ud, "supcom_air_tumble_rate", 0.0f) / GAME_SPEED * SPRING_CIRCLE_DIVS / 360.0f;
@@ -143,7 +151,8 @@ void CSupComAirMoveType::StartMoving(float3 pos, float goalRadius)
 		idleStage = IDLE_NONE;
 
 	// attacking a unit, the steering target is the unit itself, not the command AI's snapshot of its position
-	if (const CUnit* target = AttackTarget())
+	// (unless the game steers the attack itself: supcomLuaAttackGoal)
+	if (const CUnit* target = AttackTarget(); target != nullptr && !luaAttackGoal)
 		goalPos = target->pos * XZVector;
 
 	wantedHeight = cruiseHeight;
@@ -153,10 +162,14 @@ void CSupComAirMoveType::KeepPointingTo(float3 pos, float distance, bool aggress
 {
 	// attack: keep flying at the target (the base class would hold position instead)
 	wantToStop = false;
-	goalPos = pos * XZVector;
 
-	if (const CUnit* target = AttackTarget())
-		goalPos = target->pos * XZVector;
+	// the game steering the attack itself (supcomLuaAttackGoal) keeps its own goal
+	if (!luaAttackGoal) {
+		goalPos = pos * XZVector;
+
+		if (const CUnit* target = AttackTarget())
+			goalPos = target->pos * XZVector;
+	}
 
 	wantedHeight = cruiseHeight;
 	progressState = AMoveType::Active;
@@ -241,6 +254,39 @@ bool CSupComAirMoveType::Update()
 		UpdateBank(oldHeading);
 
 	return HandleCollisions(collide);
+}
+
+float CSupComAirMoveType::GetRise90() const
+{
+	return (math::log(10.0f) / std::max(1e-6f, riseRate * GAME_SPEED));
+}
+
+bool CSupComAirMoveType::SetMemberValue(unsigned int memberHash, void* memberValue)
+{
+	static const unsigned int rise90Hash = spring::LiteHash("supcomRise90", 12, 0);
+	static const unsigned int climbRateHash = spring::LiteHash("supcomClimbRate", 15, 0);
+	static const unsigned int speedResponseHash = spring::LiteHash("supcomSpeedResponse", 19, 0);
+	static const unsigned int luaAttackGoalHash = spring::LiteHash("supcomLuaAttackGoal", 19, 0);
+
+	if (memberHash == luaAttackGoalHash) {
+		// Lua passes a boolean as bool*, a number as float*; the key is boolean
+		luaAttackGoal = *reinterpret_cast<bool*>(memberValue);
+		return true;
+	}
+	if (memberHash == speedResponseHash) {
+		speedResponse = std::max(0.0f, *reinterpret_cast<float*>(memberValue)) / GAME_SPEED;
+		return true;
+	}
+	if (memberHash == rise90Hash) {
+		riseRate = RiseRate(*reinterpret_cast<float*>(memberValue));
+		return true;
+	}
+	if (memberHash == climbRateHash) {
+		climbRate = std::max(0.0f, *reinterpret_cast<float*>(memberValue)) / GAME_SPEED;
+		return true;
+	}
+
+	return CHoverAirMoveType::SetMemberValue(memberHash, memberValue);
 }
 
 void CSupComAirMoveType::UpdateFlight()

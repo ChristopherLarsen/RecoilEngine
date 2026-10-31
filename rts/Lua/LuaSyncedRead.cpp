@@ -46,6 +46,7 @@
 #include "Sim/MoveTypes/GroundMoveType.h"
 #include "Sim/MoveTypes/SupComGroundMoveType.h"
 #include "Sim/MoveTypes/HoverAirMoveType.h"
+#include "Sim/MoveTypes/SupComAirMoveType.h"
 #include "Sim/MoveTypes/ScriptMoveType.h"
 #include "Sim/MoveTypes/StaticMoveType.h"
 #include "Sim/MoveTypes/MoveDefHandler.h"
@@ -6259,6 +6260,14 @@ int LuaSyncedRead::GetUnitMoveTypeData(lua_State* L)
 		LuaPushNamedNumber(L, "brakeDistance", -1.0f); // DEPRECATED
 		LuaPushNamedBool  (L, "dontLand", hAMT->GetAllowLanding());
 		LuaPushNamedNumber(L, "maxDrift", hAMT->maxDrift);
+
+		// supcom: our air move type's settable acceleration and climb (SupComAirMoveType::SetMemberValue)
+		if (const CSupComAirMoveType* scat = dynamic_cast<const CSupComAirMoveType*>(hAMT)) {
+			LuaPushNamedNumber(L, "supcomRise90", scat->GetRise90());
+			LuaPushNamedNumber(L, "supcomClimbRate", scat->GetClimbRate());
+			LuaPushNamedNumber(L, "supcomSpeedResponse", scat->GetSpeedResponse());
+			LuaPushNamedBool(L, "supcomLuaAttackGoal", scat->GetLuaAttackGoal());
+		}
 
 		return 1;
 	}
