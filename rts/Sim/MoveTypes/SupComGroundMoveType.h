@@ -107,6 +107,9 @@ private:
 	bool FootprintBlocked(const float3& pos) const;
 	/// the waypoint, or the nearest point where the footprint fits; round a corner, a point to go to first
 	float3 FitWaypoint(const float3& wp) const;
+	/// SupComPathSmooth: the furthest waypoint ahead on the path reached in a straight line over open ground
+	float3 SmoothedWaypoint(const float3& cwp, const float3& opos);
+	bool LineOpen(const float3& a, const float3& b) const;
 	/// whether the footprint fits all along the straight line from a to b
 	bool LineFits(const float3& a, const float3& b) const;
 	bool DirectLineClear();
@@ -137,6 +140,11 @@ private:
 	float blockedRestart = 0.0f; ///< fraction of the top speed
 	float uprightSink = 0.0f;
 	float3 scLogTarget; ///< diagnosis only (SupComYieldLog): the last steering target logged
+	// SupComPathSmooth: the path's points (rebuilt from the path, not saved), the target and when it is re-checked
+	std::vector<float3> smoothPts;
+	unsigned int smoothPathID = 0;
+	int smoothFrame = -1;
+	float3 smoothTarget;
 	float footprintX = 0.0f;     ///< elmos, along the unit's right axis
 	float footprintZ = 0.0f;     ///< elmos, along the unit's forward axis
 	bool sinkLower = false;

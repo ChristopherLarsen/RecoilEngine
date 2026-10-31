@@ -16,6 +16,7 @@
 #include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Misc/GlobalSynced.h"
 #include "Sim/Misc/QuadField.h"
+#include "Sim/Path/IPathManager.h"
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/Units/CommandAI/Command.h"
 #include "Sim/Units/CommandAI/CommandAI.h"
@@ -118,6 +119,14 @@ static constexpr float LINEUP_STEP = 0.25f;
 // yield is under way before contact (PTH-002 R3: yield_delay_max 30 ticks; PLACEHOLDER)
 static constexpr float YIELD_LOOKAHEAD_FRAMES = 20.0f;
 
+CONFIG(bool, SupComPathSmooth).defaultValue(false).description("supcom: 1 makes SupComGroundMoveType units steer to the furthest waypoint ahead they reach in a straight line over open ground, clear of walls and structures, not the engine's 8-direction grid path (PTH-001 B and I); default 0 (off: it still costs PTH-002-A and PTH-004-D) follows the waypoints as before.");
+static bool PathSmoothOn() { static const bool on = configHandler->GetBool("SupComPathSmooth"); return on; }
+// path smoothing: waypoints looked ahead, and frames between re-checks of the target (PLACEHOLDER)
+static constexpr int SMOOTH_LOOKAHEAD = 32;
+static constexpr int SMOOTH_RECHECK_FRAMES = 8;
+// path smoothing: the room a cut-across line keeps on each side of the footprint, elmos (PLACEHOLDER: one square)
+static constexpr float SMOOTH_CLEARANCE = SQUARE_SIZE * 1.0f;
+
 CONFIG(bool, SupComDirectCost).defaultValue(true).description("supcom: a straight line to the goal is driven directly only if no square on it is slower than open ground (PTH-001-D: costly areas are left to the path); 0 checks only impassable squares, as before.");
 static bool DirectCostOn() { static const bool on = configHandler->GetBool("SupComDirectCost"); return on; }
 static bool YieldLog() { static const bool on = configHandler->GetBool("SupComYieldLog"); return on; }
@@ -176,6 +185,9 @@ void CSupComGroundMoveType::ResetForNewOrder()
 	scBraking = false;
 	scStopNow = false;
 	scBlockedFrames = 0;
+	smoothPathID = 0;
+	smoothFrame = -1;
+	smoothPts.clear();
 
 	// a new order during braking or the settle replaces it
 	if (scSpeed > 0.0f)
@@ -449,6 +461,95 @@ bool CSupComGroundMoveType::GetDirectSteer() const
 	return (progressState == Active && owner->commandAI->commandQue.size() <= 1 && directClear && goalPos.equals(directGoal));
 }
 
+bool CSupComGroundMoveType::LineOpen(const float3& a, const float3& b) const
+{
+	if (!LineFits(a, b))
+		return false;
+
+	// open ground only: a costly square is left to the path (PTH-001-D)
+	const float3 d = (b - a) * XZVector;
+	const int steps = std::max(1, int(math::ceil(d.Length2D() / (SQUARE_SIZE * 0.5f))));
+	// and clear of walls: the footprint moved sideways by the clearance fits too (PTH-002 A and B)
+	const float3 side = float3(-d.z, 0.0f, d.x).SafeNormalize2D() * SMOOTH_CLEARANCE;
+
+	for (int k = 1; k <= steps; k++) {
+		const float3 p = a + d * (float(k) / steps);
+
+		if (CMoveMath::GetPosSpeedMod(*owner->moveDef, p) < 0.99f)
+			return false;
+		if (FootprintBlocked(p + side) || FootprintBlocked(p - side))
+			return false;
+	}
+
+	return true;
+}
+
+float3 CSupComGroundMoveType::SmoothedWaypoint(const float3& cwp, const float3& opos)
+{
+	if (!PathSmoothOn() || pathID == 0)
+		return cwp;
+
+	// the target holds until the re-check, unless reached
+	if (pathID == smoothPathID && gs->frameNum < smoothFrame && smoothTarget.SqDistance2D(opos) > Square(SQUARE_SIZE))
+		return smoothTarget;
+
+	// read again at every re-check: the engine re-plans a path under the same id
+	{
+		std::vector<int> starts;
+		pathManager->GetPathWayPoints(pathID, smoothPts, starts);
+		smoothPathID = pathID;
+	}
+
+	smoothFrame = gs->frameNum + SMOOTH_RECHECK_FRAMES;
+	smoothTarget = cwp;
+
+	// the path point nearest the engine's current waypoint, then the furthest one ahead in a straight open line
+	int i0 = -1;
+	float best = std::numeric_limits<float>::max();
+
+	for (int i = 0; i < int(smoothPts.size()); i++) {
+		const float d = smoothPts[i].SqDistance2D(cwp);
+
+		if (d < best) {
+			best = d;
+			i0 = i;
+		}
+	}
+
+	if (i0 < 0)
+		return cwp;
+
+	const int iEnd = std::min(int(smoothPts.size()) - 1, i0 + SMOOTH_LOOKAHEAD);
+
+	for (int k = i0 + 1; k <= iEnd; k++) {
+		if (!LineOpen(opos, smoothPts[k]))
+			break;
+
+		smoothTarget = smoothPts[k];
+	}
+
+	// the unit past the engine's waypoint along the path (the path point nearest the unit comes after it): the engine
+	// moves on to its next one
+	if (!smoothTarget.same(cwp)) {
+		int iu = -1;
+		float bu = std::numeric_limits<float>::max();
+
+		for (int i = 0; i < int(smoothPts.size()); i++) {
+			const float d = smoothPts[i].SqDistance2D(opos);
+
+			if (d < bu) {
+				bu = d;
+				iu = i;
+			}
+		}
+
+		if (iu > i0)
+			TriggerSkipWayPoint();
+	}
+
+	return smoothTarget;
+}
+
 void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos)
 {
 	// a clear straight line to the goal is driven directly, not through the path's waypoints
@@ -463,7 +564,7 @@ void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos
 
 	// the engine's waypoints can lie where this move type's centred footprint does not fit (beside a wall: the engine
 	// places an even-sized footprint off its centre), or round a corner the footprint cannot cut: repair them locally
-	float3 target = FitWaypoint(cwp);
+	float3 target = FitWaypoint(SmoothedWaypoint(cwp, opos));
 	if (YieldLog() && !target.same(scLogTarget)) {
 		scLogTarget = target;
 		LOG("[SupComSteer] f=%d unit %d path waypoint (%.0f, %.0f) fitted (%.0f, %.0f) from (%.0f, %.0f)", gs->frameNum, owner->id, cwp.x, cwp.z, target.x, target.z, opos.x, opos.z);
