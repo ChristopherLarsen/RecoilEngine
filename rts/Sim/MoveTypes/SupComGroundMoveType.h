@@ -102,6 +102,15 @@ private:
 	void ExactGoalRadius();
 	bool FootprintFitsAt(const float3& pos) const;
 	void HoldEarlyArrival();
+	/// SupComGapQueue (serial update): the gap ahead, this unit's place in its queue and the room behind the unit ahead
+	void UpdateGapQueue();
+	/// whether the footprint fits at wp (or near it) but not one footprint to either side across one axis; at, dir: the
+	/// point and the axis through the gap, pointing away from the unit
+	bool GapAt(const float3& wp, float3& at, float3& dir) const;
+	/// SupComGapQueue: the steering target while queued with the waypoint already past the gap
+	float3 GapQueueTarget(const float3& cwp, const float3& opos, const float3& target) const;
+	/// SupComGapQueue: the way from p to the gap's centre (by the mouth from off its line); negative beyond it
+	float GapDist(const float3& p) const;
 
 	/// distance needed to come to rest from speed v (elmos, v in elmos per frame)
 	float StoppingDistance(float v) const;
@@ -150,6 +159,18 @@ private:
 	std::vector<float3> smoothPts;
 	// SupComCrowdArrive: frames this order's early arrival was held back (not saved: a load restarts it)
 	int crowdFrames = 0;
+	// SupComGapQueue (not saved: a load restarts the queue): the gap's key (its square), point and axis; the frame the
+	// unit joined its queue; the gap passed on this order; the nearest it came and when; the room behind the unit ahead
+	int gqKey = -1;
+	int gqDoneKey = -1;
+	int gqFrame = -1;
+	int gqBestFrame = 0;
+	float gqBest = 0.0f;
+	float gqRoom = 0.0f;
+	float3 gqPos;
+	float3 gqDir;
+	bool gqAhead = false;        ///< a unit ahead in the queue: gqRoom applies
+	bool gqHeld = false;         ///< braking or at rest for the queue (set in the parallel update)
 	unsigned int smoothPathID = 0;
 	int smoothFrame = -1;
 	float3 smoothTarget;

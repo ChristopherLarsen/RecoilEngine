@@ -132,6 +132,21 @@ CONFIG(bool, SupComCrowdArrive).defaultValue(true).description("supcom: a SupCom
 static bool CrowdArriveOn() { static const bool on = configHandler->GetBool("SupComCrowdArrive"); return on; }
 // the longest an order's early arrivals are held back in all (PLACEHOLDER: under PTH-004's stuck.time plus stuck.recover)
 static constexpr int CROWD_MAX_FRAMES = GAME_SPEED * 5;
+
+CONFIG(bool, SupComGapQueue).defaultValue(true).description("supcom: at a gap their own width, SupComGroundMoveType units pass one at a time in the order they arrive: each keeps a footprint of room behind the unit queued before it instead of pushing in beside it (PTH-002 R2, case A; PTH-004-A); 0 crowds the gap as before.");
+static bool GapQueueOn() { static const bool on = configHandler->GetBool("SupComGapQueue"); return on; }
+// a unit joins the queue this far before the gap along its axis, elmos (PLACEHOLDER: SF-PTH-002 counts arrival 2 cells
+// before the wall face, 2.5 cells from the gap's centre)
+static constexpr float GAPQ_REACH = SQUARE_SIZE * 5.0f;
+// room kept between the footprints of queued units, elmos (PLACEHOLDER: none; the engine's collisions keep footprints
+// apart, PTH-002-F measured at most 0.03 of a footprint of overlap)
+static constexpr float GAPQ_MARGIN = 0.0f;
+// a unit ahead neither held by the queue nor any nearer the gap for this long is passed over, frames (PLACEHOLDER)
+static constexpr int GAPQ_STALL_FRAMES = GAME_SPEED;
+// room beyond the stopping distance before a unit held by the queue drives again, elmos (PLACEHOLDER)
+static constexpr float GAPQ_RESUME = 1.0f;
+// the gap's mouth: the point on its line that units off the line steer to first, footprints before its centre (PLACEHOLDER)
+static constexpr float GAPQ_MOUTH = 2.0f;
 // path smoothing: the room a cut-across line keeps on each side of the footprint, elmos (PLACEHOLDER: one square)
 static constexpr float SMOOTH_CLEARANCE = SQUARE_SIZE * 1.0f;
 
@@ -197,6 +212,11 @@ void CSupComGroundMoveType::ResetForNewOrder()
 	smoothFrame = -1;
 	smoothPts.clear();
 	crowdFrames = 0;
+	gqKey = -1;
+	gqDoneKey = -1;
+	gqFrame = -1;
+	gqAhead = false;
+	gqHeld = false;
 
 	// a new order during braking or the settle replaces it
 	if (scSpeed > 0.0f)
@@ -613,7 +633,7 @@ void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos
 	if (!target.same(cwp) && target.SqDistance2D(opos) < Square(SQUARE_SIZE * 0.5f))
 		TriggerSkipWayPoint();
 
-	CGroundMoveType::SetWaypointDir(target, opos);
+	CGroundMoveType::SetWaypointDir(GapQueueTarget(cwp, opos, target), opos);
 }
 
 // offsets of up to three squares around a point, nearest first. Worker threads call this (FollowPath ->
@@ -864,6 +884,24 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		// at rest well short of the stopping point (pushed away, or the path bent): go again
 		if (scBraking && scSpeed <= 0.0f && stopDist > std::max(goalRadius, float(SQUARE_SIZE)))
 			scBraking = false;
+	}
+
+	// SupComGapQueue: at rest no nearer the gap than a footprint behind the unit queued before this one
+	if (!stop && gqAhead) {
+		const float room = std::max(gqRoom, 0.0f);
+		const float need = StoppingDistance(scSpeed) + GAPQ_RESUME;
+
+		// braking for the queue, not for the goal: drive again once the room ahead exceeds the stopping distance
+		if (gqHeld && scBraking && room > need && stopDist > need)
+			scBraking = false;
+
+		gqHeld = (room < stopDist && room <= need + scSpeed);
+		stopDist = std::min(stopDist, room);
+	} else if (gqHeld) {
+		if (scBraking && !stop && stopDist > StoppingDistance(scSpeed) + GAPQ_RESUME)
+			scBraking = false;
+
+		gqHeld = false;
 	}
 
 	float dist = 0.0f;
@@ -1215,8 +1253,214 @@ bool CSupComGroundMoveType::Update()
 			LOG("[SupComYield] f=%d unit %d done making way at (%.0f, %.0f)", gs->frameNum, owner->id, owner->pos.x, owner->pos.z);
 	}
 
+	UpdateGapQueue();
+	// held behind a queue that moves (a stuck unit ahead is passed over): not idle, so the engine neither re-plans nor
+	// fails the order (it failed units waiting their turn after eight seconds, PTH-002-B)
+	if (gqHeld && gqAhead) {
+		numIdlingUpdates = 0;
+		numIdlingSlowUpdates = 0;
+	}
 	CheckYield();
 	return moved;
+}
+
+bool CSupComGroundMoveType::GapAt(const float3& wp, float3& at, float3& dir) const
+{
+	// the waypoint, or the nearest point to it where the footprint fits
+	at = wp;
+
+	if (FootprintBlocked(at)) {
+		bool found = false;
+
+		for (const float3& o: NearOffsets()) {
+			if (!FootprintBlocked(wp + o)) {
+				at = wp + o;
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+			return false;
+	}
+
+	const float w = HalfSize() * 2.0f;
+	const float3 axes[2] = {float3(1.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 1.0f)};
+
+	for (int k = 0; k < 2; k++) {
+		const float3& ax = axes[k];
+		const float3& lat = axes[1 - k];
+
+		// walls on both sides across the axis, open ground before and after along it
+		if (!FootprintBlocked(at + lat * w) || !FootprintBlocked(at - lat * w))
+			continue;
+		if (FootprintBlocked(at + ax * w) || FootprintBlocked(at - ax * w))
+			continue;
+
+		dir = ax * (((at - owner->pos).dot(ax) >= 0.0f)? 1.0f: -1.0f);
+		return true;
+	}
+
+	return false;
+}
+
+void CSupComGroundMoveType::UpdateGapQueue()
+{
+	// runs in the serial move type update: it reads other units' queue state, written here or in the parallel phase
+	gqAhead = false;
+
+	if (!GapQueueOn() || progressState != Active || scYielding || owner->GetTransporter() != nullptr) {
+		gqKey = -1;
+		gqFrame = -1;
+		gqHeld = false;
+		return;
+	}
+
+	const float3& pos = owner->pos;
+
+	// a new gap: the current or the next waypoint, at least half a footprint ahead with the goal beyond it, not the one
+	// passed on this order
+	if (gqKey < 0) {
+		for (const float3& wp: {currWayPoint, nextWayPoint}) {
+			float3 at;
+			float3 dir;
+
+			if (wp.SqDistance2D(pos) > Square(GAPQ_REACH * 3.0f) || !GapAt(wp, at, dir))
+				continue;
+
+			const int key = int(at.z / SQUARE_SIZE) * mapDims.mapx + int(at.x / SQUARE_SIZE);
+
+			if (key == gqDoneKey || (at - pos).dot(dir) < HalfSize() || (goalPos - at).dot(dir) <= 0.0f)
+				continue;
+
+			gqKey = key;
+			gqPos = at;
+			gqDir = dir;
+			gqFrame = -1;
+			break;
+		}
+		if (gqKey < 0)
+			return;
+	}
+
+	const float s = (gqPos - pos).dot(gqDir);
+	const float d = pos.distance2D(gqPos);
+
+	// through the gap: out of its queue
+	if (s < -(HalfSize() + SQUARE_SIZE)) {
+		gqDoneKey = gqKey;
+		gqKey = -1;
+		gqFrame = -1;
+		gqHeld = false;
+		return;
+	}
+
+	// arrived at the gap: in its queue from this frame (ties by unit id)
+	if (gqFrame < 0) {
+		if (s > GAPQ_REACH || d > GAPQ_REACH * 3.0f)
+			return;
+
+		gqFrame = gs->frameNum;
+		gqBest = s;
+		gqBestFrame = gs->frameNum;
+	}
+	// progress: along the gap's axis, before and after it
+	if (s < gqBest - 0.5f) {
+		gqBest = s;
+		gqBestFrame = gs->frameNum;
+	}
+
+	// the unit ahead: the last one queued before this one at the same gap in the same direction; one stuck (neither
+	// held by the queue nor any further along the gap's axis for GAPQ_STALL_FRAMES) is passed over
+	QuadFieldQuery q;
+	quadField.GetUnitsExact(q, gqPos, GAPQ_REACH * 3.0f + SQUARE_SIZE * 2.0f, false);
+
+	const CSupComGroundMoveType* ahead = nullptr;
+
+	for (const CUnit* u: *q.units) {
+		if (u == owner)
+			continue;
+
+		const CSupComGroundMoveType* mt = dynamic_cast<const CSupComGroundMoveType*>(u->moveType);
+
+		if (mt == nullptr || mt->gqKey != gqKey || mt->gqFrame < 0 || mt->gqDir.dot(gqDir) <= 0.0f)
+			continue;
+		if (mt->gqFrame > gqFrame || (mt->gqFrame == gqFrame && u->id > owner->id))
+			continue;
+		if (!mt->gqHeld && (gs->frameNum - mt->gqBestFrame) > GAPQ_STALL_FRAMES)
+			continue;
+		if (ahead == nullptr || mt->gqFrame > ahead->gqFrame || (mt->gqFrame == ahead->gqFrame && u->id > ahead->owner->id))
+			ahead = mt;
+	}
+
+	if (ahead == nullptr)
+		return;
+
+	const float own = GapDist(pos);
+	const float aheadDist = GapDist(ahead->owner->pos);
+
+	// already nearer the gap than the unit queued before it (it got ahead of it): waiting cannot let that unit by in a
+	// gap one unit wide (units held inside the gap for seconds, PTH-002-A); it goes on
+	if (aheadDist > own)
+		return;
+
+	// the room left: this unit's way to the gap less the unit ahead's and a footprint, plus the distance the unit ahead
+	// needs to come to rest (it cannot stop sooner: a follower keeps moving while it does, instead of stopping a footprint
+	// behind it and starting again, PTH-002-A throughput)
+	gqRoom = own - aheadDist - (HalfSize() + ahead->HalfSize() + GAPQ_MARGIN) + ahead->StoppingDistance(ahead->scSpeed);
+	gqAhead = true;
+}
+
+float CSupComGroundMoveType::GapDist(const float3& p) const
+{
+	// the way from p to the gap's centre: straight on its line, by its mouth from off it (GapQueueTarget), so that units
+	// waiting off the line keep their room round the mouth rather than closing in on the wall face; negative beyond it
+	const float s = (gqPos - p).dot(gqDir);
+	const float d = p.distance2D(gqPos);
+
+	if (s <= 0.0f)
+		return -d;
+
+	const float across = math::fabs((p - gqPos).dot(float3(gqDir.z, 0.0f, -gqDir.x)));
+	const float w = HalfSize() * 2.0f;
+
+	const float mouth = w * GAPQ_MOUTH;
+
+	if (across <= 1.0f || s <= mouth)
+		return d;
+
+	return (p.distance2D(gqPos - gqDir * mouth) + mouth);
+}
+
+float3 CSupComGroundMoveType::GapQueueTarget(const float3& cwp, const float3& opos, const float3& target) const
+{
+	// the engine moves on from the gap's waypoint when the unit ahead touches it: a unit still off the gap's line then
+	// steered at a waypoint behind the wall and ground along it (PTH-002-A); one heading at the gap's own waypoint from
+	// off its line caught the wall's corner. To the gap's mouth on its line first, GAPQ_MOUTH footprints before it, so
+	// that a unit is on the line before the wall and drives through at its full speed.
+	const float w = HalfSize() * 2.0f;
+	const float mouth = w * GAPQ_MOUTH;
+
+	if (!GapQueueOn() || gqKey < 0 || gqFrame < 0 || (gqPos - cwp).dot(gqDir) > mouth)
+		return target;
+	// not held by the queue and no nearer the gap for GAPQ_STALL_FRAMES twice over (something stands in it): the path's
+	// own waypoints, as without the queue, so that the engine sees a blocked unit at rest and ends its order (aimed at the
+	// gap, a unit blocked by an enemy standing in it was knocked about and its order never ended, PTH-002-D)
+	if (!gqHeld && (gs->frameNum - gqBestFrame) > GAPQ_STALL_FRAMES * 2)
+		return target;
+
+	const float s = (gqPos - opos).dot(gqDir);
+	const float across = math::fabs((opos - gqPos).dot(float3(gqDir.z, 0.0f, -gqDir.x)));
+
+	if (s <= 0.0f || across <= 1.0f)
+		return target;
+	if (s > mouth + 1.0f)
+		return (gqPos - gqDir * mouth);
+	// past the mouth within the line-up's reach of the line: through the gap's centre
+	if (across <= LINEUP_MAX)
+		return gqPos;
+
+	// past the mouth further off: onto the line half a footprint on (beside the wall face: straight across to it)
+	return (gqPos - gqDir * ((s > w)? std::max(s - w * 0.5f, w): s));
 }
 
 bool CSupComGroundMoveType::CanYield() const
