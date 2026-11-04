@@ -60,6 +60,9 @@ public:
 	/// Lua supcomLuaAttackGoal (default false): while attacking a unit, keep the goal the command AI or Lua gives
 	/// (a Lua orbit, CMB-019 R2) instead of steering at the target itself
 	bool GetLuaAttackGoal() const { return luaAttackGoal; }
+	/// customParams supcom_air_combat_turn_rate, Lua supcomCombatTurnRate (degrees per second; 0: none): the turn rate
+	/// while the aircraft has an attack target (MOV-016 v5 R3), in place of the unit def's
+	float GetCombatTurnRate() const { return combatTurnRate * GAME_SPEED * 360.0f / SPRING_CIRCLE_DIVS; }
 
 	/// the height a transport loads and unloads at over pos: the reference plus the load height, or the
 	/// command AI's own height when no load height is set
@@ -99,6 +102,7 @@ private:
 	float climbRate = 0.0f;      ///< elmos per frame
 	float fallGravity = 0.0f;    ///< elmos per frame squared
 	float tumbleRate = 0.0f;     ///< heading units per frame
+	float combatTurnRate = 0.0f; ///< heading units per frame while attacking; 0 = the unit def's turn rate
 	float idleLandDelay = -1.0f; ///< frames; < 0 never lands when idle
 	float landDecay = 0.0f;      ///< per frame
 	float landHoldHeight = 0.0f; ///< elmos; 0 no hold

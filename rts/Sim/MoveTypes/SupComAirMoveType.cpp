@@ -35,6 +35,7 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(climbRate),
 	CR_MEMBER(fallGravity),
 	CR_MEMBER(tumbleRate),
+	CR_MEMBER(combatTurnRate),
 	CR_MEMBER(idleLandDelay),
 	CR_MEMBER(landDecay),
 	CR_MEMBER(landHoldHeight),
@@ -93,6 +94,7 @@ CSupComAirMoveType::CSupComAirMoveType(CUnit* owner): CHoverAirMoveType(owner)
 	climbRate = std::max(0.0f, CustomParam(ud, "supcom_air_climb_rate", 0.0f)) / GAME_SPEED;
 	fallGravity = std::max(0.0f, CustomParam(ud, "supcom_air_fall_gravity", 0.0f)) / (GAME_SPEED * GAME_SPEED);
 	tumbleRate = CustomParam(ud, "supcom_air_tumble_rate", 0.0f) / GAME_SPEED * SPRING_CIRCLE_DIVS / 360.0f;
+	combatTurnRate = std::max(0.0f, CustomParam(ud, "supcom_air_combat_turn_rate", 0.0f)) / GAME_SPEED * SPRING_CIRCLE_DIVS / 360.0f;
 
 	const float delay = CustomParam(ud, "supcom_air_idle_land_delay", -1.0f);
 	idleLandDelay = (delay < 0.0f)? -1.0f: (delay * GAME_SPEED);
@@ -248,7 +250,15 @@ bool CSupComAirMoveType::Update()
 
 	const short oldHeading = owner->heading;
 
-	UpdateHeading();
+	// with an attack target the combat turn rate limits the turn (MOV-016 v5 R3)
+	if (combatTurnRate > 0.0f && AttackTarget() != nullptr) {
+		const float defTurnRate = turnRate;
+		turnRate = combatTurnRate;
+		UpdateHeading();
+		turnRate = defTurnRate;
+	} else {
+		UpdateHeading();
+	}
 
 	if (winged)
 		UpdateBank(oldHeading);
@@ -267,10 +277,15 @@ bool CSupComAirMoveType::SetMemberValue(unsigned int memberHash, void* memberVal
 	static const unsigned int climbRateHash = spring::LiteHash("supcomClimbRate", 15, 0);
 	static const unsigned int speedResponseHash = spring::LiteHash("supcomSpeedResponse", 19, 0);
 	static const unsigned int luaAttackGoalHash = spring::LiteHash("supcomLuaAttackGoal", 19, 0);
+	static const unsigned int combatTurnRateHash = spring::LiteHash("supcomCombatTurnRate", 20, 0);
 
 	if (memberHash == luaAttackGoalHash) {
 		// Lua passes a boolean as bool*, a number as float*; the key is boolean
 		luaAttackGoal = *reinterpret_cast<bool*>(memberValue);
+		return true;
+	}
+	if (memberHash == combatTurnRateHash) {
+		combatTurnRate = std::max(0.0f, *reinterpret_cast<float*>(memberValue)) / GAME_SPEED * SPRING_CIRCLE_DIVS / 360.0f;
 		return true;
 	}
 	if (memberHash == speedResponseHash) {

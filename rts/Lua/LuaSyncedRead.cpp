@@ -6270,6 +6270,7 @@ int LuaSyncedRead::GetUnitMoveTypeData(lua_State* L)
 			LuaPushNamedNumber(L, "supcomClimbRate", scat->GetClimbRate());
 			LuaPushNamedNumber(L, "supcomSpeedResponse", scat->GetSpeedResponse());
 			LuaPushNamedBool(L, "supcomLuaAttackGoal", scat->GetLuaAttackGoal());
+			LuaPushNamedNumber(L, "supcomCombatTurnRate", scat->GetCombatTurnRate());
 		}
 
 		return 1;
