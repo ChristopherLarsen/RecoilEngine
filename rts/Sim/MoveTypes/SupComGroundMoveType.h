@@ -171,6 +171,8 @@ private:
 	float3 gqDir;
 	bool gqAhead = false;        ///< a unit ahead in the queue: gqRoom applies
 	bool gqHeld = false;         ///< braking or at rest for the queue (set in the parallel update)
+	bool gqPull = false;         ///< off the gap's line with a unit ahead: steers to gqSlot on the line (SupComGapPull)
+	float3 gqSlot;
 	unsigned int smoothPathID = 0;
 	int smoothFrame = -1;
 	float3 smoothTarget;

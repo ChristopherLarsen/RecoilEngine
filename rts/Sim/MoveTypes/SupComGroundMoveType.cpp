@@ -135,6 +135,8 @@ static constexpr int CROWD_MAX_FRAMES = GAME_SPEED * 5;
 
 CONFIG(bool, SupComGapQueue).defaultValue(true).description("supcom: at a gap their own width, SupComGroundMoveType units pass one at a time in the order they arrive: each keeps a footprint of room behind the unit queued before it instead of pushing in beside it (PTH-002 R2, case A; PTH-004-A); 0 crowds the gap as before.");
 static bool GapQueueOn() { static const bool on = configHandler->GetBool("SupComGapQueue"); return on; }
+CONFIG(bool, SupComGapPull).defaultValue(true).description("supcom: a SupComGroundMoveType unit queued at a gap off its line steps onto the line a footprint behind the unit queued before it, instead of waiting beside the gap's mouth and turning onto the line when that unit moves on (PTH-002 R2, case A); 0 waits beside the mouth as before. Needs SupComGapQueue.");
+static bool GapPullOn() { static const bool on = configHandler->GetBool("SupComGapPull"); return on; }
 // a unit joins the queue this far before the gap along its axis, elmos (PLACEHOLDER: SF-PTH-002 counts arrival 2 cells
 // before the wall face, 2.5 cells from the gap's centre)
 static constexpr float GAPQ_REACH = SQUARE_SIZE * 5.0f;
@@ -1307,6 +1309,7 @@ void CSupComGroundMoveType::UpdateGapQueue()
 {
 	// runs in the serial move type update: it reads other units' queue state, written here or in the parallel phase
 	gqAhead = false;
+	gqPull = false;
 
 	if (!GapQueueOn() || progressState != Active || scYielding || owner->GetTransporter() != nullptr) {
 		gqKey = -1;
@@ -1408,6 +1411,23 @@ void CSupComGroundMoveType::UpdateGapQueue()
 	// behind it and starting again, PTH-002-A throughput)
 	gqRoom = own - aheadDist - (HalfSize() + ahead->HalfSize() + GAPQ_MARGIN) + ahead->StoppingDistance(ahead->scSpeed);
 	gqAhead = true;
+
+	// SupComGapPull: off the gap's line before its mouth, onto the line a footprint behind the unit ahead now, and at rest
+	// there; waiting beside the mouth, the last units turned onto the line only when the unit ahead moved on and lost 0.2
+	// to 0.4 s each (PTH-002-A). Not beside or behind the unit ahead's place on the line: that one waits as before
+	const float mouth = HalfSize() * 2.0f * GAPQ_MOUTH;
+	const float across = math::fabs((pos - gqPos).dot(float3(gqDir.z, 0.0f, -gqDir.x)));
+
+	if (GapPullOn() && s > mouth + 1.0f && across > LINEUP_MAX) {
+		const float aheadS = (gqPos - ahead->owner->pos).dot(gqDir);
+		const float slotS = std::max(aheadS + HalfSize() + ahead->HalfSize() + GAPQ_MARGIN, mouth);
+
+		if (slotS <= s) {
+			gqSlot = gqPos - gqDir * slotS;
+			gqRoom = pos.distance2D(gqSlot);
+			gqPull = true;
+		}
+	}
 }
 
 float CSupComGroundMoveType::GapDist(const float3& p) const
@@ -1447,6 +1467,9 @@ float3 CSupComGroundMoveType::GapQueueTarget(const float3& cwp, const float3& op
 	// gap, a unit blocked by an enemy standing in it was knocked about and its order never ended, PTH-002-D)
 	if (!gqHeld && (gs->frameNum - gqBestFrame) > GAPQ_STALL_FRAMES * 2)
 		return target;
+	// SupComGapPull: onto the gap's line behind the unit ahead (UpdateGapQueue)
+	if (gqPull)
+		return gqSlot;
 
 	const float s = (gqPos - opos).dot(gqDir);
 	const float across = math::fabs((opos - gqPos).dot(float3(gqDir.z, 0.0f, -gqDir.x)));
