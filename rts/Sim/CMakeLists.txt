@@ -143,6 +143,7 @@ add_library(engineSim STATIC
 		"${CMAKE_CURRENT_SOURCE_DIR}/Units/UnitTypes/Factory.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Weapons/BeamLaser.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Weapons/BombDropper.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/Weapons/SupComBombRelease.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Weapons/Cannon.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Weapons/DGunWeapon.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Weapons/EmgCannon.cpp"

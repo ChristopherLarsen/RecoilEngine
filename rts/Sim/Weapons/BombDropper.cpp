@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "BombDropper.h"
+#include "SupComBombRelease.h"
 #include "WeaponDef.h"
 #include "Game/GameHelper.h"
 #include "Sim/Misc/GlobalSynced.h"
@@ -103,6 +104,10 @@ bool CBombDropper::TestRange(const float3& tgtPos, const SWeaponTarget& trg) con
 	// torpedoes especially should not be dropped if the
 	// target position is already behind owner's position
 	const float torpDist = torpMoveRange * (owner->frontdir.dot(tgtPos - aimFromPos) > 0.0f);
+
+	// SupCom: release when the predicted impact point reaches the target (customParams supcom_bomb_impact)
+	if (!dropTorpedoes && SupComBombRelease::Enabled(weaponDef))
+		return SupComBombRelease::InRange(owner, weaponMuzzlePos, tgtPos, fallTime, dropDist);
 
 	return (tgtPos.SqDistance2D(aimFromPos + owner->speed * fallTime) < Square(dropDist + torpDist));
 }
