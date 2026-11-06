@@ -65,6 +65,8 @@ public:
 	bool OnSeabed() const;
 	float GetContactLift() const override { return contactLift; }
 	bool HeadingLocked() const override;
+	bool WantReverseTurnGo(const float3& wpDir, const float3& ffDir) const;
+	bool HoldForTurn(int dir) const;
 	bool GetHeadingFree() const { return headingFree; }
 	/// true while SetWaypointDir steers straight at the goal instead of along the path's waypoints (read-only: the
 	/// last straight-line answer for this goal, never a new test)
@@ -153,6 +155,8 @@ private:
 	float settleRate = 1.0f;     ///< per frame
 	float stopSpeed = 0.0f;      ///< elmos per frame
 	float blockedRestart = 0.0f; ///< fraction of the top speed
+	float reverseDist = 0.0f;    ///< SupComTurnGo: elmos; 0 = the engine's own reverse choice
+	float turnGoCos = 2.0f;      ///< SupComTurnGo: cosine of the move-off angle; above 1 = off
 	float uprightSink = 0.0f;
 	float3 scLogTarget; ///< diagnosis only (SupComYieldLog): the last steering target logged
 	// SupComPathSmooth: the path's points (rebuilt from the path, not saved), the target and when it is re-checked

@@ -38,6 +38,8 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
 	CR_MEMBER(blockedRestart),
+	CR_MEMBER(reverseDist),
+	CR_MEMBER(turnGoCos),
 	CR_MEMBER(uprightSink),
 	CR_MEMBER(footprintX),
 	CR_MEMBER(footprintZ),
@@ -135,6 +137,8 @@ static constexpr int CROWD_MAX_FRAMES = GAME_SPEED * 5;
 
 CONFIG(bool, SupComGapQueue).defaultValue(true).description("supcom: at a gap their own width, SupComGroundMoveType units pass one at a time in the order they arrive: each keeps a footprint of room behind the unit queued before it instead of pushing in beside it (PTH-002 R2, case A; PTH-004-A); 0 crowds the gap as before.");
 static bool GapQueueOn() { static const bool on = configHandler->GetBool("SupComGapQueue"); return on; }
+CONFIG(bool, SupComTurnGo).defaultValue(true).description("supcom: SupComGroundMoveType units with customParams.supcom_reverse_dist reverse to a goal behind them within that distance (else drive forwards), and units with customParams.supcom_turn_go_angle turn on the spot from rest until their heading is within that angle of their way before they move off; 0 (or no keys) keeps the engine's own reverse choice and moves off while turning, as before.");
+static bool TurnGoOn() { static const bool on = configHandler->GetBool("SupComTurnGo"); return on; }
 // a unit joins the queue this far before the gap along its axis, elmos (PLACEHOLDER: SF-PTH-002 counts arrival 2 cells
 // before the wall face, 2.5 cells from the gap's centre)
 static constexpr float GAPQ_REACH = SQUARE_SIZE * 5.0f;
@@ -183,6 +187,12 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	settleRate = std::max(1e-6f, CustomParam(ud, "supcom_settle_rate", 1e6f)) / GAME_SPEED;
 	stopSpeed = std::max(0.0f, CustomParam(ud, "supcom_stop_speed", 0.0f)) / GAME_SPEED;
 	blockedRestart = std::max(0.0f, CustomParam(ud, "supcom_blocked_restart", 0.0f));
+	// SupComTurnGo: reverse distance (elmos; 0 = the engine's own choice) and the move-off angle (degrees; 0 = off)
+	reverseDist = std::max(0.0f, CustomParam(ud, "supcom_reverse_dist", 0.0f));
+	{
+		const float a = CustomParam(ud, "supcom_turn_go_angle", 0.0f);
+		turnGoCos = (a > 0.0f && a < 180.0f)? math::cos(a * math::DEG_TO_RAD): 2.0f;
+	}
 	uprightSink = std::max(0.0f, CustomParam(ud, "supcom_upright_sink", 0.0f));
 	turnRadius = std::max(0.0f, CustomParam(ud, "supcom_turn_radius", 0.0f));
 	footprintX = std::max(0.0f, CustomParam(ud, "supcom_footprint_x", md->xsize * SQUARE_SIZE));
@@ -828,7 +838,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	switch (setHeading) {
 		case HEADING_CHANGED_MOVE: {
-			wantReverse = !HeadingLocked() && WantReverse(waypointDir, flatFrontDir);
+			wantReverse = !HeadingLocked() && WantReverseTurnGo(waypointDir, flatFrontDir);
 		} break;
 		case HEADING_CHANGED_STOP:
 		case HEADING_CHANGED_STUN: {
@@ -919,7 +929,12 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		if (scSpeed <= 0.0f)
 			scDir = wantDir;
 
-		dist = Advance(topSpeed, stopDist, stop);
+		// SupComTurnGo: from rest, turn on the spot until the heading (backwards when reversing) is within the move-off
+		// angle of the way; the base class turns the heading meanwhile
+		if (scSpeed <= 0.0f && !stop && HoldForTurn(wantDir))
+			dist = 0.0f;
+		else
+			dist = Advance(topSpeed, stopDist, stop);
 	}
 
 	scRestart = false;
@@ -1073,6 +1088,37 @@ void CSupComGroundMoveType::StartDive(bool submerge)
 
 	// a reversal part-way takes the matching part of the full time
 	depthFrames = (diveDepth > 0.0f)? (diveFrames * math::fabs(to - from) / diveDepth): 0.0f;
+}
+
+bool CSupComGroundMoveType::WantReverseTurnGo(const float3& wpDir, const float3& ffDir) const
+{
+	// a reverse distance set: reverse exactly when the goal is behind (more than 90 degrees off the facing) and within it
+	if (!TurnGoOn() || reverseDist <= 0.0f)
+		return WantReverse(wpDir, ffDir);
+	if (owner->unitDef->rSpeed <= 0.0f || maxReverseSpeed <= 0.0f)
+		return false;
+
+	const float3 toGoal = (goalPos - owner->pos) * XZVector;
+	const float d = toGoal.Length2D();
+
+	if (d <= 1e-3f || d > reverseDist)
+		return false;
+
+	return ((toGoal / d).dot(ffDir) < 0.0f);
+}
+
+bool CSupComGroundMoveType::HoldForTurn(int dir) const
+{
+	if (!TurnGoOn() || turnGoCos > 1.0f || HeadingLocked())
+		return false;
+
+	float3 w = waypointDir * XZVector;
+
+	if (w.SqLength2D() <= 1e-6f)
+		return false;
+
+	w.SafeNormalize2D();
+	return ((flatFrontDir * float(dir)).dot(w) < turnGoCos);
 }
 
 bool CSupComGroundMoveType::HeadingLocked() const
