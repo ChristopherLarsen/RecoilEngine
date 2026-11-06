@@ -525,9 +525,20 @@ void CKardashevCamera::Update()
 		if (tau <= 0.0f) {
 			curU = tgtU;
 		} else {
-			curU += (tgtU - curU) * (1.0f - std::exp(-dt / tau));
-			if (std::abs(tgtU - curU) * std::log(lim.dMax / lim.dMin) < feel.snap)
-				curU = tgtU;
+			const float span = std::log(lim.dMax / lim.dMin);
+			if (feel.glideEase && span > 0.0f) {
+				// the rest r (log distance) decays as (r + snap) * exp(-t / tau) - snap: the same fast start and length as
+				// the truncated exponential (tau * ln((D + snap) / snap)), but it reaches the target exactly with no last
+				// jump (owner report 2026-11-05: the view snapped to the zoom level at the end). A new notch keeps going
+				// from the current value (CAM-002 R4)
+				const float r = std::abs(tgtU - curU) * span;
+				const float rn = (r + feel.snap) * std::exp(-dt / tau) - feel.snap;
+				curU = (rn <= 0.0f)? tgtU: tgtU - std::copysign(rn / span, tgtU - curU);
+			} else {
+				curU += (tgtU - curU) * (1.0f - std::exp(-dt / tau));
+				if (std::abs(tgtU - curU) * span < feel.snap)
+					curU = tgtU;
+			}
 		}
 	}
 
@@ -682,6 +693,8 @@ void CKardashevCamera::GetState(StateMap& sm) const
 //   freeRotate                         1: the rotate modifier with drag or keys turns and the tilt modifier with the wheel
 //                                      tilts (stock-like free rotation); 0: neither (Lua's "rotate" and "tilt" still do)
 //   clearL clearR clearT clearB        screen insets (0..1) the furthest view keeps the map clear of (the HUD's panels)
+//   glideEase                          1 (default): the glide eases into its target, no last-frame jump; 0: the
+//                                      last snap share is jumped in one frame (as before 2026-11-05)
 //   glide                              1 normal, 0 every zoom instant (reduced motion)
 // Commands (never in GetState):
 //   zoomTo (distance, glides), wheel (notches; < 0 in: dives at the pointer), zoomKey (notches, never anchored: the zoom
@@ -731,6 +744,8 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 		SetFeel("dragPan", feel.dragPan, 0.0f, 20.0f, 1.0f);
 		SetFeel("clearance", feel.clearance, 0.0f, 200.0f, 1.0f);
 		SetFeel("snap", feel.snap, 0.0001f, 0.5f, 1.0f);
+		if (Has("glideEase"))
+			feel.glideEase = sm["glideEase"] != 0.0f;
 		if (Has("freeRotate"))
 			feel.freeRotate = sm["freeRotate"] != 0.0f;
 		if (feelSet) {

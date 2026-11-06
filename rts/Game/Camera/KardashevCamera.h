@@ -70,6 +70,9 @@ private:
 		float stepOut    = 0.50f;                        // a notch out adds 50 % of the distance; in removes 33 %
 		float tau        = 0.22f;                        // glide time constant (s): fast start, long soft landing
 		float snap       = 0.002f;                       // the glide ends (on the target) inside this share of the distance (log)
+		bool glideEase   = true;                         // the glide eases into the target with no last-frame jump (the
+		                                                 // exponential shifted by snap, same length); false: it jumps the
+		                                                 // last snap share in one frame (as before 2026-11-05)
 		float keyPan     = 2.0f;                         // keys and edge: view heights per second
 		float keyFast    = 4.0f;                         // the fast modifier on the pan keys
 		float dragPan    = 0.5f;                         // middle-drag: view pixels per pointer pixel
