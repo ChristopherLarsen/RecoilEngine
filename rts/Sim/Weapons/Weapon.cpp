@@ -1111,7 +1111,10 @@ bool CWeapon::TestRange(const float3& tgtPos, const SWeaponTarget& trg) const
 
 	float weaponRange = 0.0f; // range modified by heightDiff and cylinderTargeting
 
-	if (trg.type == Target_Pos || weaponDef->cylinderTargeting < 0.01f) {
+	if (weaponDef->supcomRangeHorizontal) {
+		// supcom: horizontal distance from the aim point only, the height difference ignored
+		weaponRange = range;
+	} else if (trg.type == Target_Pos || weaponDef->cylinderTargeting < 0.01f) {
 		// check range in a sphere (with extra radius <heightDiff * heightMod>)
 		weaponRange = GetRange2D(0.0f, heightDiff * weaponDef->heightmod);
 	} else {

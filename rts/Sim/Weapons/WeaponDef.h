@@ -202,6 +202,8 @@ public:
 	 * (height=range*cylinderTargeting) instead of a sphere.
 	 */
 	float cylinderTargeting;
+	/// supcom: customParams.supcom_range_horizontal = "1": range by horizontal distance only (a vertical cylinder of any height)
+	bool supcomRangeHorizontal = false;
 	/**
 	 * For beam-lasers only - always hit with some minimum intensity
 	 * (a damage coefficient normally dependent on distance).

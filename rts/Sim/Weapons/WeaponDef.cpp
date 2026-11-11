@@ -564,6 +564,7 @@ WeaponDef::WeaponDef(const LuaTable& wdTable, const std::string& name_, int id_)
 
 	// custom parameters table
 	wdTable.SubTable("customParams").GetMap(customParams);
+	supcomRangeHorizontal = (wdTable.SubTable("customParams").GetInt("supcom_range_horizontal", 0) != 0);
 
 	// internal only
 	isNulled = (STRCASECMP(name.c_str(), "noweapon") == 0);

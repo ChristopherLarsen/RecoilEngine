@@ -732,7 +732,10 @@ size_t CGameHelper::GenerateWeaponTargets(const CWeapon* weapon, const CUnit* av
 					continue;
 				}
 
-				const float modRange = weapon->GetRange2D(rangeBoost, (targetPos.y - aimPosHeight) * heightMod);
+				// supcom: supcom_range_horizontal weapons ignore the height difference
+				const float modRange = weapon->weaponDef->supcomRangeHorizontal?
+					(weapon->range + rangeBoost):
+					weapon->GetRange2D(rangeBoost, (targetPos.y - aimPosHeight) * heightMod);
 				const float sqDist2D = ownerPos.SqDistance2D(targetPos);
 
 				if (sqDist2D > Square(modRange))
