@@ -998,12 +998,17 @@ float3 CGameHelper::Pos2BuildPos(const BuildInfo& buildInfo, bool synced)
 	static_assert(BUILD_GRID_RESOLUTION == 2);
 
 	// snap build-positions to 16-elmo grid
-	if (buildInfo.GetXSize() & 2)
+	// supcom: an odd size (supcom_footprint_squares) centres on a map square, an 8-elmo grid; stock sizes are even
+	if (buildInfo.GetXSize() & 1)
+		pos.x = math::floor(buildInfo.pos.x / SQUARE_SIZE) * SQUARE_SIZE + SQUARE_SIZE * 0.5f;
+	else if (buildInfo.GetXSize() & 2)
 		pos.x = math::floor((buildInfo.pos.x              ) / BUILD_SQUARE_SIZE) * BUILD_SQUARE_SIZE + SQUARE_SIZE;
 	else
 		pos.x = math::floor((buildInfo.pos.x + SQUARE_SIZE) / BUILD_SQUARE_SIZE) * BUILD_SQUARE_SIZE;
 
-	if (buildInfo.GetZSize() & 2)
+	if (buildInfo.GetZSize() & 1)
+		pos.z = math::floor(buildInfo.pos.z / SQUARE_SIZE) * SQUARE_SIZE + SQUARE_SIZE * 0.5f;
+	else if (buildInfo.GetZSize() & 2)
 		pos.z = math::floor((buildInfo.pos.z              ) / BUILD_SQUARE_SIZE) * BUILD_SQUARE_SIZE + SQUARE_SIZE;
 	else
 		pos.z = math::floor((buildInfo.pos.z + SQUARE_SIZE) / BUILD_SQUARE_SIZE) * BUILD_SQUARE_SIZE;

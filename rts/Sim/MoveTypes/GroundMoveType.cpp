@@ -752,6 +752,7 @@ bool CGroundMoveType::Update()
 	if (resultantForces.SqLength() > 0.f)
 		owner->Move(resultantForces, true);
 
+	KeepInsideMap();
 	AdjustPosToWaterLine();
 
 	ASSERT_SANE_OWNER_SPEED(owner->speed);

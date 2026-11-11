@@ -439,6 +439,30 @@ float CSupComGroundMoveType::Advance(float topSpeed, float stopDist, bool stop)
 }
 
 
+void CSupComGroundMoveType::KeepInsideMap()
+{
+	// the map edge by the footprint's edge in elmos (MAP-EDGE-UNIT-INSIDE): the engine's collision push tests only the
+	// square under the centre, so a pushed unit could rest with its footprint over the edge; the facing as in
+	// FootprintBlocked, and an axis narrower than the footprint is left alone
+	if (footprintX <= 0.0f || footprintZ <= 0.0f)
+		return;
+
+	const bool alongX = (math::fabs(flatFrontDir.x) > math::fabs(flatFrontDir.z));
+	const float hx = (alongX? footprintZ: footprintX) * 0.5f;
+	const float hz = (alongX? footprintX: footprintZ) * 0.5f;
+	const float mx = mapDims.mapx * SQUARE_SIZE * 1.0f;
+	const float mz = mapDims.mapy * SQUARE_SIZE * 1.0f;
+
+	float3 d;
+	if (hx * 2.0f <= mx)
+		d.x = std::clamp(owner->pos.x, hx, mx - hx) - owner->pos.x;
+	if (hz * 2.0f <= mz)
+		d.z = std::clamp(owner->pos.z, hz, mz - hz) - owner->pos.z;
+
+	if (d.x != 0.0f || d.z != 0.0f)
+		owner->Move(d, true);
+}
+
 bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 {
 	const MoveDef* md = owner->moveDef;

@@ -145,7 +145,14 @@ float CKardashevCamera::DistOf(float u) const { return lim.dMin * std::pow(lim.d
 float CKardashevCamera::UOf(float d) const { return std::clamp(std::log(std::max(d, 1.0f) / lim.dMin) / std::log(lim.dMax / lim.dMin), 0.0f, 1.0f); }
 float CKardashevCamera::ElevCurve(float u) const { return feel.elevNear + (feel.elevFar - feel.elevNear) * Shape(u, feel.shape); }
 float CKardashevCamera::FovCurve(float u) const { return feel.fovNear + (feel.fovFar - feel.fovNear) * Shape(u, feel.shape); }
-float CKardashevCamera::CentreWeight(float u) const { return Smooth((u - feel.centreFrom) / std::max(1e-3f, 1.0f - feel.centreFrom)); }
+float CKardashevCamera::CentreWeight(float u) const
+{
+	// centreFrom 1: no pull below the far limit, the focus pinned to the map centre at it
+	if (feel.centreFrom >= 1.0f)
+		return (u >= 1.0f)? 1.0f: 0.0f;
+
+	return Smooth((u - feel.centreFrom) / std::max(1e-3f, 1.0f - feel.centreFrom));
+}
 float CKardashevCamera::Elev() const { return (heldElev >= 0.0f)? heldElev: ElevCurve(curU); }
 float CKardashevCamera::Aspect() const { return globalRendering->viewSizeX / std::max(1.0f, float(globalRendering->viewSizeY)); }
 float3 CKardashevCamera::Heading() const { return float3(std::sin(rotY), 0.0f, -std::cos(rotY)); }
@@ -736,7 +743,7 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 		SetFeel("fovNear", feel.fovNear, 10.0f, 120.0f, 1.0f);
 		SetFeel("fovFar", feel.fovFar, 10.0f, 120.0f, 1.0f);
 		SetFeel("shape", feel.shape, 0.0f, 0.95f, 1.0f);
-		SetFeel("centreFrom", feel.centreFrom, 0.0f, 0.99f, 1.0f);
+		SetFeel("centreFrom", feel.centreFrom, 0.0f, 1.0f, 1.0f);
 		SetFeel("stepOut", feel.stepOut, 0.01f, 3.0f, 1.0f);
 		SetFeel("tau", feel.tau, 0.0f, 2.0f, 1.0f);
 		SetFeel("keyPan", feel.keyPan, 0.0f, 20.0f, 1.0f);

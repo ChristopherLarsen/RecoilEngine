@@ -91,6 +91,7 @@ protected:
 	bool ArrivalAllowed() const override;
 	bool IsAtGoal() const override;
 	void AdjustPosToWaterLine() override;
+	void KeepInsideMap() override;
 
 private:
 	enum Phase {

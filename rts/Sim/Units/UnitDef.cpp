@@ -668,8 +668,11 @@ UnitDef::UnitDef(const LuaTable& udTable, const std::string& unitName, int id)
 	activateWhenBuilt = udTable.GetBool("activateWhenBuilt", false);
 	onoffable = udTable.GetBool("onoffable", false);
 
-	xsize = std::max(1 * SPRING_FOOTPRINT_SCALE, (udTable.GetInt("footprintX", 1) * SPRING_FOOTPRINT_SCALE));
-	zsize = std::max(1 * SPRING_FOOTPRINT_SCALE, (udTable.GetInt("footprintZ", 1) * SPRING_FOOTPRINT_SCALE));
+	// supcom: customParams.supcom_footprint_squares = "1" counts footprintX/Z in map squares (8 elmos, smallest 1)
+	// instead of footprint cells (16 elmos); without the key: stock
+	const int footprintScale = (udTable.SubTable("customParams").GetInt("supcom_footprint_squares", 0) != 0)? 1: SPRING_FOOTPRINT_SCALE;
+	xsize = std::max(1 * footprintScale, (udTable.GetInt("footprintX", 1) * footprintScale));
+	zsize = std::max(1 * footprintScale, (udTable.GetInt("footprintZ", 1) * footprintScale));
 
 	buildingMask = (std::uint16_t)udTable.GetInt("buildingMask", 1); //1st bit set to 1 constitutes for "normal building"
 	if (IsImmobileUnit())
