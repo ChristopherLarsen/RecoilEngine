@@ -112,6 +112,10 @@ private:
 	float maxBank = 0.0f;        ///< radians (winged, presentation)
 	float transportDescent = 0.0f; ///< elmos per frame; 0 = the climb rate
 	float loadHeight = 0.0f;     ///< elmos above the reference while loading and unloading; 0 = the command AI's
+	/// customParams supcom_air_early_descent: lower to the load height from a transport order on (during the approach)
+	bool earlyDescent = false;
+	/// customParams supcom_air_pickup_cmd: a game command id that counts as a transport order (0: none)
+	int pickupCmd = 0;
 
 	// state
 	float horSpeed = 0.0f;       ///< horizontal speed (elmos per frame)

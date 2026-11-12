@@ -45,6 +45,8 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(maxBank),
 	CR_MEMBER(transportDescent),
 	CR_MEMBER(loadHeight),
+	CR_MEMBER(earlyDescent),
+	CR_MEMBER(pickupCmd),
 
 	CR_MEMBER(horSpeed),
 	CR_MEMBER(idleStage),
@@ -106,6 +108,8 @@ CSupComAirMoveType::CSupComAirMoveType(CUnit* owner): CHoverAirMoveType(owner)
 	maxBank = std::max(0.0f, CustomParam(ud, "supcom_air_max_bank", 0.0f)) * math::DEG_TO_RAD;
 	transportDescent = std::max(0.0f, CustomParam(ud, "supcom_air_transport_descent", 0.0f)) / GAME_SPEED;
 	loadHeight = std::max(0.0f, CustomParam(ud, "supcom_air_load_height", 0.0f));
+	earlyDescent = (CustomParam(ud, "supcom_air_early_descent", 0.0f) != 0.0f);
+	pickupCmd = int(CustomParam(ud, "supcom_air_pickup_cmd", 0.0f));
 
 	// the cruise height exactly as defined (the base class adds a random offset)
 	cruiseHeight = ud->wantedHeight;
@@ -398,8 +402,12 @@ void CSupComAirMoveType::UpdateFlight()
 	} else {
 		// towards the wanted height (cruise, or the command AI's load height) at no more than the climb rate;
 		// a transport under a load or unload order lowers at no more than its transport descent
-		const float downRate = (transportDescent > 0.0f && InTransportOrder())? transportDescent: climbRate;
-		newY = pos.y + std::clamp((ref + wantedHeight) - pos.y, -downRate, climbRate);
+		const bool inTransport = InTransportOrder();
+		const float downRate = (transportDescent > 0.0f && inTransport)? transportDescent: climbRate;
+		// supcom_air_early_descent: under a transport order the transport lowers to its load height from the order on,
+		// during the approach, not only once the command AI has it over the spot
+		const float wh = (earlyDescent && loadHeight > 0.0f && inTransport)? std::min(wantedHeight, loadHeight): wantedHeight;
+		newY = pos.y + std::clamp((ref + wh) - pos.y, -downRate, climbRate);
 	}
 
 	// never below the reference height
@@ -469,6 +477,10 @@ bool CSupComAirMoveType::InTransportOrder() const
 		default:
 			break;
 	}
+
+	// a game's own pickup command (customParams supcom_air_pickup_cmd) counts as a transport order
+	if (pickupCmd != 0 && queue.front().GetID() == pickupCmd)
+		return true;
 
 	return false;
 }
