@@ -92,6 +92,7 @@ protected:
 	bool IsAtGoal() const override;
 	void AdjustPosToWaterLine() override;
 	void KeepInsideMap() override;
+	bool FootprintAtMapEdge() const;
 
 private:
 	enum Phase {

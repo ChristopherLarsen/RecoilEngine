@@ -444,6 +444,19 @@ float CSupComGroundMoveType::Advance(float topSpeed, float stopDist, bool stop)
 }
 
 
+bool CSupComGroundMoveType::FootprintAtMapEdge() const
+{
+	// the footprint (the larger of the move type's and the unit def's, turned with the facing) within half an elmo of an edge
+	const float fx = std::max(footprintX, owner->unitDef->xsize * SQUARE_SIZE * 1.0f);
+	const float fz = std::max(footprintZ, owner->unitDef->zsize * SQUARE_SIZE * 1.0f);
+	const bool alongX = (math::fabs(flatFrontDir.x) > math::fabs(flatFrontDir.z));
+	const float hx = (alongX? fz: fx) * 0.5f;
+	const float hz = (alongX? fx: fz) * 0.5f;
+	const float3& p = owner->pos;
+
+	return (p.x - hx < 0.5f || p.z - hz < 0.5f || p.x + hx > mapDims.mapx * SQUARE_SIZE - 0.5f || p.z + hz > mapDims.mapy * SQUARE_SIZE - 0.5f);
+}
+
 void CSupComGroundMoveType::KeepInsideMap()
 {
 	// the map edge by the footprint's edge in elmos (MAP-EDGE-UNIT-INSIDE): the engine's collision push tests only the
@@ -952,6 +965,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	// supcom_blocked_restart_delay: after a blocked step the next movement from rest waits this long (counted from the first
 	// frame it wants to move again; a new goal restarts the count)
 	bool deadHold = false;
+	// resting with the footprint against the map edge counts as held there (an order that ended on arrival at the edge)
+	if (restartDelay > 0 && scSpeed <= 0.0f && !blockedSinceMove && FootprintAtMapEdge())
+		blockedSinceMove = true;
 	if (restartDelay > 0 && blockedSinceMove && !stop && scSpeed <= 0.0f) {
 		if (!goalPos.equals(deadGoal)) {
 			deadGoal = goalPos;
