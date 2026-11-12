@@ -1388,6 +1388,13 @@ static bool InDockingRange(const CUnit* owner, const float3& wantedPos, float ra
 	return (owner->pos.SqDistance(wantedPos) < Square(radius));
 }
 
+static bool SupComUnloadAll(const CUnit* owner)
+{
+	const auto& cp = owner->unitDef->customParams;
+	const auto it = cp.find("supcom_unload_all");
+	return (it != cp.end() && it->second != "0" && !it->second.empty());
+}
+
 void CMobileCAI::ExecuteLoadUnits(Command& c)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -1473,7 +1480,7 @@ void CMobileCAI::ExecuteLoadUnits(Command& c)
 
 						// FIXME: kill the hardcoded constants, use the command's radius
 						const bool isInRange = InDockingRange(owner, wantedPos, AIRTRANSPORT_DOCKING_RADIUS);
-						const bool isAligned = (std::abs(owner->heading - unit->heading) < AIRTRANSPORT_DOCKING_ANGLE);
+						const bool isAligned = SupComUnloadAll(owner) || (std::abs(owner->heading - unit->heading) < AIRTRANSPORT_DOCKING_ANGLE);   // supcom: a keyed transport docks at any heading
 						const bool isUpright = (owner->updir.dot(UpVector) > 0.995f);
 
 						if (!eventHandler.AllowUnitTransportLoad(owner, unit, wantedPos, isInRange && isAligned && isUpright))
@@ -1970,13 +1977,6 @@ static constexpr CUnit* GetTransporteeFromUnloadOrder(const Command& c, const au
 	return nullptr;
 }
 
-static bool SupComUnloadAll(const CUnit* owner)
-{
-	const auto& cp = owner->unitDef->customParams;
-	const auto it = cp.find("supcom_unload_all");
-	return (it != cp.end() && it->second != "0" && !it->second.empty());
-}
-
 void CMobileCAI::UnloadLand(Command& c)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -2023,7 +2023,7 @@ void CMobileCAI::UnloadLand(Command& c)
 		// FIXME: kill the hardcoded constants, use the command's radius
 		// NOTE: 2D distance-check would mean units get dropped from air
 		const bool isInRange = InDockingRange(owner, wantedPos, AIRTRANSPORT_DOCKING_RADIUS);
-		const bool isAligned = (std::abs(owner->heading - am->GetForcedHeading()) < AIRTRANSPORT_DOCKING_ANGLE);
+		const bool isAligned = SupComUnloadAll(owner) || (std::abs(owner->heading - am->GetForcedHeading()) < AIRTRANSPORT_DOCKING_ANGLE);   // supcom: a keyed transport sets down at any heading
 		const bool isUpright = (owner->updir.dot(UpVector) > 0.99f);
 
 		if (!eventHandler.AllowUnitTransportUnload(owner, transportee, wantedPos, isInRange && isAligned && isUpright))
