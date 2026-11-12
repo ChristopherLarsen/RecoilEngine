@@ -1970,6 +1970,13 @@ static constexpr CUnit* GetTransporteeFromUnloadOrder(const Command& c, const au
 	return nullptr;
 }
 
+static bool SupComUnloadAll(const CUnit* owner)
+{
+	const auto& cp = owner->unitDef->customParams;
+	const auto it = cp.find("supcom_unload_all");
+	return (it != cp.end() && it->second != "0" && !it->second.empty());
+}
+
 void CMobileCAI::UnloadLand(Command& c)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -2036,6 +2043,21 @@ void CMobileCAI::UnloadLand(Command& c)
 			}
 		} else {
 			owner->DetachUnit(transportee);
+
+			// supcom: customParams.supcom_unload_all = "1" sets all the cargo down at this first set-down, at the same
+			// moment (each still asks AllowUnitTransportUnload); without the key, one unit per landing as before
+			if (SupComUnloadAll(owner)) {
+				std::vector<CUnit*> rest;
+				rest.reserve(transportees.size());
+				for (const CUnit::TransportedUnit& tu: transportees)
+					rest.push_back(tu.unit);
+
+				for (CUnit* u: rest) {
+					if (!eventHandler.AllowUnitTransportUnload(owner, u, wantedPos, true))
+						continue;
+					owner->DetachUnit(u);
+				}
+			}
 
 			if (transportees.empty()) {
 				am->SetAllowLanding(true);
