@@ -733,6 +733,31 @@ void CGroundMoveType::UpdateCollisionDetections() {
 	HandleObjectCollisions();
 }
 
+void CGroundMoveType::KeepInsideMap()
+{
+	// supcom: the stock push tests only the centre's square, so a unit could rest with its footprint over the map
+	// edge; clamp the centre so the unit def footprint (turned with the facing) stays inside, an axis narrower than
+	// the footprint left alone
+	const UnitDef* ud = owner->unitDef;
+	if (ud->xsize <= 0 || ud->zsize <= 0)
+		return;
+
+	const bool alongX = (math::fabs(flatFrontDir.x) > math::fabs(flatFrontDir.z));
+	const float hx = (alongX? ud->zsize: ud->xsize) * SQUARE_SIZE * 0.5f;
+	const float hz = (alongX? ud->xsize: ud->zsize) * SQUARE_SIZE * 0.5f;
+	const float mx = mapDims.mapx * SQUARE_SIZE * 1.0f;
+	const float mz = mapDims.mapy * SQUARE_SIZE * 1.0f;
+
+	float3 d;
+	if (hx * 2.0f <= mx)
+		d.x = std::clamp(owner->pos.x, hx, mx - hx) - owner->pos.x;
+	if (hz * 2.0f <= mz)
+		d.z = std::clamp(owner->pos.z, hz, mz - hz) - owner->pos.z;
+
+	if (d.x != 0.0f || d.z != 0.0f)
+		owner->Move(d, true);
+}
+
 bool CGroundMoveType::Update()
 {
 	RECOIL_DETAILED_TRACY_ZONE;

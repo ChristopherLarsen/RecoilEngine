@@ -220,7 +220,8 @@ private:
 
 	virtual void AdjustPosToWaterLine();
 	// supcom: after the frame's collision forces; stock does nothing (SupComGroundMoveType keeps its footprint inside the map)
-	virtual void KeepInsideMap() {}
+	// supcom: keeps the unit def footprint inside the map, in elmos (MAP-EDGE-UNIT-INSIDE)
+	virtual void KeepInsideMap();
 	bool UpdateDirectControl();
 	void UpdateOwnerAccelAndHeading();
 	void UpdatePos(const CUnit* unit, const float3&, float3& resultantMove, int thread) const;
