@@ -38,6 +38,10 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
 	CR_MEMBER(blockedRestart),
+	CR_MEMBER(restartDelay),
+	CR_MEMBER(blockedSinceMove),
+	CR_MEMBER(deadUntil),
+	CR_MEMBER(deadGoal),
 	CR_MEMBER(reverseDist),
 	CR_MEMBER(turnGoCos),
 	CR_MEMBER(uprightSink),
@@ -187,6 +191,7 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	settleRate = std::max(1e-6f, CustomParam(ud, "supcom_settle_rate", 1e6f)) / GAME_SPEED;
 	stopSpeed = std::max(0.0f, CustomParam(ud, "supcom_stop_speed", 0.0f)) / GAME_SPEED;
 	blockedRestart = std::max(0.0f, CustomParam(ud, "supcom_blocked_restart", 0.0f));
+	restartDelay = int(std::max(0.0f, CustomParam(ud, "supcom_blocked_restart_delay", 0.0f)) * GAME_SPEED + 0.5f);
 	// SupComTurnGo: reverse distance (elmos; 0 = the engine's own choice) and the move-off angle (degrees; 0 = off)
 	reverseDist = std::max(0.0f, CustomParam(ud, "supcom_reverse_dist", 0.0f));
 	{
@@ -944,7 +949,28 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	float dist = 0.0f;
 
-	if (scRestart && !stop && !scBraking) {
+	// supcom_blocked_restart_delay: after a blocked step the next movement from rest waits this long (counted from the first
+	// frame it wants to move again; a new goal restarts the count)
+	bool deadHold = false;
+	if (restartDelay > 0 && blockedSinceMove && !stop && scSpeed <= 0.0f) {
+		if (!goalPos.equals(deadGoal)) {
+			deadGoal = goalPos;
+			deadUntil = -1;
+		}
+		if (deadUntil < 0)
+			deadUntil = gs->frameNum + restartDelay;
+		if (gs->frameNum < deadUntil) {
+			deadHold = true;
+		} else {
+			blockedSinceMove = false;
+			deadUntil = -1;
+		}
+	}
+
+	if (deadHold) {
+		scSpeed = 0.0f;
+		dist = 0.0f;
+	} else if (scRestart && !stop && !scBraking) {
 		// the step after a blocked one is taken at the restart speed
 		scDir = wantDir;
 		scPhase = PHASE_DRIVE;
@@ -1061,6 +1087,10 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			scSpeed = 0.0f;
 			scPhase = PHASE_DRIVE;
 			scRestart = (!stop && !scBraking);
+			if (!stop) {
+				blockedSinceMove = true;
+				deadUntil = -1;
+			}
 			if (YieldLog() && scBlockedFrames == 0 && !stop) {
 				const bool byTerrain = FootprintBlocked(owner->pos + moveRequest) && !FootprintBlocked(owner->pos);
 				LOG("[SupComYield] f=%d unit %d step refused by %s at (%.1f, %.1f) heading (%.2f, %.2f) step (%.2f, %.2f) wp (%.0f, %.0f)", gs->frameNum, owner->id,

@@ -156,6 +156,10 @@ private:
 	float settleRate = 1.0f;     ///< per frame
 	float stopSpeed = 0.0f;      ///< elmos per frame
 	float blockedRestart = 0.0f; ///< fraction of the top speed
+	int restartDelay = 0;        ///< customParams supcom_blocked_restart_delay (s), in frames: dead time after a blocked step
+	bool blockedSinceMove = false;
+	int deadUntil = -1;
+	float3 deadGoal;
 	float reverseDist = 0.0f;    ///< SupComTurnGo: elmos; 0 = the engine's own reverse choice
 	float turnGoCos = 2.0f;      ///< SupComTurnGo: cosine of the move-off angle; above 1 = off
 	float uprightSink = 0.0f;
