@@ -444,12 +444,16 @@ void CSupComGroundMoveType::KeepInsideMap()
 	// the map edge by the footprint's edge in elmos (MAP-EDGE-UNIT-INSIDE): the engine's collision push tests only the
 	// square under the centre, so a pushed unit could rest with its footprint over the edge; the facing as in
 	// FootprintBlocked, and an axis narrower than the footprint is left alone
-	if (footprintX <= 0.0f || footprintZ <= 0.0f)
+	// the larger of the move type's footprint and the unit def's (MOV-007 R1: the whole unit footprint stays inside;
+	// the move type's defaults to the planner footprint, which may be smaller)
+	const float fx = std::max(footprintX, owner->unitDef->xsize * SQUARE_SIZE * 1.0f);
+	const float fz = std::max(footprintZ, owner->unitDef->zsize * SQUARE_SIZE * 1.0f);
+	if (fx <= 0.0f || fz <= 0.0f)
 		return;
 
 	const bool alongX = (math::fabs(flatFrontDir.x) > math::fabs(flatFrontDir.z));
-	const float hx = (alongX? footprintZ: footprintX) * 0.5f;
-	const float hz = (alongX? footprintX: footprintZ) * 0.5f;
+	const float hx = (alongX? fz: fx) * 0.5f;
+	const float hz = (alongX? fx: fz) * 0.5f;
 	const float mx = mapDims.mapx * SQUARE_SIZE * 1.0f;
 	const float mz = mapDims.mapy * SQUARE_SIZE * 1.0f;
 
