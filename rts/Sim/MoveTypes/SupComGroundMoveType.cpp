@@ -962,7 +962,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	float dist = 0.0f;
 
-	// supcom_blocked_restart_delay: after a blocked step the next movement from rest waits this long (counted from the first
+	// supcom_blocked_restart_delay: held against the map edge (blocked there, or resting there), the next movement from rest waits this long (counted from the first
 	// frame it wants to move again; a new goal restarts the count)
 	bool deadHold = false;
 	// resting with the footprint against the map edge counts as held there (an order that ended on arrival at the edge)
@@ -1103,7 +1103,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			scSpeed = 0.0f;
 			scPhase = PHASE_DRIVE;
 			scRestart = (!stop && !scBraking);
-			if (!stop) {
+			// the restart delay is for a unit held against the map edge only (window B); a step blocked by a unit or a
+			// structure inland (a walker under a transport, a queue) keeps moving off as before
+			if (!stop && FootprintAtMapEdge()) {
 				blockedSinceMove = true;
 				deadUntil = -1;
 			}
