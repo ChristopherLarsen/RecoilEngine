@@ -116,6 +116,8 @@ private:
 	bool earlyDescent = false;
 	/// customParams supcom_air_pickup_cmd: a game command id that counts as a transport order (0: none)
 	int pickupCmd = 0;
+	/// Lua supcomOrbitRadius (elmos; 0: off): a winged aircraft with no attack target circles its goal at this radius instead of passes
+	float orbitRadius = 0.0f;
 
 	// state
 	float horSpeed = 0.0f;       ///< horizontal speed (elmos per frame)

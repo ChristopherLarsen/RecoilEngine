@@ -46,6 +46,7 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(transportDescent),
 	CR_MEMBER(loadHeight),
 	CR_MEMBER(earlyDescent),
+	CR_MEMBER(orbitRadius),
 	CR_MEMBER(pickupCmd),
 
 	CR_MEMBER(horSpeed),
@@ -282,10 +283,15 @@ bool CSupComAirMoveType::SetMemberValue(unsigned int memberHash, void* memberVal
 	static const unsigned int speedResponseHash = spring::LiteHash("supcomSpeedResponse", 19, 0);
 	static const unsigned int luaAttackGoalHash = spring::LiteHash("supcomLuaAttackGoal", 19, 0);
 	static const unsigned int combatTurnRateHash = spring::LiteHash("supcomCombatTurnRate", 20, 0);
+	static const unsigned int orbitRadiusHash = spring::LiteHash("supcomOrbitRadius", 17, 0);
 
 	if (memberHash == luaAttackGoalHash) {
 		// Lua passes a boolean as bool*, a number as float*; the key is boolean
 		luaAttackGoal = *reinterpret_cast<bool*>(memberValue);
+		return true;
+	}
+	if (memberHash == orbitRadiusHash) {
+		orbitRadius = std::max(0.0f, *reinterpret_cast<float*>(memberValue));
 		return true;
 	}
 	if (memberHash == combatTurnRateHash) {
@@ -343,7 +349,16 @@ void CSupComAirMoveType::UpdateFlight()
 		lastAimDist = aimDist;
 
 		// always forwards along the heading, turning towards the goal (round it when idle)
-		if (!passOut && aimDist > 1.0f)
+		if (orbitRadius > 0.0f && AttackTarget() == nullptr && aimDist > 1.0f) {
+			// supcomOrbitRadius (set from Lua, e.g. an aircraft waiting to be stored): hold a circle of that radius round the
+			// goal instead of passes; the steer mixes the tangent with the radial error (as tight as the turn rate allows)
+			passOut = false;
+			const float3 radial = toAim / aimDist;
+			const float3 tangent = float3(-radial.z, 0.0f, radial.x);
+			const float k = std::clamp((aimDist - orbitRadius) / orbitRadius * 2.0f, -1.0f, 3.0f);
+			const float3 want = tangent + radial * k;
+			wantedHeading = GetHeadingFromVector(want.x, want.z);
+		} else if (!passOut && aimDist > 1.0f)
 			wantedHeading = GetHeadingFromVector(toAim.x, toAim.z);
 
 		dir = GetVectorFromHeading(owner->heading);
