@@ -152,6 +152,8 @@ struct MoveDef {
 	/// of the footprint
 	int xsize = 0, xsizeh = 0;
 	int zsize = 0, zsizeh = 0;
+	/// supcom: squares on the high side of the centre square (= xsizeh for an odd size; one less for an even size)
+	int xsizeHi = 0, zsizeHi = 0;
 
 	/// minWaterDepth for ships, maxWaterDepth otherwise
 	/// controls movement and (un-)loading constraints

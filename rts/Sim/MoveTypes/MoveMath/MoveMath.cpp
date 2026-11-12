@@ -169,7 +169,7 @@ CMoveMath::BlockType CMoveMath::IsBlockedNoSpeedModCheck(const MoveDef& moveDef,
 			: MoveTypes::CheckCollisionQuery(&moveDef);
 	collisionQuery.UpdateElevationForPos(int2{xSquare, zSquare});
 
-	return RangeIsBlocked(xSquare - moveDef.xsizeh, xSquare + moveDef.xsizeh, zSquare - moveDef.zsizeh, zSquare + moveDef.zsizeh, &collisionQuery, thread);
+	return RangeIsBlocked(xSquare - moveDef.xsizeh, xSquare + moveDef.xsizeHi, zSquare - moveDef.zsizeh, zSquare + moveDef.zsizeHi, &collisionQuery, thread);
 }
 
 CMoveMath::BlockType CMoveMath::IsBlockedNoSpeedModCheckDiff(const MoveDef& moveDef, int2 prevSqr, int2 newSqr, const CSolidObject* collider, int thread)
@@ -178,13 +178,13 @@ CMoveMath::BlockType CMoveMath::IsBlockedNoSpeedModCheckDiff(const MoveDef& move
 	// prev allows {-1, -1} so that the first check is always treated as a full test
 	const int prev_xmin = std::max(prevSqr.x - moveDef.xsizeh,               -1);
 	const int prev_zmin = std::max(prevSqr.y - moveDef.zsizeh,               -1);
-	const int prev_xmax = std::min(prevSqr.x + moveDef.xsizeh, mapDims.mapx - 1);
-	const int prev_zmax = std::min(prevSqr.y + moveDef.zsizeh, mapDims.mapy - 1);
+	const int prev_xmax = std::min(prevSqr.x + moveDef.xsizeHi, mapDims.mapx - 1);
+	const int prev_zmax = std::min(prevSqr.y + moveDef.zsizeHi, mapDims.mapy - 1);
 
 	const int xmin = std::max(newSqr.x - moveDef.xsizeh,                0);
 	const int zmin = std::max(newSqr.y - moveDef.zsizeh,                0);
-	const int xmax = std::min(newSqr.x + moveDef.xsizeh, mapDims.mapx - 1);
-	const int zmax = std::min(newSqr.y + moveDef.zsizeh, mapDims.mapy - 1);
+	const int xmax = std::min(newSqr.x + moveDef.xsizeHi, mapDims.mapx - 1);
+	const int zmax = std::min(newSqr.y + moveDef.zsizeHi, mapDims.mapy - 1);
 
 	BlockType ret = BLOCK_NONE;
 
@@ -196,10 +196,10 @@ CMoveMath::BlockType CMoveMath::IsBlockedNoSpeedModCheckDiff(const MoveDef& move
 	const int tempNum = gs->GetMtTempNum(thread);
 
 	// footprints are point-symmetric around <xSquare, zSquare>
-	for (int z = zmin; z <= zmax; z += FOOTPRINT_ZSTEP) {
+	for (int z = zmin; z <= zmax; z = (z == zmax || z + FOOTPRINT_ZSTEP <= zmax)? z + FOOTPRINT_ZSTEP: zmax) {
 		const int zOffset = z * mapDims.mapx;
 
-		for (int x = xmin; x <= xmax; x += FOOTPRINT_XSTEP) {
+		for (int x = xmin; x <= xmax; x = (x == xmax || x + FOOTPRINT_XSTEP <= xmax)? x + FOOTPRINT_XSTEP: xmax) {
 
 			if (		z <= prev_zmax && z >= prev_zmin
 			 		&& 	x <= prev_xmax && x >= prev_xmin)
@@ -387,10 +387,10 @@ CMoveMath::BlockType CMoveMath::RangeIsBlockedMt(int xmin, int xmax, int zmin, i
 	BlockType ret = BLOCK_NONE;
 
 	// footprints are point-symmetric around <xSquare, zSquare>
-	for (int z = zmin; z <= zmax; z += FOOTPRINT_ZSTEP) {
+	for (int z = zmin; z <= zmax; z = (z == zmax || z + FOOTPRINT_ZSTEP <= zmax)? z + FOOTPRINT_ZSTEP: zmax) {
 		const int zOffset = z * mapDims.mapx;
 
-		for (int x = xmin; x <= xmax; x += FOOTPRINT_XSTEP) {
+		for (int x = xmin; x <= xmax; x = (x == xmax || x + FOOTPRINT_XSTEP <= xmax)? x + FOOTPRINT_XSTEP: xmax) {
 			const CGroundBlockingObjectMap::BlockingMapCell& cell = groundBlockingObjectMap.GetCellUnsafeConst(zOffset + x);
 
 			for (size_t i = 0, n = cell.size(); i < n; i++) {
@@ -440,10 +440,10 @@ CMoveMath::BlockType CMoveMath::RangeIsBlockedHashedMt(int xmin, int xmax, int z
 	}
 
 	// footprints are point-symmetric around <xSquare, zSquare>
-	for (int z = zmin; z <= zmax; z += FOOTPRINT_ZSTEP) {
+	for (int z = zmin; z <= zmax; z = (z == zmax || z + FOOTPRINT_ZSTEP <= zmax)? z + FOOTPRINT_ZSTEP: zmax) {
 		const int zOffset = z * mapDims.mapx;
 
-		for (int x = xmin; x <= xmax; x += FOOTPRINT_XSTEP) {
+		for (int x = xmin; x <= xmax; x = (x == xmax || x + FOOTPRINT_XSTEP <= xmax)? x + FOOTPRINT_XSTEP: xmax) {
 			const CGroundBlockingObjectMap::BlockingMapCell& cell = groundBlockingObjectMap.GetCellUnsafeConst(zOffset + x);
 
 			for (size_t i = 0, n = cell.size(); i < n; i++) {
@@ -506,8 +506,8 @@ void CMoveMath::FloodFillRangeIsBlocked(const MoveDef& moveDef, const CSolidObje
 }
 
 bool CMoveMath::RangeHasExitOnly(int xmin, int xmax, int zmin, int zmax, const ObjectCollisionMapHelper& object) {
-	for (int z = zmin; z <= zmax; z += FOOTPRINT_ZSTEP) {
-		for (int x = xmin; x <= xmax; x += FOOTPRINT_XSTEP)
+	for (int z = zmin; z <= zmax; z = (z == zmax || z + FOOTPRINT_ZSTEP <= zmax)? z + FOOTPRINT_ZSTEP: zmax) {
+		for (int x = xmin; x <= xmax; x = (x == xmax || x + FOOTPRINT_XSTEP <= xmax)? x + FOOTPRINT_XSTEP: xmax)
 			if (object.IsExitOnlyAt(x, z)) return true;
 	}
 	return false;

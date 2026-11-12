@@ -33,6 +33,8 @@ CR_REG_METADATA(MoveDef, (
 	CR_MEMBER(xsizeh),
 	CR_MEMBER(zsize),
 	CR_MEMBER(zsizeh),
+	CR_MEMBER(xsizeHi),
+	CR_MEMBER(zsizeHi),
 
 	CR_MEMBER(depth),
 	CR_MEMBER(depthModParams),
@@ -317,11 +319,17 @@ MoveDef::MoveDef(const LuaTable& moveDefTable): MoveDef() {
 	zsize = zsizeDef * SPRING_FOOTPRINT_SCALE;
 	xsize -= ((xsize & 1)? 0: 1);
 	zsize -= ((zsize & 1)? 0: 1);
+
+	// supcom: supcom_path_cells = N (>= 1) sets the planner footprint to N x N map squares (8 elmos each), even N
+	// included; an even footprint covers squares [c - N/2, c + N/2 - 1] around its square c
+	if (const int pathCells = moveDefTable.GetInt("supcom_path_cells", 0); pathCells > 0)
+		xsize = zsize = pathCells;
+
 	// precalculated data for MoveMath
 	xsizeh = xsize >> 1;
 	zsizeh = zsize >> 1;
-	assert((xsize & 1) == 1);
-	assert((zsize & 1) == 1);
+	xsizeHi = xsize - 1 - xsizeh;
+	zsizeHi = zsize - 1 - zsizeh;
 
 	int defaultHeight = xsize * SQUARE_SIZE;
 	if (speedModClass != MoveDef::KBot) {
@@ -548,8 +556,8 @@ bool MoveDef::DoRawSearch(
 			(int x, int z) -> bool {
 		const int xmin = std::max(x - xsizeh * (1 - centerOnly), 0);
 		const int zmin = std::max(z - zsizeh * (1 - centerOnly), 0);
-		const int xmax = std::min(x + xsizeh * (1 - centerOnly), mapDims.mapxm1);
-		const int zmax = std::min(z + zsizeh * (1 - centerOnly), mapDims.mapym1);
+		const int xmax = std::min(x + xsizeHi * (1 - centerOnly), mapDims.mapxm1);
+		const int zmax = std::min(z + zsizeHi * (1 - centerOnly), mapDims.mapym1);
 
 		// Height affects whether units in water collide or not, so the new y positions need
 		// to be considered or else we will get incorrect results.
@@ -643,8 +651,8 @@ bool MoveDef::TestMoveSquareRange(
 
 	const int xmin = xmid - xsizeh * (1 - centerOnly);
 	const int zmin = zmid - zsizeh * (1 - centerOnly);
-	const int xmax = xmid + xsizeh * (1 - centerOnly);
-	const int zmax = zmid + zsizeh * (1 - centerOnly);
+	const int xmax = xmid + xsizeHi * (1 - centerOnly);
+	const int zmax = zmid + zsizeHi * (1 - centerOnly);
 
 	float minSpeedMod = std::numeric_limits<float>::max();
 	int   maxBlockBit = CMoveMath::BLOCK_NONE;
@@ -696,8 +704,8 @@ bool MoveDef::TestMovePositionForObjects(
 
 	const int xmin = xmid - xsizeh;
 	const int zmin = zmid - zsizeh;
-	const int xmax = xmid + xsizeh;
-	const int zmax = zmid + zsizeh;
+	const int xmax = xmid + xsizeHi;
+	const int zmax = zmid + zsizeHi;
 
 	const CMoveMath::BlockType blockBits = CMoveMath::RangeIsBlockedTempNum(xmin, xmax, zmin, zmax, collider, magicNum, thread);
 	if (blockBits & CMoveMath::BLOCK_STRUCTURE)
@@ -727,8 +735,8 @@ bool MoveDef::IsInExitOnly(const float3 testMovePos) const {
 bool MoveDef::IsInExitOnly(int xmid, int zmid) const {
 	const int xmin = std::max(xmid - xsizeh, 0);
 	const int zmin = std::max(zmid - zsizeh, 0);
-	const int xmax = std::min(xmid + xsizeh, mapDims.mapxm1);
-	const int zmax = std::min(zmid + zsizeh, mapDims.mapym1);
+	const int xmax = std::min(xmid + xsizeHi, mapDims.mapxm1);
+	const int zmax = std::min(zmid + zsizeHi, mapDims.mapym1);
 
 	const ObjectCollisionMapHelper object;
 	return CMoveMath::RangeHasExitOnly(xmin, xmax, zmin, zmax, object);

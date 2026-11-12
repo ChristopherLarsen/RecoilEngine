@@ -137,14 +137,14 @@ bool QTPFS::NodeLayer::Update(UpdateThreadData& threadData, bool isInitialUpdate
 	auto rangeIsBlocked = [&blockRect, &blockBits](const MoveDef& md, int chmx, int chmz){
 		const int xmin = (chmx - md.xsizeh) - blockRect.x1;
 		const int zmin = (chmz - md.zsizeh) - blockRect.z1;
-		const int xmax = (chmx + md.xsizeh) - blockRect.x1;
-		const int zmax = (chmz + md.zsizeh) - blockRect.z1;
+		const int xmax = (chmx + md.xsizeHi) - blockRect.x1;
+		const int zmax = (chmz + md.zsizeHi) - blockRect.z1;
 		const int blockRectWidth = blockRect.GetWidth();
 		int ret = 0;
 
 		// footprints are point-symmetric around <xSquare, zSquare>
-		for (int z = zmin; z <= zmax; z += 2/*FOOTPRINT_ZSTEP*/) {
-			for (int x = xmin; x <= xmax; x += 2/*FOOTPRINT_XSTEP*/) {
+		for (int z = zmin; z <= zmax; z = (z == zmax || z + 2 <= zmax)? z + 2: zmax) {
+			for (int x = xmin; x <= xmax; x = (x == xmax || x + 2 <= xmax)? x + 2: xmax) {
 				ret |= blockBits[z * blockRectWidth + x];
 				if ((ret & CMoveMath::BLOCK_STRUCTURE) != 0)
 					return ret;
@@ -162,8 +162,8 @@ bool QTPFS::NodeLayer::Update(UpdateThreadData& threadData, bool isInitialUpdate
 	auto submersibleRangeIsBlocked = [this, &virtualObject, &queryState, &tempNum, &threadData](const MoveDef& md, int chmx, int chmz){
 		const int xmin = (chmx - md.xsizeh);
 		const int zmin = (chmz - md.zsizeh);
-		const int xmax = (chmx + md.xsizeh);
-		const int zmax = (chmz + md.zsizeh);
+		const int xmax = (chmx + md.xsizeHi);
+		const int zmax = (chmz + md.zsizeHi);
 
 		md.UpdateCheckCollisionQuery(virtualObject, queryState, {chmx, chmz});
 		if (queryState.refreshCollisionCache)
@@ -181,8 +181,8 @@ bool QTPFS::NodeLayer::Update(UpdateThreadData& threadData, bool isInitialUpdate
 	for (unsigned int hmz = r.z1; hmz < r.z2; ++hmz) {
 		for (unsigned int hmx = r.x1; hmx < r.x2; ++hmx, ++recIdx) {
 			// don't tesselate map edges when footprint extends across them in IsBlocked*
-			const int chmx = std::clamp(int(hmx), md->xsizeh, mapDims.mapxm1 + (-md->xsizeh));
-			const int chmz = std::clamp(int(hmz), md->zsizeh, mapDims.mapym1 + (-md->zsizeh));
+			const int chmx = std::clamp(int(hmx), md->xsizeh, mapDims.mapxm1 + (-md->xsizeHi));
+			const int chmz = std::clamp(int(hmz), md->zsizeh, mapDims.mapym1 + (-md->zsizeHi));
 
 			int maxBlockBit = (!isSubmersible) ? rangeIsBlocked(*md, chmx, chmz)
 											  : submersibleRangeIsBlocked(*md, chmx, chmz);
