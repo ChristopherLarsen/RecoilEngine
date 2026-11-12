@@ -327,6 +327,10 @@ void CSupComAirMoveType::UpdateFlight()
 	const float3 toGoal = (goalPos - pos) * XZVector;
 	const float goalDist = toGoal.Length2D();
 
+	// supcomOrbitRadius: slow enough that the turning circle fits the orbit (speed <= turn rate x radius)
+	if (winged && orbitRadius > 0.0f && AttackTarget() == nullptr)
+		topSpeed = std::min(topSpeed, std::max(0.1f, turnRate * math::TWOPI / SPRING_CIRCLE_DIVS * orbitRadius));
+
 	float3 dir;
 
 	if (winged) {
