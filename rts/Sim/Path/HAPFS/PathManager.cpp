@@ -22,6 +22,7 @@
 #include "System/Threading/ThreadPool.h"
 
 #include "PathGlobal.h"
+#include "SupComPathEarlyStop.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -501,6 +502,12 @@ CPathManager::MultiPath CPathManager::IssuePathRequest(
 	newPath.finalGoal = goalPos;
 	newPath.caller = caller;
 	newPath.peDef.synced = synced;
+
+	// supcom hook (SupComPathEarlyStop.h, PathEarlyStop): a walled-in start gives the stock result, Error, without the searches
+	if (SupComPathEarlyStop::On() && SupComPathEarlyStop::StartWalledIn(*moveDef, startPos, goalPos, goalRadius, caller)) {
+		newPath.searchResult = IPath::Error;
+		return newPath;
+	}
 
 	const IPath::SearchResult result = ArrangePath(&newPath, moveDef, startPos, goalPos, caller);
 	if (result != IPath::Error) {
