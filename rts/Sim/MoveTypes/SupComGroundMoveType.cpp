@@ -1016,7 +1016,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			dist = Advance(topSpeed, stopDist, stop);
 	}
 
-	scRestart = false;
+	// a pending restart waits through frames at rest (turning on the spot, the edge dead time) for the first step taken
+	if (dist > 0.0f || stop || scBraking)
+		scRestart = false;
 
 	const float3 motionDir = MotionDir();
 	float3 moveRequest = motionDir * (dist * scDir);
