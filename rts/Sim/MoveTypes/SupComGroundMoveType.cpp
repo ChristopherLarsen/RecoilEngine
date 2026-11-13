@@ -975,6 +975,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	// resting with the footprint against the map edge counts as held there (an order that ended on arrival at the edge)
 	if (restartDelay > 0 && scSpeed <= 0.0f && !blockedSinceMove && FootprintAtMapEdge())
 		blockedSinceMove = true;
+	// at rest against the map edge with an order: the edge blocked the last step, so the next one is a blocked restart (MOV-007 R3)
+	if (blockedRestart > 0.0f && scSpeed <= 0.0f && !stop && !scBraking && FootprintAtMapEdge())
+		scRestart = true;
 	if (restartDelay > 0 && blockedSinceMove && !stop && scSpeed <= 0.0f) {
 		if (!goalPos.equals(deadGoal)) {
 			deadGoal = goalPos;
