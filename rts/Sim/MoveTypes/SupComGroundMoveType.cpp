@@ -35,6 +35,7 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(baseTurnRate),
 	CR_MEMBER(turnAccelFactor),
 	CR_MEMBER(turnRadius),
+	CR_MEMBER(inPlaceRate),
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
 	CR_MEMBER(blockedRestart),
@@ -200,6 +201,7 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	}
 	uprightSink = std::max(0.0f, CustomParam(ud, "supcom_upright_sink", 0.0f));
 	turnRadius = std::max(0.0f, CustomParam(ud, "supcom_turn_radius", 0.0f));
+	inPlaceRate = std::max(0.0f, CustomParam(ud, "supcom_turn_in_place_rate", 0.0f)) * (SPRING_CIRCLE_DIVS / 360.0f) / GAME_SPEED;
 	footprintX = std::max(0.0f, CustomParam(ud, "supcom_footprint_x", md->xsize * SQUARE_SIZE));
 	footprintZ = std::max(0.0f, CustomParam(ud, "supcom_footprint_z", md->zsize * SQUARE_SIZE));
 	sinkLower = (CustomParam(ud, "supcom_sink_lower", 0.0f) != 0.0f);
@@ -786,6 +788,11 @@ void CSupComGroundMoveType::UpdateTurnRate()
 
 	if (turnRadius > 0.0f)
 		rate = std::max(rate, (scSpeed / turnRadius) * (SPRING_CIRCLE_DIVS / math::TWOPI));
+
+	// supcom_turn_in_place_rate (deg/s): a unit stopped or nearly stopped (under a tenth of its top speed) turns at
+	// least this fast, so a moving turn radius above 0 keeps a standstill turn time
+	if (inPlaceRate > 0.0f && math::fabs(scSpeed) <= maxSpeed * 0.1f)
+		rate = std::max(rate, inPlaceRate);
 
 	turnRate = std::clamp(rate, 1.0f, SPRING_CIRCLE_DIVS * 0.5f - 1.0f);
 	turnAccel = turnRate * turnAccelFactor;

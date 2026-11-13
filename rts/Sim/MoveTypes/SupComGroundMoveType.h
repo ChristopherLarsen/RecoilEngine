@@ -154,6 +154,7 @@ private:
 	float baseTurnRate = 0.0f;   ///< turn rate limit at low speed (heading units per frame)
 	float turnAccelFactor = 0.333f; ///< turn acceleration per unit of turn rate (the base class's ratio)
 	float turnRadius = 0.0f;     ///< elmos; 0 means none
+	float inPlaceRate = 0.0f;    ///< heading units per frame while stopped or nearly stopped; 0 means none
 	float settleRate = 1.0f;     ///< per frame
 	float stopSpeed = 0.0f;      ///< elmos per frame
 	float blockedRestart = 0.0f; ///< fraction of the top speed
