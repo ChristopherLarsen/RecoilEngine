@@ -213,6 +213,10 @@ void CTimeProfiler::ToggleLock(bool lock)
 
 void CTimeProfiler::Update()
 {
+	// supcom hook (SupComProfiler.h, SupComProfiler): record every timer without the /debug overlay
+	if (!enabled && SupComProfiler::On())
+		enabled = true;
+
 	if (!enabled) {
 		UpdateRaw();
 		ResortProfilesRaw();
