@@ -354,7 +354,9 @@ void CSupComAirMoveType::UpdateFlight()
 		if (passSwing > 0.0f) {
 			if (passOut) {
 				passOut = (aimDist < ((passRun > 0.0f)? passRun: passSwing));
-			} else if (aimDist < passSwing * 0.25f && aimDist > lastAimDist) {
+			} else if ((aimDist < passSwing * 0.25f || aimDist < passRun) && aimDist > lastAimDist) {
+				// moving away inside the overflight distance (supcom_air_pass_overflight) also runs out: a pass the game
+				// lengthened with a move leg (mov_air_pass) resumes the attack outbound and holds its line to that distance
 				passOut = true;
 			}
 		}
