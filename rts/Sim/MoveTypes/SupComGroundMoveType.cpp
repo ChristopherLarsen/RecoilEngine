@@ -996,11 +996,15 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		scSpeed = 0.0f;
 		dist = 0.0f;
 	} else if (scRestart && !stop && !scBraking) {
-		// the step after a blocked one is taken at the restart speed
+		// the step after a blocked one is taken at the restart speed, once any turn on the spot from rest is done
 		scDir = wantDir;
-		scPhase = PHASE_DRIVE;
-		scSpeed = std::min(topSpeed, blockedRestart * maxSpeed);
-		dist = scSpeed;
+		if (scSpeed <= 0.0f && HoldForTurn(wantDir)) {
+			dist = 0.0f;
+		} else {
+			scPhase = PHASE_DRIVE;
+			scSpeed = std::min(topSpeed, blockedRestart * maxSpeed);
+			dist = scSpeed;
+		}
 	} else if (scSpeed > 0.0f && wantDir != scDir) {
 		// change of direction: brake to rest first
 		dist = Advance(topSpeed, NO_STOP, true);
