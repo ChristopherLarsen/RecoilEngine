@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "System/TimeProfiler.h"
+#include "System/SupComProfiler.h"
 #include "System/GlobalRNG.h"
 #include "System/StringHash.h"
 #include "System/Log/ILog.h"
