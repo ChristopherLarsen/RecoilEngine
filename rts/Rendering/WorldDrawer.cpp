@@ -469,6 +469,7 @@ void CWorldDrawer::DrawAlphaObjects() const
 
 void CWorldDrawer::DrawMiscObjects() const
 {
+	SCOPED_TIMER("Draw::World::Misc"); // supcom: diagnosis timer (SupComProfiler)
 
 	{
 		// note: duplicated in CMiniMap::DrawWorldStuff()
@@ -482,8 +483,10 @@ void CWorldDrawer::DrawMiscObjects() const
 	// either draw from here, or make {Dyn,Bump}Water use blending
 	// pro: icons are drawn only once per frame, not every pass
 	// con: looks somewhat worse for underwater / obscured icons
-	if (!CUnitDrawer::UseScreenIcons())
+	if (!CUnitDrawer::UseScreenIcons()) {
+		SCOPED_TIMER("Draw::World::Icons"); // supcom: diagnosis timer (SupComProfiler)
 		unitDrawer->DrawUnitIcons();
+	}
 
 	lineDrawer.DrawAll();
 	cursorIcons.Draw();
