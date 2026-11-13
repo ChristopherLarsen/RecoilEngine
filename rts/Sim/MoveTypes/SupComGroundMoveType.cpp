@@ -985,8 +985,10 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		if (gs->frameNum < deadUntil) {
 			deadHold = true;
 		} else {
+			// the hold ends as a blocked restart: the first step is taken at the restart speed
 			blockedSinceMove = false;
 			deadUntil = -1;
+			scRestart = !scBraking;
 		}
 	}
 
