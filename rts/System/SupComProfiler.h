@@ -9,7 +9,7 @@
 // Header-only for the profiler: SupComProfiler.cpp registers the config reader, so code linked without it (unit tests)
 // reads "off".
 namespace SupComProfiler {
-	inline bool (*reader)() = nullptr;
+	inline int (*reader)() = nullptr; // 1 on, 0 off, -1 not readable yet
 	inline int state = -1;
 
 	inline bool On()
@@ -17,7 +17,7 @@ namespace SupComProfiler {
 		if (state < 0) {
 			if (reader == nullptr)
 				return false;
-			const int s = reader()? 1: 0;
+			const int s = reader();
 			if (s < 0)
 				return false;
 			state = s;

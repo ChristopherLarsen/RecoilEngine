@@ -8,7 +8,7 @@ CONFIG(bool, SupComProfiler).defaultValue(false).description("supcom: 1 keeps th
 
 namespace {
 	// read once the config exists; until then the profiler stays as stock
-	bool ReadConfig() { return (configHandler != nullptr && configHandler->GetBool("SupComProfiler")); }
+	int ReadConfig() { return (configHandler == nullptr)? -1: (configHandler->GetBool("SupComProfiler")? 1: 0); }
 
 	struct Register { Register() { SupComProfiler::reader = &ReadConfig; } } registerReader;
 }
