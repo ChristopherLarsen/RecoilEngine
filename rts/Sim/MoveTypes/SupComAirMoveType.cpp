@@ -48,6 +48,10 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(earlyDescent),
 	CR_MEMBER(orbitRadius),
 	CR_MEMBER(pickupCmd),
+	CR_MEMBER(attackDip),
+	CR_MEMBER(takeoffOvershoot),
+	CR_MEMBER(takeoffPeak),
+	CR_MEMBER(passRun),
 
 	CR_MEMBER(horSpeed),
 	CR_MEMBER(idleStage),
@@ -111,6 +115,9 @@ CSupComAirMoveType::CSupComAirMoveType(CUnit* owner): CHoverAirMoveType(owner)
 	loadHeight = std::max(0.0f, CustomParam(ud, "supcom_air_load_height", 0.0f));
 	earlyDescent = (CustomParam(ud, "supcom_air_early_descent", 0.0f) != 0.0f);
 	pickupCmd = int(CustomParam(ud, "supcom_air_pickup_cmd", 0.0f));
+	attackDip = std::max(0.0f, CustomParam(ud, "supcom_air_attack_dip", 0.0f));
+	passRun = std::max(0.0f, CustomParam(ud, "supcom_air_pass_overflight", 0.0f));
+	takeoffOvershoot = std::max(0.0f, CustomParam(ud, "supcom_air_takeoff_overshoot", 0.0f));
 
 	// the cruise height exactly as defined (the base class adds a random offset)
 	cruiseHeight = ud->wantedHeight;
@@ -240,6 +247,8 @@ bool CSupComAirMoveType::Update()
 			return true;
 		}
 		case AIRCRAFT_TAKEOFF: {
+			// a hovering aircraft leaving the ground climbs past the cruise height first (supcom_air_takeoff_overshoot)
+			takeoffPeak = (!winged && takeoffOvershoot > 0.0f);
 			SetState(AIRCRAFT_FLYING);
 			UpdateIdle();
 			UpdateFlight();
@@ -344,7 +353,7 @@ void CSupComAirMoveType::UpdateFlight()
 		// passes: overshoot the aim point, run straight out to the swing distance, then turn back
 		if (passSwing > 0.0f) {
 			if (passOut) {
-				passOut = (aimDist < passSwing);
+				passOut = (aimDist < ((passRun > 0.0f)? passRun: passSwing));
 			} else if (aimDist < passSwing * 0.25f && aimDist > lastAimDist) {
 				passOut = true;
 			}
@@ -425,7 +434,27 @@ void CSupComAirMoveType::UpdateFlight()
 		const float downRate = (transportDescent > 0.0f && inTransport)? transportDescent: climbRate;
 		// supcom_air_early_descent: under a transport order the transport lowers to its load height from the order on,
 		// during the approach, not only once the command AI has it over the spot
-		const float wh = (earlyDescent && loadHeight > 0.0f && inTransport)? std::min(wantedHeight, loadHeight): wantedHeight;
+		float wh = (earlyDescent && loadHeight > 0.0f && inTransport)? std::min(wantedHeight, loadHeight): wantedHeight;
+
+		// take-off overshoot: the raised height until it is reached, then the plain wanted height; any order but a
+		// plain flight (transport, idle lowering) ends it
+		if (takeoffPeak) {
+			const float peak = wantedHeight * (1.0f + takeoffOvershoot);
+
+			if (inTransport || wantedHeight != cruiseHeight || (pos.y - ref) >= peak - 0.5f)
+				takeoffPeak = false;
+			else
+				wh = peak;
+		}
+
+		// attack dip: inbound on an attack order (not running out past the aim point), within 1.5 s of flight of it
+		if (winged && attackDip > 0.0f && !passOut && InAttackOrder()) {
+			const float aimDist = ((goalPos - pos) * XZVector).Length2D();
+
+			if (aimDist < topSpeed * GAME_SPEED * 1.5f)
+				wh = std::max(0.0f, wh - attackDip);
+		}
+
 		newY = pos.y + std::clamp((ref + wh) - pos.y, -downRate, climbRate);
 	}
 
@@ -478,6 +507,12 @@ const CUnit* CSupComAirMoveType::AttackTarget() const
 		return nullptr;
 
 	return target;
+}
+
+bool CSupComAirMoveType::InAttackOrder() const
+{
+	const auto& queue = owner->commandAI->commandQue;
+	return (!queue.empty() && queue.front().GetID() == CMD_ATTACK);
 }
 
 bool CSupComAirMoveType::InTransportOrder() const

@@ -27,8 +27,12 @@ struct UnitDef;
  *    (`supcom_air_land_decay`, per second), optionally holding `supcom_air_land_hold_height` (elmos) for
  *    `supcom_air_land_hold_time` seconds, and lands under 0.1 map units above the ground;
  *  - attacking, a winged aircraft re-aims at its target's current position every frame and makes passes: it
- *    overshoots, runs out to `supcom_air_pass_swing` (elmos) and turns back; it banks with its turn rate, up to
+ *    overshoots, runs out to `supcom_air_pass_overflight` (elmos; else `supcom_air_pass_swing`) and turns back; it banks with its turn rate, up to
  *    `supcom_air_max_bank` degrees (presentation);
+ *  - attacking, a winged aircraft inbound to its aim point lowers by `supcom_air_attack_dip` (elmos) below the cruise
+ *    height over the last 1.5 s of flight before it (bomb runs);
+ *  - a hovering aircraft taking off from the ground climbs to the cruise height raised by `supcom_air_takeoff_overshoot`
+ *    (a fraction of it) and then settles back to the cruise height;
  *  - a transport under a load or unload order lowers at no more than `supcom_air_transport_descent` (elmos per
  *    second) and loads and unloads holding `supcom_air_load_height` (elmos) above the ground (TransportHeight).
  *
@@ -89,6 +93,7 @@ private:
 	void UpdateBank(short oldHeading);
 	const CUnit* AttackTarget() const;
 	bool InTransportOrder() const;
+	bool InAttackOrder() const;
 
 	/// a horizontal step rounded towards zero onto the float grid around position p
 	static float GridStepDown(float p, float d);
@@ -116,6 +121,13 @@ private:
 	bool earlyDescent = false;
 	/// customParams supcom_air_pickup_cmd: a game command id that counts as a transport order (0: none)
 	int pickupCmd = 0;
+	/// customParams supcom_air_attack_dip (elmos; 0: none): winged, inbound on an attack order, this far below the cruise height
+	float attackDip = 0.0f;
+	/// customParams supcom_air_takeoff_overshoot (fraction of the cruise height; 0: none): hovering take-off peak
+	float takeoffOvershoot = 0.0f;
+	/// customParams supcom_air_pass_overflight (elmos; 0: the pass swing): how far past the aim point a pass runs out
+	/// before turning back, where it differs from the break-off distance
+	float passRun = 0.0f;
 	/// Lua supcomOrbitRadius (elmos; 0: off): a winged aircraft with no attack target circles its goal at this radius instead of passes
 	float orbitRadius = 0.0f;
 
@@ -125,6 +137,7 @@ private:
 	int idleFrame = 0;           ///< frame the current idle stage started
 	float idleHeight = 0.0f;     ///< height above the ground when the current lowering stage started
 	bool falling = false;
+	bool takeoffPeak = false;    ///< climbing to the take-off overshoot height
 	bool passOut = false;        ///< past the target, running out before turning back
 	float lastAimDist = 0.0f;
 	float3 fallVelocity;         ///< elmos per frame
