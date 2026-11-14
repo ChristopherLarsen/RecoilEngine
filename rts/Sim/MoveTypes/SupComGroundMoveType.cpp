@@ -234,6 +234,7 @@ void CSupComGroundMoveType::ResetForNewOrder()
 	smoothFrame = -1;
 	smoothPts.clear();
 	crowdFrames = 0;
+	holdBestDist = -1.0f;
 	gqKey = -1;
 	gqDoneKey = -1;
 	gqFrame = -1;
@@ -327,17 +328,10 @@ bool CSupComGroundMoveType::HoldLastLeg()
 	if (earlyCurrWayPoint.y < 0.0f || earlyCurrWayPoint.SqDistance2D(goalPos) > Square(SQUARE_SIZE))
 		return false;
 
-	// a unit that circles the goal without getting closer (a turn circle wider than its goal radius: base-cross L4813, tank orbiting
-	// 8.0 to 8.2 elmos from a goal radius of 8) gets the stock failure after a second of no progress, from where it is
-	// (values: 1 s and 0.5 elmo are DESIGN, this function: well under one orbit, well over float noise)
-	const float dist = owner->pos.distance2D(goalPos);
-	if (holdBestDist < 0.0f || holdGoal != goalPos || dist < holdBestDist - 0.5f) {
+	if (holdBestDist < 0.0f || holdGoal != goalPos) {
 		holdGoal = goalPos;
-		holdBestDist = dist;
+		holdBestDist = owner->pos.distance2D(goalPos);
 		holdBestFrame = gs->frameNum;
-	} else if (gs->frameNum - holdBestFrame > GAME_SPEED) {
-		holdBestDist = -1.0f;
-		return false;
 	}
 
 	earlyNextWayPoint = goalPos;
@@ -866,6 +860,29 @@ void CSupComGroundMoveType::HoldEarlyArrival()
 	crowdFrames++;
 }
 
+void CSupComGroundMoveType::HeldLegProgress()
+{
+	// a unit on a held last leg (HoldLastLeg) that circles the goal without getting closer (a turn circle wider than its goal
+	// radius: base-cross L4813, tank orbiting 8.0 to 8.2 elmos from a goal radius of 8) gets the stock failure after a second of
+	// no progress, from where it is (values: 1 s and 0.5 elmo are DESIGN, this function: well under one orbit, over float noise)
+	if (holdBestDist < 0.0f)
+		return;
+	if (holdGoal != goalPos || progressState != Active || atGoal || pathingArrived || pathingFailed) {
+		holdBestDist = -1.0f;
+		return;
+	}
+	const float dist = owner->pos.distance2D(goalPos);
+	if (dist < holdBestDist - 0.5f) {
+		holdBestDist = dist;
+		holdBestFrame = gs->frameNum;
+		return;
+	}
+	if (gs->frameNum - holdBestFrame <= GAME_SPEED)
+		return;
+	holdBestDist = -1.0f;
+	pathingFailed = true;
+}
+
 bool CSupComGroundMoveType::IsAtGoal() const
 {
 	// the command AI finishes the order on this: a crowd arrival set by this frame's collisions waits as in HoldEarlyArrival
@@ -881,6 +898,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	// before the engine acts on this frame's arrival flags (UpdatePreCollisions)
 	HoldEarlyArrival();
+	HeldLegProgress();
 
 	if (owner->UnderFirstPersonControl()) {
 		CGroundMoveType::UpdateUnitPosition();
