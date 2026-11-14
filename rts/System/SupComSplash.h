@@ -4,8 +4,8 @@
 #define SUPCOM_SPLASH_H
 
 namespace SupComSplash {
-	// config SplashScreenText (default 1): 0 hides the splash progress lines ("[Initializing Virtual File System]", archives,
-	// scan time); the version and licence notice stay
+	// config SplashScreenText (default 1): 0 hides all splash text (progress lines, version and licence notice:
+	// the game shows the engine licence in its credits); the splash image alone shows
 	bool ShowProgressText();
 	// config LoadScreenClearColor ("r g b" 0-255, default "5 9 13"): the load screen is cleared to it until LuaIntro draws
 	void ClearBeforeIntro();

@@ -7,7 +7,7 @@
 #include "Rendering/GL/myGL.h"
 #include "System/Config/ConfigHandler.h"
 
-CONFIG(bool, SplashScreenText).defaultValue(true).description("supcom: 0 hides the splash screen progress text (the version and licence notice stay).");
+CONFIG(bool, SplashScreenText).defaultValue(true).description("supcom: 0 hides all splash screen text (the game shows the engine licence in its credits).");
 CONFIG(std::string, LoadScreenClearColor).defaultValue("5 9 13").description("supcom: \"r g b\" (0-255) the load screen is cleared to until LuaIntro draws.");
 
 bool SupComSplash::ShowProgressText() { return configHandler->GetBool("SplashScreenText"); }

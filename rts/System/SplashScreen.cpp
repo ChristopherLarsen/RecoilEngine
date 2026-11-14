@@ -99,13 +99,15 @@ void ShowSplashScreen(
 		font->End();
 		}
 
-		// always render Spring's license notice
+		// always render Spring's license notice (supcom: unless SplashScreenText is 0; the game shows the licence in its credits)
+		if (SupComSplash::ShowProgressText()) {
 		font->Begin();
 		font->SetOutlineColor(0.0f, 0.0f, 0.0f, 0.65f);
 		font->SetTextColor(color.x, color.y, color.z, color.w);
 		font->glFormat(coors.x - (normWidth[2] * 0.5f), coors.y * 0.5f - (coors.w * coors.z * 1.0f), coors.z, fontFlags | FONT_OUTLINE, versionStrBuf);
 		font->glFormat(coors.x - (normWidth[1] * 0.5f), coors.y * 0.5f - (coors.w * coors.z * 2.0f), coors.z, fontFlags | FONT_OUTLINE, fmtStrs[4]);
 		font->End();
+		}
 
 		globalRendering->SwapBuffers(true, true);
 
