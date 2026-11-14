@@ -17,9 +17,21 @@
 
 #include <set>
 
+#include <SDL_events.h>
 #include <SDL_keyboard.h>
 #include <SDL_keycode.h>
 #include <SDL_mouse.h>
+
+/* supcom: debug.emulateWindowClose() queues SDL_QUIT, the event of the window close button and Alt+F4: the next event pump runs
+ * the same quit request (the AllowQuit call-in, then quit unless a handle returns false). Returns true when the event was queued. */
+static int EmulateWindowClose(lua_State* L)
+{
+	SDL_Event ev = {};
+	ev.type = SDL_QUIT;
+	lua_pushboolean(L, SDL_PushEvent(&ev) == 1);
+	return 1;
+}
+
 
 
 /******************************************************************************
@@ -44,6 +56,7 @@ bool LuaDebugExtra::PushEntries(lua_State* L)
 	LuaPushNamedCFunc(L, "emulateKeyRelease",   EmulateKeyRelease);
 	LuaPushNamedCFunc(L, "emulateMousePress",   EmulateMousePress);
 	LuaPushNamedCFunc(L, "emulateMouseRelease", EmulateMouseRelease);
+	LuaPushNamedCFunc(L, "emulateWindowClose",  EmulateWindowClose);
 	LuaPushNamedCFunc(L, "emulateMouseMove",    EmulateMouseMove);
 	LuaPushNamedCFunc(L, "emulateMouseWheel",   EmulateMouseWheel);
 	LuaPushNamedCFunc(L, "clearEmulatedInput",  ClearEmulatedInputLua);
