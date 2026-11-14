@@ -147,9 +147,9 @@ float CKardashevCamera::ElevCurve(float u) const { return feel.elevNear + (feel.
 float CKardashevCamera::FovCurve(float u) const { return feel.fovNear + (feel.fovFar - feel.fovNear) * Shape(u, feel.shape); }
 float CKardashevCamera::CentreWeight(float u) const
 {
-	// centreFrom 1: no pull below the far limit, the focus pinned to the map centre at it
+	// centreFrom 1: no pull at any zoom; the player keeps the focus out to the far limit, subject only to the edge clamp
 	if (feel.centreFrom >= 1.0f)
-		return (u >= 1.0f)? 1.0f: 0.0f;
+		return 0.0f;
 
 	return Smooth((u - feel.centreFrom) / std::max(1e-3f, 1.0f - feel.centreFrom));
 }
