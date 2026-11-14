@@ -1,7 +1,7 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // supcom: see SupComUnitQuery.h.
 //   Spring.GetUnitArrays([teamID]) -> ids, xs, ys, zs, defIDs, teams, healths   (flat arrays, ascending unit id)
-//   Spring.GetUnitChanges()        -> frame, created, destroyed, moved          (unit ids, ascending; between the last two unit updates)
+//   Spring.GetUnitChanges()        -> frame, created, destroyed, moved          (unit ids, ascending; since the previous GameFrame)
 //   Spring.GetUnitsInCylinderSorted(x, z, radius [, filter]) -> ids, dists
 //     the units Spring.GetUnitsInCylinder(x, z, radius) returns (midPos inside the circle), kept by filter = { team =, allyTeam =,
 //     enemyOf = allyTeam, alive = true (not isDead), air = bool (UnitDef IsAirUnit), defs = { [defID] = true }, category = mask

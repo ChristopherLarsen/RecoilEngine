@@ -3,7 +3,6 @@
 #include <cassert>
 
 #include "UnitHandler.h"
-#include "Lua/SupComUnitQuery.h"
 #include "Unit.h"
 #include "UnitDefHandler.h"
 #include "UnitMemPool.h"
@@ -474,7 +473,6 @@ void CUnitHandler::Update()
 	SlowUpdateUnits();
 	UpdateUnits();
 	UpdateUnitWeapons();
-	SupComUnitQuery::OnUnitsUpdated(); // supcom: change lists for Spring.GetUnitChanges
 
 	inUpdateCall = false;
 }

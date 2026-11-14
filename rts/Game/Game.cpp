@@ -5,6 +5,7 @@
 #include <Rml/Backends/RmlUi_Backend.h>
 #include <RmlUi/Core.h>
 #include "Game.h"
+#include "Lua/SupComUnitQuery.h"
 #include "Camera.h"
 #include "CameraHandler.h"
 #include "ChatMessage.h"
@@ -1778,6 +1779,7 @@ void CGame::SimFrame() {
 			if (luaGCControl == 0)
 				eventHandler.CollectGarbage(false);
 
+			SupComUnitQuery::OnUnitsUpdated(); // supcom: change lists for Spring.GetUnitChanges
 			eventHandler.GameFrame(gs->frameNum);
 		}
 

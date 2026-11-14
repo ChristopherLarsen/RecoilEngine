@@ -8,7 +8,7 @@
 struct lua_State;
 
 namespace SupComUnitQuery {
-	// end of CUnitHandler::Update: the change lists (created, destroyed, moved) between this unit update and the one before
+	// just before eventHandler.GameFrame: the change lists (created, destroyed, moved) since the previous GameFrame
 	void OnUnitsUpdated();
 	void PushSyncedRead(lua_State* L);
 }
