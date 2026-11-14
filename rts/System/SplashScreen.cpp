@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "System/SupComSplash.h"
 #include <cstdint>
 
 #include <SDL.h>
@@ -89,12 +90,14 @@ void ShowSplashScreen(
 		rb.DrawElements(GL_TRIANGLES);
 		sh.Disable();
 
+		if (SupComSplash::ShowProgressText()) { // supcom: SplashScreenText
 		font->Begin();
 		font->SetTextColor(color.x, color.y, color.z, color.w);
 		font->glFormat(coors.x - (normWidth[0] * 0.500f), coors.y                             , coors.z, fontFlags, fmtStrs[0]);
 		font->glFormat(coors.x - (normWidth[0] * 0.475f), coors.y - (coors.w * coors.z * 1.0f), coors.z, fontFlags, fmtStrs[1], CArchiveScanner::GetNumScannedArchives());
 		font->glFormat(coors.x - (normWidth[0] * 0.475f), coors.y - (coors.w * coors.z * 2.0f), coors.z, fontFlags, fmtStrs[2], (t1 - t0).toMilliSecsf());
 		font->End();
+		}
 
 		// always render Spring's license notice
 		font->Begin();

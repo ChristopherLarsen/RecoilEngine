@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "System/SupComSplash.h"
 #include <SDL.h>
 #include <functional>
 
@@ -315,6 +316,7 @@ bool CLoadScreen::Draw()
 	if (luaMenu != nullptr)
 		luaMenu->Update();
 
+	if (luaIntro == nullptr) SupComSplash::ClearBeforeIntro(); // supcom: LoadScreenClearColor until LuaIntro draws
 	if (luaIntro != nullptr) {
 		luaIntro->Update();
 		luaIntro->DrawGenesis();
