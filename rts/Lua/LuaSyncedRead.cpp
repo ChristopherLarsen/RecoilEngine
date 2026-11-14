@@ -6201,6 +6201,7 @@ int LuaSyncedRead::GetUnitMoveTypeData(lua_State* L)
 			LuaPushNamedNumber(L, "supcomBlockedFrames", scmt->GetBlockedFrames());
 			LuaPushNamedBool(L, "supcomExactGoal", CSupComGroundMoveType::ExactGoalEnabled());
 			LuaPushNamedNumber(L, "supcomPhysState", unit->physicalState);
+			scmt->PushLuaState(L); // supcom: arrival radius, gap queue, crowd arrival, Q100 state
 		}
 
 		return 1;

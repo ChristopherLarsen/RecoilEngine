@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "SupComGroundMoveType.h"
+#include "Lua/LuaUtils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -195,6 +196,7 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	restartDelay = int(std::max(0.0f, CustomParam(ud, "supcom_blocked_restart_delay", 0.0f)) * GAME_SPEED + 0.5f);
 	// SupComTurnGo: reverse distance (elmos; 0 = the engine's own choice) and the move-off angle (degrees; 0 = off)
 	reverseDist = std::max(0.0f, CustomParam(ud, "supcom_reverse_dist", 0.0f));
+	goalRadiusParam = CustomParam(ud, "supcom_goal_radius", -1.0f);
 	{
 		const float a = CustomParam(ud, "supcom_turn_go_angle", 0.0f);
 		turnGoCos = (a > 0.0f && a < 180.0f)? math::cos(a * math::DEG_TO_RAD): 2.0f;
@@ -264,6 +266,27 @@ void CSupComGroundMoveType::ExactGoalRadius()
 {
 	if (ExactGoalOn() && extraRadius > 0.0f && FootprintFitsAt(goalPos))
 		extraRadius = 0.0f;
+
+	// supcom_goal_radius: a plain move order (the command AI's default radius, one square or less) to ground the footprint fits
+	// on ends within this radius of the ordered point (no footprint widening); orders with a wider radius (build range, guard) keep theirs
+	if (goalRadiusParam >= 0.0f && goalRadius <= SQUARE_SIZE && FootprintFitsAt(goalPos)) {
+		goalRadius = goalRadiusParam;
+		extraRadius = 0.0f;
+		atGoal = (goalPos.SqDistance2D(owner->pos) < Square(goalRadius));
+	}
+}
+
+void CSupComGroundMoveType::PushLuaState(lua_State* L) const
+{
+	LuaPushNamedNumber(L, "supcomGoalRadius", goalRadius);
+	LuaPushNamedNumber(L, "supcomExtraRadius", extraRadius);
+	LuaPushNamedNumber(L, "supcomGoalRadiusParam", goalRadiusParam);
+	LuaPushNamedBool(L, "supcomAtGoal", atGoal);
+	LuaPushNamedBool(L, "supcomGapAhead", gqAhead);
+	LuaPushNamedBool(L, "supcomGapHeld", gqHeld);
+	LuaPushNamedNumber(L, "supcomGapRoom", gqRoom);
+	LuaPushNamedNumber(L, "supcomCrowdFrames", crowdFrames);
+	LuaPushNamedNumber(L, "supcomStructFrames", scStructFrames);
 }
 
 void CSupComGroundMoveType::StartMovingRaw(const float3 moveGoalPos, float moveGoalRadius)
@@ -945,7 +968,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		stopDist = goalPos.distance2D(owner->pos) - stopRadius;
 
 		// at rest well short of the stopping point (pushed away, or the path bent): go again
-		if (scBraking && scSpeed <= 0.0f && stopDist > std::max(goalRadius, float(SQUARE_SIZE)))
+		if (scBraking && scSpeed <= 0.0f && stopDist > ((goalRadiusParam >= 0.0f)? std::max(goalRadius, 0.5f): std::max(goalRadius, float(SQUARE_SIZE))))
 			scBraking = false;
 	}
 

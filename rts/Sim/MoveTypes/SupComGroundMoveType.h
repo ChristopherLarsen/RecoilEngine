@@ -89,6 +89,10 @@ public:
 
 protected:
 	bool ArrivalAllowed() const override;
+public:
+	/// read-only state for Spring.GetUnitMoveTypeData (keys supcom*)
+	void PushLuaState(struct lua_State* L) const;
+protected:
 	bool IsAtGoal() const override;
 	void AdjustPosToWaterLine() override;
 	void KeepInsideMap() override;
@@ -170,6 +174,7 @@ private:
 	std::vector<float3> smoothPts;
 	// SupComCrowdArrive: frames this order's early arrival was held back (not saved: a load restarts it)
 	int crowdFrames = 0;
+	float goalRadiusParam = -1.0f;  ///< customParams supcom_goal_radius (elmos; <0: stock): a plain move order's arrival radius
 	// SupComGapQueue (not saved: a load restarts the queue): the gap's key (its square), point and axis; the frame the
 	// unit joined its queue; the gap passed on this order; the nearest it came and when; the room behind the unit ahead
 	int gqKey = -1;
