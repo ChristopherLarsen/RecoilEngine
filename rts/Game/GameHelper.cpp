@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "Game/SupComBuildSnap.h"
 #include "GameHelper.h"
 #include "Game/SupComLocalView.h"
 
@@ -1001,6 +1002,7 @@ float3 CGameHelper::Pos2BuildPos(const BuildInfo& buildInfo, bool synced)
 	static_assert(BUILD_GRID_RESOLUTION == 2);
 
 	// snap build-positions to 16-elmo grid
+	if (SupComBuildSnap::Fine(buildInfo.def)) { pos.x = SupComBuildSnap::Axis(buildInfo.pos.x, buildInfo.GetXSize()); pos.z = SupComBuildSnap::Axis(buildInfo.pos.z, buildInfo.GetZSize()); pos.y = CGameHelper::GetBuildHeight(pos, buildInfo.def, synced); return pos; }
 	// supcom: an odd size (supcom_footprint_squares) centres on a map square, an 8-elmo grid; stock sizes are even
 	if (buildInfo.GetXSize() & 1)
 		pos.x = math::floor(buildInfo.pos.x / SQUARE_SIZE) * SQUARE_SIZE + SQUARE_SIZE * 0.5f;
