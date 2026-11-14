@@ -84,6 +84,9 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(depthTo),
 	CR_MEMBER(depthFrames),
 	CR_MEMBER(depthStartFrame),
+	CR_MEMBER(holdBestDist),
+	CR_MEMBER(holdBestFrame),
+	CR_MEMBER(holdGoal),
 
 	CR_PREALLOC(GetPreallocContainer)
 ))
@@ -323,6 +326,19 @@ bool CSupComGroundMoveType::HoldLastLeg()
 	// commander 27.6, tank 20.8 elmos short)
 	if (earlyCurrWayPoint.y < 0.0f || earlyCurrWayPoint.SqDistance2D(goalPos) > Square(SQUARE_SIZE))
 		return false;
+
+	// a unit that circles the goal without getting closer (a turn circle wider than its goal radius: base-cross L4813, tank orbiting
+	// 8.0 to 8.2 elmos from a goal radius of 8) gets the stock failure after a second of no progress, from where it is
+	// (values: 1 s and 0.5 elmo are DESIGN, this function: well under one orbit, well over float noise)
+	const float dist = owner->pos.distance2D(goalPos);
+	if (holdBestDist < 0.0f || holdGoal != goalPos || dist < holdBestDist - 0.5f) {
+		holdGoal = goalPos;
+		holdBestDist = dist;
+		holdBestFrame = gs->frameNum;
+	} else if (gs->frameNum - holdBestFrame > GAME_SPEED) {
+		holdBestDist = -1.0f;
+		return false;
+	}
 
 	earlyNextWayPoint = goalPos;
 	earlyNextWayPoint.y = earlyCurrWayPoint.y;

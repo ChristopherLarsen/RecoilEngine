@@ -175,6 +175,9 @@ private:
 	std::vector<float3> smoothPts;
 	// SupComCrowdArrive: frames this order's early arrival was held back (not saved: a load restarts it)
 	int crowdFrames = 0;
+	float holdBestDist = -1.0f;      ///< HoldLastLeg: the closest the unit came to holdGoal (elmos; <0: not holding)
+	int holdBestFrame = 0;           ///< HoldLastLeg: the frame of that closest approach
+	float3 holdGoal;                 ///< HoldLastLeg: the goal being held
 	float goalRadiusParam = -1.0f;  ///< customParams supcom_goal_radius (elmos; <0: stock): a plain move order's arrival radius
 	// SupComGapQueue (not saved: a load restarts the queue): the gap's key (its square), point and axis; the frame the
 	// unit joined its queue; the gap passed on this order; the nearest it came and when; the room behind the unit ahead
