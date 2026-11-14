@@ -44,6 +44,7 @@ set(sources_engine_Lua
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaSyncedCtrl.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaSyncedMoveCtrl.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaSyncedRead.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/SupComUnitQuery.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaSyncedTable.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaTableExtra.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaTextures.cpp"
