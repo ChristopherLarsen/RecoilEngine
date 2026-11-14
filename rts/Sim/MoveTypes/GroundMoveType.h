@@ -154,6 +154,7 @@ public:
 private:
 	// derived move types may hold the arrival back, e.g. until the unit has come to rest
 	virtual bool ArrivalAllowed() const { return true; }
+	virtual bool HoldLastLeg() { return false; } // supcom: no next waypoint while on the last leg to the goal is not a failed path
 	/// supcom: true while something else owns the unit's heading (ChangeHeading then does nothing)
 	virtual bool HeadingLocked() const { return false; }
 

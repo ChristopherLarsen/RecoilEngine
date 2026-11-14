@@ -89,6 +89,7 @@ public:
 
 protected:
 	bool ArrivalAllowed() const override;
+	bool HoldLastLeg() override;
 public:
 	/// read-only state for Spring.GetUnitMoveTypeData (keys supcom*)
 	void PushLuaState(struct lua_State* L) const;

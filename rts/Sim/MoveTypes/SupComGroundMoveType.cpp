@@ -316,6 +316,19 @@ void CSupComGroundMoveType::StopMoving(bool callScript, bool hardStop, bool canc
 	}
 }
 
+bool CSupComGroundMoveType::HoldLastLeg()
+{
+	// the path manager has no waypoint after the last one; with the current waypoint at the goal (the last leg, open ground)
+	// the unit drives on to the goal and brakes there instead of failing the order 3 to 5 squares short (base-cross L4705:
+	// commander 27.6, tank 20.8 elmos short)
+	if (earlyCurrWayPoint.y < 0.0f || earlyCurrWayPoint.SqDistance2D(goalPos) > Square(SQUARE_SIZE))
+		return false;
+
+	earlyNextWayPoint = goalPos;
+	earlyNextWayPoint.y = earlyCurrWayPoint.y;
+	return true;
+}
+
 bool CSupComGroundMoveType::ArrivalAllowed() const
 {
 	// the order is complete once the unit is at rest; queued waypoints are passed through

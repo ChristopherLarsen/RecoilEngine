@@ -2391,7 +2391,7 @@ void CGroundMoveType::SetNextWayPoint(int thread)
 		wantRepath = false;
 	}
 
-	if (earlyNextWayPoint.x == -1.0f && earlyNextWayPoint.z == -1.0f) {
+	if (earlyNextWayPoint.x == -1.0f && earlyNextWayPoint.z == -1.0f && !HoldLastLeg()) {
 		//Fail(false);
 		pathingFailed = true;
 		#ifdef PATHING_DEBUG
