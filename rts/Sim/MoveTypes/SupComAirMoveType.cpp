@@ -60,6 +60,8 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(falling),
 	CR_MEMBER(fallVelocity),
 	CR_MEMBER(passOut),
+	CR_MEMBER(passTurn),
+	CR_MEMBER(passSpeedFactor),
 	CR_MEMBER(lastAimDist),
 
 	CR_PREALLOC(GetPreallocContainer)
@@ -117,6 +119,7 @@ CSupComAirMoveType::CSupComAirMoveType(CUnit* owner): CHoverAirMoveType(owner)
 	pickupCmd = int(CustomParam(ud, "supcom_air_pickup_cmd", 0.0f));
 	attackDip = std::max(0.0f, CustomParam(ud, "supcom_air_attack_dip", 0.0f));
 	passRun = std::max(0.0f, CustomParam(ud, "supcom_air_pass_overflight", 0.0f));
+	passSpeedFactor = std::clamp(CustomParam(ud, "supcom_air_pass_speed_factor", 1.0f), 0.05f, 1.0f);
 	takeoffOvershoot = std::max(0.0f, CustomParam(ud, "supcom_air_takeoff_overshoot", 0.0f));
 
 	// the cruise height exactly as defined (the base class adds a random offset)
@@ -354,6 +357,7 @@ void CSupComAirMoveType::UpdateFlight()
 		if (passSwing > 0.0f) {
 			if (passOut) {
 				passOut = (aimDist < ((passRun > 0.0f)? passRun: passSwing));
+				passTurn = !passOut;
 			} else if ((aimDist < passSwing * 0.25f || aimDist < passRun) && aimDist > lastAimDist) {
 				// moving away inside the overflight distance (supcom_air_pass_overflight) also runs out: a pass the game
 				// lengthened with a move leg (mov_air_pass) resumes the attack outbound and holds its line to that distance
@@ -362,6 +366,13 @@ void CSupComAirMoveType::UpdateFlight()
 		}
 
 		lastAimDist = aimDist;
+
+		// supcom_air_pass_speed_factor: the run-out and the turn back fly at this fraction of the top speed, until the
+		// heading is back within 20 degrees of the aim (a smaller turning circle: radius = speed / turn rate)
+		if (passTurn && (passSwing <= 0.0f || aimDist <= 1.0f || std::abs(short(GetHeadingFromVector(toAim.x, toAim.z) - owner->heading)) < short(SPRING_CIRCLE_DIVS / 18)))
+			passTurn = false;
+		if ((passOut || passTurn) && passSpeedFactor < 1.0f)
+			topSpeed *= passSpeedFactor;
 
 		// always forwards along the heading, turning towards the goal (round it when idle)
 		if (orbitRadius > 0.0f && AttackTarget() == nullptr && aimDist > 1.0f) {

@@ -139,6 +139,8 @@ private:
 	bool falling = false;
 	bool takeoffPeak = false;    ///< climbing to the take-off overshoot height
 	bool passOut = false;        ///< past the target, running out before turning back
+	bool passTurn = false;          ///< turning back after a run-out (supcom_air_pass_speed_factor applies)
+	float passSpeedFactor = 1.0f;   ///< customParams supcom_air_pass_speed_factor: speed on the run-out and turn back, fraction of top speed
 	float lastAimDist = 0.0f;
 	float3 fallVelocity;         ///< elmos per frame
 };
