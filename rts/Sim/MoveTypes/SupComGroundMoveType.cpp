@@ -45,6 +45,8 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(deadUntil),
 	CR_MEMBER(deadGoal),
 	CR_MEMBER(reverseDist),
+	CR_MEMBER(reverseAngle),
+	CR_MEMBER(backTurn),
 	CR_MEMBER(turnGoCos),
 	CR_MEMBER(uprightSink),
 	CR_MEMBER(footprintX),
@@ -200,6 +202,14 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	// SupComTurnGo: reverse distance (elmos; 0 = the engine's own choice) and the move-off angle (degrees; 0 = off)
 	reverseDist = std::max(0.0f, CustomParam(ud, "supcom_reverse_dist", 0.0f));
 	goalRadiusParam = CustomParam(ud, "supcom_goal_radius", -1.0f);
+	// MOV-005 R5 (supcom_reverse_angle with supcom_reverse_dist): a goal behind, within the distance and at least the angle off the
+	// heading, is reached backwards, rear first (the engine's own reverse choice given these two thresholds, which also turns the
+	// heading); any other goal behind: back up while the front turns towards it, brake once it is within a right angle, drive on
+	reverseAngle = std::clamp(CustomParam(ud, "supcom_reverse_angle", 0.0f), 0.0f, 180.0f);
+	if (reverseAngle > 0.0f && reverseDist > 0.0f) {
+		maxReverseDist = reverseDist;
+		minReverseAngle = reverseAngle;
+	}
 	{
 		const float a = CustomParam(ud, "supcom_turn_go_angle", 0.0f);
 		turnGoCos = (a > 0.0f && a < 180.0f)? math::cos(a * math::DEG_TO_RAD): 2.0f;
@@ -962,6 +972,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	switch (setHeading) {
 		case HEADING_CHANGED_MOVE: {
 			wantReverse = !HeadingLocked() && WantReverseTurnGo(waypointDir, flatFrontDir);
+			backTurn = !wantReverse && WantBackTurn();
 		} break;
 		case HEADING_CHANGED_STOP:
 		case HEADING_CHANGED_STUN: {
@@ -979,9 +990,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (owner->beingBuilt)
 		return;
 
-	const int wantDir = wantReverse? -1: 1;
+	const int wantDir = (wantReverse || backTurn)? -1: 1;
 
-	float topSpeed = wantReverse? maxReverseSpeed: maxSpeed;
+	float topSpeed = (wantReverse || backTurn)? maxReverseSpeed: maxSpeed;
 
 	// under water, the move class's depth speed rule (depthModParams), the same one the engine's own ground movement
 	// applies through its terrain speed: one rule for both move types (the game's default is no slowdown)
@@ -1071,7 +1082,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	} else if (scRestart && !stop && !scBraking) {
 		// the step after a blocked one is taken at the restart speed, once any turn on the spot from rest is done
 		scDir = wantDir;
-		if (scSpeed <= 0.0f && HoldForTurn(wantDir)) {
+		if (scSpeed <= 0.0f && !backTurn && HoldForTurn(wantDir)) {
 			dist = 0.0f;
 		} else {
 			scPhase = PHASE_DRIVE;
@@ -1087,7 +1098,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 		// SupComTurnGo: from rest, turn on the spot until the heading (backwards when reversing) is within the move-off
 		// angle of the way; the base class turns the heading meanwhile
-		if (scSpeed <= 0.0f && !stop && HoldForTurn(wantDir))
+		if (scSpeed <= 0.0f && !stop && !backTurn && HoldForTurn(wantDir))
 			dist = 0.0f;
 		else
 			dist = Advance(topSpeed, stopDist, stop);
@@ -1256,6 +1267,8 @@ void CSupComGroundMoveType::StartDive(bool submerge)
 
 bool CSupComGroundMoveType::WantReverseTurnGo(const float3& wpDir, const float3& ffDir) const
 {
+	if (reverseAngle > 0.0f && reverseDist > 0.0f)
+		return WantReverse(wpDir, ffDir);
 	// a reverse distance set: reverse exactly when the goal is behind (more than 90 degrees off the facing) and within it
 	if (!TurnGoOn() || reverseDist <= 0.0f)
 		return WantReverse(wpDir, ffDir);
@@ -1269,6 +1282,20 @@ bool CSupComGroundMoveType::WantReverseTurnGo(const float3& wpDir, const float3&
 		return false;
 
 	return ((toGoal / d).dot(ffDir) < 0.0f);
+}
+
+bool CSupComGroundMoveType::WantBackTurn() const
+{
+	// MOV-005 R5, second branch: the goal behind (more than a right angle off the heading) but not a reverse goal
+	if (reverseAngle <= 0.0f || reverseDist <= 0.0f || HeadingLocked())
+		return false;
+	if (owner->unitDef->rSpeed <= 0.0f || maxReverseSpeed <= 0.0f)
+		return false;
+
+	const float3 toGoal = (goalPos - owner->pos) * XZVector;
+	const float d = toGoal.Length2D();
+
+	return (d > 1e-3f && (toGoal / d).dot(flatFrontDir) < 0.0f);
 }
 
 bool CSupComGroundMoveType::HoldForTurn(int dir) const
