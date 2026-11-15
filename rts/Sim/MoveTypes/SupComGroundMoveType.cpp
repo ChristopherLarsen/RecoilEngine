@@ -125,6 +125,8 @@ static bool yieldLogSquares = false;
 
 CONFIG(bool, SupComMakeWay).defaultValue(true).description("supcom: SupComGroundMoveType units line up with a gap their own width instead of stopping at its edge, and make way faster (PTH-002, PTH-004); 0 behaves as before.");
 static bool MakeWayOn() { static const bool on = configHandler->GetBool("SupComMakeWay"); return on; }
+CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
+static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
 // sideways search for a line that fits through a gap: up to this many elmos either side, in this step (PLACEHOLDER)
 static constexpr float LINEUP_MAX = SQUARE_SIZE;
 static constexpr float LINEUP_STEP = 0.25f;
@@ -1017,6 +1019,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	// turnRate (rad/frame) * r; braking at decRate reaches the cap at the point. Straight on (d under 10 deg): no cap.
 	if (MakeWayOn() && !stop && owner->commandAI != nullptr) {
 		const CCommandQueue& q = owner->commandAI->commandQue;
+		if (CornerLog() && (gs->frameNum + owner->id) % GAME_SPEED == 0)
+			LOG("[SupComCorner] f=%d u=%d q=%d ids %d %d goal (%.0f,%.0f) top %.3f turnRate %.1f", gs->frameNum, owner->id, int(q.size()), q.empty()? 0: q[0].GetID(), (q.size() < 2)? 0: q[1].GetID(), goalPos.x, goalPos.z, topSpeed, turnRate);
 
 		if (q.size() >= 2 && q[0].GetID() == CMD_MOVE && q[1].GetID() == CMD_MOVE && q[0].GetNumParams() >= 3 && q[1].GetNumParams() >= 3) {
 			const float3 p0(q[0].GetParam(0), 0.0f, q[0].GetParam(2));
