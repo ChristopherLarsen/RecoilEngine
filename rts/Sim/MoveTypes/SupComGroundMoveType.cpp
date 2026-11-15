@@ -1064,6 +1064,36 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				topSpeed = std::min(topSpeed, std::max(allow, cap));
 			}
 		}
+
+		// turn circle (courses trace L5070: a tank arriving on the heading its last turn left it with, 16 deg against a 60 deg
+		// leg, had the next point inside its turn circle and looped round it at full speed): a target at distance D and angle
+		// phi off the heading lies inside the circle of radius R tangent to the heading when D < 2 R sin(phi), so the speed
+		// is capped at turnRate x D / (2 sin phi) (x 0.9 margin) for the goal, and near the goal (within 3 arrival radii)
+		// for the next queued point too. No cap for a target within 15 deg of straight ahead or behind (turn on the spot
+		// and reversing handle those); never below a tenth of the top speed.
+		{
+			const float3 here = owner->pos * XZVector;
+			const float3 fwd = (flatFrontDir * XZVector).SafeNormalize2D();
+			const float w = turnRate * math::TWOPI / SPRING_CIRCLE_DIVS;
+			const float arrival = std::max(goalRadius, float(SQUARE_SIZE));
+			const auto CircleCap = [&](const float3& target) {
+				const float3 rel = (target * XZVector) - here;
+				const float D = rel.Length2D();
+				if (D <= 1e-3f)
+					return topSpeed;
+				const float sinPhi = math::fabs(fwd.x * rel.z - fwd.z * rel.x) / D;
+				if (sinPhi < math::sin(15.0f * math::DEG_TO_RAD))
+					return topSpeed;
+				return std::max(0.9f * w * D / (2.0f * sinPhi), 0.1f * topSpeed);
+			};
+
+			float circ = CircleCap(p0);
+			if (haveNext && (p0 - here).Length2D() <= 3.0f * arrival)
+				circ = std::min(circ, CircleCap(p1));
+			if (CornerLog() && circ < topSpeed && (gs->frameNum + owner->id) % 5 == 0)
+				LOG("[SupComCorner] f=%d u=%d circle cap %.3f (top %.3f, speed %.3f)", gs->frameNum, owner->id, circ, topSpeed, scSpeed);
+			topSpeed = std::min(topSpeed, circ);
+		}
 	}
 
 	wantedSpeed = topSpeed * (1 - stop);
