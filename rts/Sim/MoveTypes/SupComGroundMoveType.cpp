@@ -1011,6 +1011,36 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (maxWantedSpeed > 0.0f)
 		topSpeed = std::min(topSpeed, maxWantedSpeed);
 
+	// corner speed (owner pathing courses 2026-11-15): before a queued move point whose next leg turns away, the unit
+	// slows so that the turn at its turn rate stays within the arrival radius of the point: the arc tangent to both legs
+	// passes the point at r * (1 / cos(d / 2) - 1) for a deflection d, so r <= arrival / that, and the speed cap is
+	// turnRate (rad/frame) * r; braking at decRate reaches the cap at the point. Straight on (d under 10 deg): no cap.
+	if (MakeWayOn() && !stop && owner->commandAI != nullptr) {
+		const CCommandQueue& q = owner->commandAI->commandQue;
+
+		if (q.size() >= 2 && q[0].GetID() == CMD_MOVE && q[1].GetID() == CMD_MOVE && q[0].GetNumParams() >= 3 && q[1].GetNumParams() >= 3) {
+			const float3 p0(q[0].GetParam(0), 0.0f, q[0].GetParam(2));
+			const float3 p1(q[1].GetParam(0), 0.0f, q[1].GetParam(2));
+			const float3 here = owner->pos * XZVector;
+			const float3 in = (p0 - here).SafeNormalize2D();
+			const float3 out = (p1 - p0).SafeNormalize2D();
+			const float d = math::acos(std::clamp(in.dot(out), -1.0f, 1.0f));
+			const float toPoint = (p0 - here).Length2D();
+
+			if (d > 10.0f * math::DEG_TO_RAD && (goalPos * XZVector).distance2D(p0) < SQUARE_SIZE) {
+				constexpr float MIN_CORNER_RADIUS = 1.0f;
+				const float arrival = std::max(goalRadius, float(SQUARE_SIZE));
+				const float sec1 = 1.0f / std::max(math::cos(d * 0.5f), 0.05f) - 1.0f;
+				const float r = std::max(arrival / std::max(sec1, 1e-3f), MIN_CORNER_RADIUS);
+				const float w = turnRate * math::TWOPI / SPRING_CIRCLE_DIVS;
+				const float cap = w * r;
+				const float allow = math::sqrt(cap * cap + 2.0f * decRate * std::max(toPoint - arrival, 0.0f));
+
+				topSpeed = std::min(topSpeed, std::max(allow, cap));
+			}
+		}
+	}
+
 	wantedSpeed = topSpeed * (1 - stop);
 
 	// distance left to the point where the unit should be at rest: the goal itself
