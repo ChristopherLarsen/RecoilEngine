@@ -206,10 +206,7 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	// heading, is reached backwards, rear first (the engine's own reverse choice given these two thresholds, which also turns the
 	// heading); any other goal behind: back up while the front turns towards it, brake once it is within a right angle, drive on
 	reverseAngle = std::clamp(CustomParam(ud, "supcom_reverse_angle", 0.0f), 0.0f, 180.0f);
-	if (reverseAngle > 0.0f && reverseDist > 0.0f) {
-		maxReverseDist = reverseDist;
-		minReverseAngle = reverseAngle;
-	}
+
 	{
 		const float a = CustomParam(ud, "supcom_turn_go_angle", 0.0f);
 		turnGoCos = (a > 0.0f && a < 180.0f)? math::cos(a * math::DEG_TO_RAD): 2.0f;
@@ -1282,6 +1279,24 @@ bool CSupComGroundMoveType::WantReverseTurnGo(const float3& wpDir, const float3&
 		return false;
 
 	return ((toGoal / d).dot(ffDir) < 0.0f);
+}
+
+bool CSupComGroundMoveType::WantReverse(const float3& wpDir, const float3& ffDir) const
+{
+	// MOV-005 R5: with supcom_reverse_angle the reverse choice (which also sets the heading: rear or front towards the way) is
+	// measured to the goal, not to the current waypoint (the engine's maxReverseDist reads the waypoint, always near)
+	if (reverseAngle <= 0.0f || reverseDist <= 0.0f)
+		return CGroundMoveType::WantReverse(wpDir, ffDir);
+	if (owner->unitDef->rSpeed <= 0.0f || maxReverseSpeed <= 0.0f)
+		return false;
+
+	const float3 toGoal = (goalPos - owner->pos) * XZVector;
+	const float d = toGoal.Length2D();
+
+	if (d <= 1e-3f || d > reverseDist)
+		return false;
+
+	return ((toGoal / d).dot(ffDir) <= -math::cos((180.0f - reverseAngle) * math::DEG_TO_RAD) + 1e-6f);
 }
 
 bool CSupComGroundMoveType::WantBackTurn() const

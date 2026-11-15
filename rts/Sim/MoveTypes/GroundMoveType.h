@@ -230,7 +230,7 @@ private:
 	bool UpdateOwnerSpeed(float oldSpeedAbs, float newSpeedAbs, float newSpeedRaw);
 	bool OwnerMoved(const short, const float3&, const float3&);
 	bool FollowPath(int thread);
-	bool WantReverse(const float3& wpDir, const float3& ffDir) const;
+	virtual bool WantReverse(const float3& wpDir, const float3& ffDir) const;
 	virtual void SetWaypointDir(const float3& cwp, const float3 &opos);
 
 private:

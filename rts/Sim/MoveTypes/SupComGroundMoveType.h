@@ -91,6 +91,7 @@ protected:
 	bool ArrivalAllowed() const override;
 	bool HoldLastLeg() override;
 	bool WantBackTurn() const;
+	bool WantReverse(const float3& wpDir, const float3& ffDir) const override;
 	void HeldLegProgress();
 public:
 	/// read-only state for Spring.GetUnitMoveTypeData (keys supcom*)
