@@ -1115,6 +1115,25 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		bool blocked = false;
 		bool byStructure = false;
 
+		// PTH-004 E: a footprint pushed onto impassable squares (by a collision while held at a gap exactly its width) is
+		// first moved back off them: the nearest offset up to EJECT_MAX elmos along x or z (x+, x-, z+, z- on a tie)
+		if (MakeWayOn() && !positionStuck && FootprintBlocked(owner->pos)) {
+			constexpr float EJECT_STEP = 0.25f;
+			constexpr float EJECT_MAX = 4.0f;
+			const float3 dirs[4] = {float3(1.0f, 0.0f, 0.0f), float3(-1.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 1.0f), float3(0.0f, 0.0f, -1.0f)};
+			bool ejected = false;
+
+			for (float e = EJECT_STEP; e <= EJECT_MAX + 1e-4f && !ejected; e += EJECT_STEP) {
+				for (const float3& dv: dirs) {
+					if (FootprintBlocked(owner->pos + dv * e))
+						continue;
+					owner->Move(dv * e, true);
+					ejected = true;
+					break;
+				}
+			}
+		}
+
 		if (!positionStuck) {
 			blocked = (FootprintBlocked(owner->pos + moveRequest) && !FootprintBlocked(owner->pos));
 
