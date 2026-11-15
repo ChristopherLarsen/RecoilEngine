@@ -1728,6 +1728,16 @@ bool CSupComGroundMoveType::CanYield() const
 	return owner->commandAI->commandQue.empty();
 }
 
+// distance from p to the segment a-b, in the horizontal plane
+static float SegmentDist2D(const float3& p, const float3& a, const float3& b)
+{
+	const float3 ab = (b - a) * XZVector;
+	const float len2 = ab.SqLength2D();
+	const float t = (len2 > 0.0f)? std::clamp(((p - a) * XZVector).dot(ab) / len2, 0.0f, 1.0f): 0.0f;
+
+	return (a + ab * t).distance2D(p);
+}
+
 void CSupComGroundMoveType::CheckYield()
 {
 	// runs in the serial move type update, so it may start another unit moving
@@ -1746,6 +1756,19 @@ void CSupComGroundMoveType::CheckYield()
 
 	// the lowest id among the idle allied units in contact in front (deterministic)
 	CSupComGroundMoveType* blocker = nullptr;
+
+	// PTH-004 F (Reference recheck 2026-11-15: 0 of 16 engineers moved when a tank left a factory): no make-way on a factory exit
+	if (MakeWayOn()) {
+		for (const CUnit* u: *qfQuery.units) {
+			if (u->unitDef == nullptr || !u->unitDef->IsFactoryUnit())
+				continue;
+			if (math::fabs(pos.x - u->pos.x) <= u->xsize * SQUARE_SIZE * 0.5f && math::fabs(pos.z - u->pos.z) <= u->zsize * SQUARE_SIZE * 0.5f) {
+				scYieldFrames = 0;
+				scYieldUnit = -1;
+				return;
+			}
+		}
+	}
 
 	for (CUnit* u: *qfQuery.units) {
 		if (u == owner || !teamHandler.AlliedTeams(owner->team, u->team))
@@ -1775,6 +1798,14 @@ void CSupComGroundMoveType::CheckYield()
 
 		if ((dist > contact && !onLineAhead) || !inFront)
 			continue;
+		// PTH-004 F (Reference recheck 2026-11-15: an idle unit yields only when it is actually in the path): the idle
+		// unit's footprint must overlap the mover's swept footprint along its way to the next two waypoints
+		if (MakeWayOn()) {
+			const float overlap = HalfSize() + mt->HalfSize();
+			const float pathDist = std::min(SegmentDist2D(u->pos, pos, currWayPoint), SegmentDist2D(u->pos, currWayPoint, nextWayPoint));
+			if (pathDist >= overlap)
+				continue;
+		}
 		if (blocker == nullptr || u->id < blocker->owner->id)
 			blocker = mt;
 	}
@@ -1799,16 +1830,6 @@ void CSupComGroundMoveType::CheckYield()
 	const bool made = blocker->MakeWay(this);
 	if (YieldLog())
 		LOG("[SupComYield] f=%d mover %d asks %d to make way: %s", gs->frameNum, owner->id, blocker->owner->id, made? "moving": "no spot");
-}
-
-// distance from p to the segment a-b, in the horizontal plane
-static float SegmentDist2D(const float3& p, const float3& a, const float3& b)
-{
-	const float3 ab = (b - a) * XZVector;
-	const float len2 = ab.SqLength2D();
-	const float t = (len2 > 0.0f)? std::clamp(((p - a) * XZVector).dot(ab) / len2, 0.0f, 1.0f): 0.0f;
-
-	return (a + ab * t).distance2D(p);
 }
 
 bool CSupComGroundMoveType::MakeWay(const CSupComGroundMoveType* mover)
