@@ -94,6 +94,7 @@ private:
 	const CUnit* AttackTarget() const;
 	bool InTransportOrder() const;
 	bool InAttackOrder() const;
+	bool InInternalMove() const;
 
 	/// a horizontal step rounded towards zero onto the float grid around position p
 	static float GridStepDown(float p, float d);
@@ -139,6 +140,7 @@ private:
 	bool falling = false;
 	bool takeoffPeak = false;    ///< climbing to the take-off overshoot height
 	bool passOut = false;        ///< past the target, running out before turning back
+	bool passLeg = false;           ///< flying an internal (game-inserted) move leg: supcom_air_pass_speed_factor applies, then passTurn
 	bool passTurn = false;          ///< turning back after a run-out (supcom_air_pass_speed_factor applies)
 	float passSpeedFactor = 1.0f;   ///< customParams supcom_air_pass_speed_factor: speed on the run-out and turn back, fraction of top speed
 	float lastAimDist = 0.0f;

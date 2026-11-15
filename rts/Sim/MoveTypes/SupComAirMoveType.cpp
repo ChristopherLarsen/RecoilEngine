@@ -60,6 +60,7 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(falling),
 	CR_MEMBER(fallVelocity),
 	CR_MEMBER(passOut),
+	CR_MEMBER(passLeg),
 	CR_MEMBER(passTurn),
 	CR_MEMBER(passSpeedFactor),
 	CR_MEMBER(lastAimDist),
@@ -369,9 +370,16 @@ void CSupComAirMoveType::UpdateFlight()
 
 		// supcom_air_pass_speed_factor: the run-out and the turn back fly at this fraction of the top speed, until the
 		// heading is back within 20 degrees of the aim (a smaller turning circle: radius = speed / turn rate)
-		if (passTurn && (passSwing <= 0.0f || aimDist <= 1.0f || std::abs(short(GetHeadingFromVector(toAim.x, toAim.z) - owner->heading)) < short(SPRING_CIRCLE_DIVS / 18)))
+		// an internal move leg (a break-off the game inserted, e.g. mov_air_pass) counts as the run-out: the factor applies on
+		// it, and the turn back after it is a pass turn
+		const bool internalLeg = (passSpeedFactor < 1.0f && InInternalMove());
+		if (passLeg && !internalLeg)
+			passTurn = true;
+		passLeg = internalLeg;
+
+		if (!passLeg && passTurn && (passSwing <= 0.0f || aimDist <= 1.0f || std::abs(short(GetHeadingFromVector(toAim.x, toAim.z) - owner->heading)) < short(SPRING_CIRCLE_DIVS / 18)))
 			passTurn = false;
-		if ((passOut || passTurn) && passSpeedFactor < 1.0f)
+		if ((passOut || passLeg || passTurn) && passSpeedFactor < 1.0f)
 			topSpeed *= passSpeedFactor;
 
 		// always forwards along the heading, turning towards the goal (round it when idle)
@@ -526,6 +534,12 @@ bool CSupComAirMoveType::InAttackOrder() const
 {
 	const auto& queue = owner->commandAI->commandQue;
 	return (!queue.empty() && queue.front().GetID() == CMD_ATTACK);
+}
+
+bool CSupComAirMoveType::InInternalMove() const
+{
+	const auto& queue = owner->commandAI->commandQue;
+	return (!queue.empty() && queue.front().GetID() == CMD_MOVE && (queue.front().GetOpts() & INTERNAL_ORDER) != 0);
 }
 
 bool CSupComAirMoveType::InTransportOrder() const
