@@ -1022,16 +1022,35 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		if (CornerLog() && (gs->frameNum + owner->id) % GAME_SPEED == 0)
 			LOG("[SupComCorner] f=%d u=%d q=%d ids %d %d goal (%.0f,%.0f) top %.3f turnRate %.1f", gs->frameNum, owner->id, int(q.size()), q.empty()? 0: q[0].GetID(), (q.size() < 2)? 0: q[1].GetID(), goalPos.x, goalPos.z, topSpeed, turnRate);
 
-		if (q.size() >= 2 && q[0].GetID() == CMD_MOVE && q[1].GetID() == CMD_MOVE && q[0].GetNumParams() >= 3 && q[1].GetNumParams() >= 3) {
-			const float3 p0(q[0].GetParam(0), 0.0f, q[0].GetParam(2));
-			const float3 p1(q[1].GetParam(0), 0.0f, q[1].GetParam(2));
+		// the point being driven to is the goal; the next leg runs to the first later queued command with a position
+		// more than a square from it (a game's own waypoint-step command may stand in front of the move it serves)
+		const float3 p0 = goalPos * XZVector;
+		float3 p1;
+		bool haveNext = false;
+		bool seenGoal = false;
+
+		for (size_t k = 0; k < q.size() && k < 8 && !haveNext; k++) {
+			if (q[k].GetNumParams() < 3)
+				continue;
+			const float3 pk(q[k].GetParam(0), 0.0f, q[k].GetParam(2));
+			if (!seenGoal) {
+				seenGoal = (pk.distance2D(p0) < SQUARE_SIZE);
+				continue;
+			}
+			if (pk.distance2D(p0) > SQUARE_SIZE) {
+				p1 = pk;
+				haveNext = true;
+			}
+		}
+
+		if (haveNext) {
 			const float3 here = owner->pos * XZVector;
 			const float3 in = (p0 - here).SafeNormalize2D();
 			const float3 out = (p1 - p0).SafeNormalize2D();
 			const float d = math::acos(std::clamp(in.dot(out), -1.0f, 1.0f));
 			const float toPoint = (p0 - here).Length2D();
 
-			if (d > 10.0f * math::DEG_TO_RAD && (goalPos * XZVector).distance2D(p0) < SQUARE_SIZE) {
+			if (d > 10.0f * math::DEG_TO_RAD) {
 				constexpr float MIN_CORNER_RADIUS = 1.0f;
 				const float arrival = std::max(goalRadius, float(SQUARE_SIZE));
 				const float sec1 = 1.0f / std::max(math::cos(d * 0.5f), 0.05f) - 1.0f;
@@ -1040,6 +1059,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				const float cap = w * r;
 				const float allow = math::sqrt(cap * cap + 2.0f * decRate * std::max(toPoint - arrival, 0.0f));
 
+				if (CornerLog() && (gs->frameNum + owner->id) % 5 == 0)
+					LOG("[SupComCorner] f=%d u=%d defl %.0f to point %.1f cap %.3f allow %.3f top %.3f speed %.3f", gs->frameNum, owner->id, d * math::RAD_TO_DEG, toPoint, cap, allow, topSpeed, scSpeed);
 				topSpeed = std::min(topSpeed, std::max(allow, cap));
 			}
 		}
