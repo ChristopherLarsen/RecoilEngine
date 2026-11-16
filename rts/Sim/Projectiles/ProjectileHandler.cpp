@@ -31,6 +31,8 @@
 #include "System/Cpp11Compat.hpp"
 #include "System/SpringMath.h"
 #include "System/TimeProfiler.h"
+#include "Rendering/Env/Particles/Classes/SupComRibbonProjectile.h"
+#include "Sim/Projectiles/WeaponProjectiles/WeaponProjectile.h"
 #include "System/Threading/ThreadPool.h"
 
 #include "System/Misc/TracyDefs.h"
@@ -206,6 +208,7 @@ void CProjectileHandler::UpdateProjectilesImpl()
 			MAPPOS_SANITY_CHECK(p->pos);
 			p->PreUpdate();
 			p->Update();
+			if (p->weapon) CSupComRibbonProjectile::OnWeaponUpdate(static_cast<CWeaponProjectile*>(p)); // supcom: ribbon trails (draw only)
 			quadField.MovedProjectile(p);
 
 			MAPPOS_SANITY_CHECK(p->pos);

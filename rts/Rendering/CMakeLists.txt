@@ -51,6 +51,7 @@ set(sources_engine_Rendering
 		"${CMAKE_CURRENT_SOURCE_DIR}/Env/Particles/Classes/SmokeProjectile.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Env/Particles/Classes/SmokeProjectile2.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Env/Particles/Classes/SmokeTrailProjectile.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/Env/Particles/Classes/SupComRibbonProjectile.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Env/Particles/Classes/SpherePartProjectile.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Env/Particles/Classes/TracerProjectile.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Env/Particles/Classes/WakeProjectile.cpp"
