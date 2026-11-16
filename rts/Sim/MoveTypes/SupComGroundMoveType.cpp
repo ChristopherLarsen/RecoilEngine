@@ -348,6 +348,8 @@ void CSupComGroundMoveType::StartMoving(float3 moveGoalPos, float moveGoalRadius
 
 void CSupComGroundMoveType::StopMoving(bool callScript, bool hardStop, bool cancelRaw)
 {
+	if (CornerLog())
+		LOG("[SupComStop] f=%d u=%d StopMoving(script %d, hard %d, raw %d) speed %.3f q %d progress %d further %d", gs->frameNum, owner->id, int(callScript), int(hardStop), int(cancelRaw), scSpeed, (owner->commandAI != nullptr)? int(owner->commandAI->commandQue.size()): -1, int(progressState), (owner->commandAI != nullptr)? int(HasFurtherPoint()): -1);
 	CGroundMoveType::StopMoving(callScript, hardStop, cancelRaw);
 
 	// MOV-020 R3/R4 (courses L6040, commander course 3): a waypoint step finishing sends a soft stop while the next point
@@ -1254,7 +1256,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	}
 
 	if (CornerLog() && (gs->frameNum + owner->id) % 3 == 0)
-		LOG("[SupComSpeed] f=%d u=%d top %.3f wanted %.3f speed %.3f stop %d stopDist %.1f brk %d phase %d q %d gq %d dir %d want %d through %d", gs->frameNum, owner->id, topSpeed, wantedSpeed, scSpeed, int(stop), (stopDist == NO_STOP)? -1.0f: stopDist, int(scBraking), int(scPhase), int(owner->commandAI->commandQue.size()), int(gqAhead), scDir, wantDir, int(wpThrough));
+		LOG("[SupComSpeed] f=%d u=%d top %.3f wanted %.3f speed %.3f stop %d stopDist %.1f brk %d phase %d q %d gq %d dir %d want %d through %d progress %d coast %d nowstop %d", gs->frameNum, owner->id, topSpeed, wantedSpeed, scSpeed, int(stop), (stopDist == NO_STOP)? -1.0f: stopDist, int(scBraking), int(scPhase), int(owner->commandAI->commandQue.size()), int(gqAhead), scDir, wantDir, int(wpThrough), int(progressState), int(wpCoast), int(scStopNow));
 
 	// SupComGapQueue: at rest no nearer the gap than a footprint behind the unit queued before this one
 	if (!stop && gqAhead) {
