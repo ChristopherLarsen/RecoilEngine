@@ -37,6 +37,9 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(turnAccelFactor),
 	CR_MEMBER(turnRadius),
 	CR_MEMBER(inPlaceRate),
+	CR_MEMBER(wpDip),
+	CR_MEMBER(wpDipFrames),
+	CR_MEMBER(wpDipUntil),
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
 	CR_MEMBER(blockedRestart),
@@ -216,6 +219,10 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	uprightSink = std::max(0.0f, CustomParam(ud, "supcom_upright_sink", 0.0f));
 	turnRadius = std::max(0.0f, CustomParam(ud, "supcom_turn_radius", 0.0f));
 	inPlaceRate = std::max(0.0f, CustomParam(ud, "supcom_turn_in_place_rate", 0.0f)) * (SPRING_CIRCLE_DIVS / 360.0f) / GAME_SPEED;
+	// MOV-020 R3: moving on to a new point while driving, the speed dips to this fraction of the top speed for this many frames, then
+	// the unit accelerates again at its own rate (0 or no keys: no dip)
+	wpDip = std::clamp(CustomParam(ud, "supcom_wp_dip", 0.0f), 0.0f, 1.0f);
+	wpDipFrames = std::max(0, int(CustomParam(ud, "supcom_wp_dip_frames", 0.0f)));
 	footprintX = std::max(0.0f, CustomParam(ud, "supcom_footprint_x", md->xsize * SQUARE_SIZE));
 	footprintZ = std::max(0.0f, CustomParam(ud, "supcom_footprint_z", md->zsize * SQUARE_SIZE));
 	sinkLower = (CustomParam(ud, "supcom_sink_lower", 0.0f) != 0.0f);
@@ -253,6 +260,12 @@ void CSupComGroundMoveType::ResetForNewOrder()
 	// a new order during braking or the settle replaces it
 	if (scSpeed > 0.0f)
 		scPhase = PHASE_DRIVE;
+
+	// MOV-020 R3: on to a new point while driving: the speed dip
+	if (wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f) {
+		wpDipUntil = gs->frameNum + wpDipFrames;
+		scSpeed = std::min(scSpeed, wpDip * maxSpeed);
+	}
 }
 
 bool CSupComGroundMoveType::FootprintFitsAt(const float3& pos) const
@@ -1012,6 +1025,10 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	if (maxWantedSpeed > 0.0f)
 		topSpeed = std::min(topSpeed, maxWantedSpeed);
+
+	// MOV-020 R3: during the dip after moving on to a new point, no faster than the dip speed
+	if (gs->frameNum < wpDipUntil)
+		topSpeed = std::min(topSpeed, wpDip * maxSpeed);
 
 	// corner speed (owner pathing courses 2026-11-15): before a queued move point whose next leg turns away, the unit
 	// slows so that the turn at its turn rate stays within the arrival radius of the point: the arc tangent to both legs
