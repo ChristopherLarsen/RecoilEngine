@@ -42,6 +42,7 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(wpDipUntil),
 	CR_MEMBER(wpThrough),
 	CR_MEMBER(wpAdvance),
+	CR_MEMBER(wpCoast),
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
 	CR_MEMBER(blockedRestart),
@@ -323,7 +324,8 @@ void CSupComGroundMoveType::PushLuaState(lua_State* L) const
 void CSupComGroundMoveType::StartMovingRaw(const float3 moveGoalPos, float moveGoalRadius)
 {
 	// MOV-020 R3: an advance moves on from a point the unit has (nearly) reached; a new order from elsewhere is no advance
-	wpAdvance = ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
+	wpAdvance = wpCoast || ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
+	wpCoast = false;
 	CGroundMoveType::StartMovingRaw(moveGoalPos, moveGoalRadius);
 	ExactGoalRadius();
 	ResetForNewOrder();
@@ -332,7 +334,8 @@ void CSupComGroundMoveType::StartMovingRaw(const float3 moveGoalPos, float moveG
 void CSupComGroundMoveType::StartMoving(float3 moveGoalPos, float moveGoalRadius)
 {
 	// MOV-020 R3: an advance moves on from a point the unit has (nearly) reached; a new order from elsewhere is no advance
-	wpAdvance = ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
+	wpAdvance = wpCoast || ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
+	wpCoast = false;
 	CGroundMoveType::StartMoving(moveGoalPos, moveGoalRadius);
 	ExactGoalRadius();
 	ResetForNewOrder();
@@ -341,6 +344,13 @@ void CSupComGroundMoveType::StartMoving(float3 moveGoalPos, float moveGoalRadius
 void CSupComGroundMoveType::StopMoving(bool callScript, bool hardStop, bool cancelRaw)
 {
 	CGroundMoveType::StopMoving(callScript, hardStop, cancelRaw);
+
+	// MOV-020 R3/R4 (courses L6040, commander course 3): a waypoint step finishing sends a soft stop while the next point
+	// is already queued, and the next order starts about 12 frames later; a unit with the waypoint dip does not brake
+	// for that stop but coasts at the dip speed until the next order starts
+	wpCoast = (!hardStop && wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f && owner->commandAI != nullptr && owner->commandAI->commandQue.size() > 1);
+	if (wpCoast)
+		return;
 
 	// a stop order brakes at once
 	scStopNow = true;
@@ -1059,7 +1069,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				}
 			}
 		} break;
-		case HEADING_CHANGED_STOP:
+		case HEADING_CHANGED_STOP: {
+			stop = !wpCoast;
+		} break;
 		case HEADING_CHANGED_STUN: {
 			stop = true;
 		} break;
@@ -1100,7 +1112,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		topSpeed = std::min(topSpeed, maxWantedSpeed);
 
 	// MOV-020 R3: during the dip after moving on to a new point, no faster than the dip speed
-	if (gs->frameNum < wpDipUntil)
+	if (gs->frameNum < wpDipUntil || wpCoast)
 		topSpeed = std::min(topSpeed, wpDip * maxSpeed);
 
 	// corner speed (owner pathing courses 2026-11-15): before a queued move point whose next leg turns away, the unit

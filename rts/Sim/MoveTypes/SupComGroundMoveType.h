@@ -168,6 +168,7 @@ private:
 	int wpDipFrames = 0;         ///< frames the dip lasts
 	int wpDipUntil = -1;         ///< frame the current dip ends
 	float3 dbgEndPos;            ///< diagnosis: the position at the end of the last update (not saved)
+	bool wpCoast = false;        ///< MOV-020: a soft stop between queued points: coast at the dip speed until the next order
 	bool wpAdvance = false;      ///< MOV-020 R3: the current StartMoving moved on from a reached point (only then the dip)
 	bool wpThrough = false;      ///< MOV-020 R4: moving through a point after a dip: forwards only until the goal is ahead
 	float inPlaceRate = 0.0f;    ///< heading units per frame while stopped or nearly stopped; 0 means none
