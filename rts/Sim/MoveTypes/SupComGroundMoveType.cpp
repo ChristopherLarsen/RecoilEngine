@@ -1654,7 +1654,17 @@ void CSupComGroundMoveType::AdjustPosToWaterLine()
 
 bool CSupComGroundMoveType::Update()
 {
+	// diagnosis (PTH-004-E): with the footprint on impassable squares, where the unit was moved: between updates (the
+	// collision pass) or in this update
+	const float3 updStart = owner->pos;
+	if (YieldLog() && FootprintBlocked(owner->pos) && updStart.SqDistance2D(dbgEndPos) > 1e-4f)
+		LOG("[SupComYield] f=%d unit %d on impassable squares: moved between updates (%.2f, %.2f) to (%.1f, %.1f)", gs->frameNum, owner->id, updStart.x - dbgEndPos.x, updStart.z - dbgEndPos.z, updStart.x, updStart.z);
+
 	const bool moved = CGroundMoveType::Update();
+
+	if (YieldLog() && FootprintBlocked(owner->pos) && owner->pos.SqDistance2D(updStart) > 1e-4f)
+		LOG("[SupComYield] f=%d unit %d on impassable squares: moved in its update (%.2f, %.2f) to (%.1f, %.1f) brk %d ho %d blk %d", gs->frameNum, owner->id, owner->pos.x - updStart.x, owner->pos.z - updStart.z, owner->pos.x, owner->pos.z, int(scBraking), scHandoverFrames, scBlockedFrames);
+	dbgEndPos = owner->pos;
 
 	// MOV-009 R8: Land -> Seabed at the switch depth, back to Land as the depth falls to zero
 	if (seabedSwitchDepth > 0.0f) {
