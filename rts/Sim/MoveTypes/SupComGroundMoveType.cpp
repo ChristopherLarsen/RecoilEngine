@@ -1184,6 +1184,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			scBraking = false;
 	}
 
+	if (CornerLog() && (gs->frameNum + owner->id) % 3 == 0)
+		LOG("[SupComSpeed] f=%d u=%d top %.3f wanted %.3f speed %.3f stop %d stopDist %.1f brk %d phase %d q %d gq %d dir %d want %d through %d", gs->frameNum, owner->id, topSpeed, wantedSpeed, scSpeed, int(stop), (stopDist == NO_STOP)? -1.0f: stopDist, int(scBraking), int(scPhase), int(owner->commandAI->commandQue.size()), int(gqAhead), scDir, wantDir, int(wpThrough));
+
 	// SupComGapQueue: at rest no nearer the gap than a footprint behind the unit queued before this one
 	if (!stop && gqAhead) {
 		const float room = std::max(gqRoom, 0.0f);
