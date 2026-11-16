@@ -623,6 +623,16 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 	return false;
 }
 
+bool CSupComGroundMoveType::HasFurtherPoint() const
+{
+	// a queued command with a position away from the current goal (not the order that is arriving now)
+	for (const Command& c: owner->commandAI->commandQue) {
+		if (c.GetNumParams() >= 3 && float3(c.GetParam(0), 0.0f, c.GetParam(2)).distance2D(goalPos * XZVector) > SQUARE_SIZE)
+			return true;
+	}
+	return false;
+}
+
 float CSupComGroundMoveType::FootprintDepth(const float3& pos) const
 {
 	// how far the footprint reaches into impassable squares: over the blocked squares it overlaps, the largest
@@ -1089,7 +1099,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			// MOV-020 R3/R4 (courses L6040, ord_orders): the move type arrives (Done) at a point while the next one is still
 			// queued, and the game's waypoint step only starts about 12 frames later; a unit with the waypoint dip does not
 			// brake for that arrival but takes the dip there and coasts at the dip speed until the next order starts
-			if (progressState == Done && !wpCoast && wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f && owner->commandAI != nullptr && !owner->commandAI->commandQue.empty()) {
+			if (progressState == Done && !wpCoast && wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f && owner->commandAI != nullptr && HasFurtherPoint()) {
 				wpCoast = true;
 				scSpeed = std::min(scSpeed, wpDip * maxSpeed);
 				wpDipUntil = gs->frameNum + wpDipFrames;

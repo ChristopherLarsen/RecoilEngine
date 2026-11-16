@@ -134,6 +134,7 @@ private:
 	bool FootprintBlocked(const float3& pos) const;
 	bool FootprintOnStructure(const float3& pos) const;
 	float FootprintDepth(const float3& pos) const;
+	bool HasFurtherPoint() const;
 	/// the waypoint, or the nearest point where the footprint fits; round a corner, a point to go to first
 	float3 FitWaypoint(const float3& wp) const;
 	/// SupComPathSmooth: the furthest waypoint ahead on the path reached in a straight line over open ground
