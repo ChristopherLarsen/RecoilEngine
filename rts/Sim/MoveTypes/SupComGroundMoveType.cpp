@@ -942,11 +942,6 @@ void CSupComGroundMoveType::CentreInGap(float3& req) const
 	float& r = latIsX? req.x: req.z;
 	const float most = std::max(math::fabs(r), 0.25f);
 	r = (math::fabs(to) <= most)? to: ((to > 0.0f)? most: -most);
-	// held and off the line: the sideways part alone (the forward part is refused by what holds the unit, and with it
-	// the correction)
-	if (math::fabs(to) > 0.01f) {
-		if (latIsX) req.z = 0.0f; else req.x = 0.0f;
-	}
 }
 
 float3 CSupComGroundMoveType::FitWaypoint(const float3& wp) const
