@@ -12,9 +12,12 @@
 #include <algorithm>
 
 #include "Game/Camera.h"
+#include "Rendering/GL/VertexArrayTypes.h"
 
-void CExpGenSpawnable::SupComAdjustQuad(VA_TYPE_TC* q) const
+void CExpGenSpawnable::SupComAddQuad(uint32_t pageNum, const VA_TYPE_TC& tl, const VA_TYPE_TC& tr, const VA_TYPE_TC& br, const VA_TYPE_TC& bl, int anim) const
 {
+	VA_TYPE_TC q[4] = {tl, tr, br, bl};
+
 	if (supcomAdditive != 0.0f) {
 		const float keep = 1.0f - std::clamp(supcomAdditive, 0.0f, 1.0f);
 		for (int i = 0; i < 4; ++i)
@@ -35,5 +38,13 @@ void CExpGenSpawnable::SupComAdjustQuad(VA_TYPE_TC* q) const
 				q[i].pos += v * (d.dot(v) * extra);
 			}
 		}
+	}
+
+	switch (anim) {
+		case 1: AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3], animParams1, animProgress1); break;
+		case 2: AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3], animParams2, animProgress2); break;
+		case 3: AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3], animParams3, animProgress3); break;
+		case 4: AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3], animParams4, animProgress4); break;
+		default: AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3]); break;
 	}
 }

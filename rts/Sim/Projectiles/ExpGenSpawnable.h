@@ -56,7 +56,7 @@ protected:
 	static void AddEffectsQuadImpl(uint32_t pageNum, const VA_TYPE_TC& tl, const VA_TYPE_TC& tr, const VA_TYPE_TC& br, const VA_TYPE_TC& bl);
 
 	static bool GetMemberInfo(SExpGenSpawnableMemberInfo& memberInfo);
-	void SupComAdjustQuad(VA_TYPE_TC* q) const; // supcom: CEG tags supcomAdditive / supcomStretch (SupComCEGQuad.cpp)
+	void SupComAddQuad(uint32_t pageNum, const VA_TYPE_TC& tl, const VA_TYPE_TC& tr, const VA_TYPE_TC& br, const VA_TYPE_TC& bl, int anim) const; // supcom: CEG tags supcomAdditive / supcomStretch (SupComCEGQuad.cpp)
 	float supcomAdditive = 0.0f; // supcom: 0 = the class blend as is, 1 = fully additive (alpha scaled by 1 - this)
 	float supcomStretch = 0.0f;  // supcom: lengthen along the on-screen velocity by 1 + this x speed (elmos/frame)
 
@@ -83,31 +83,31 @@ protected:
 template <>
 inline void CExpGenSpawnable::AddEffectsQuad<0>(uint32_t pageNum, const VA_TYPE_TC& tl, const VA_TYPE_TC& tr, const VA_TYPE_TC& br, const VA_TYPE_TC& bl) const {
 	// no animation
-	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { VA_TYPE_TC q[4] = {tl, tr, br, bl}; SupComAdjustQuad(q); AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3]); return; } // supcom
+	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { SupComAddQuad(pageNum, tl, tr, br, bl, 0); return; } // supcom
 	AddEffectsQuadImpl(pageNum, tl, tr, br, bl);
 }
 
 template <>
 inline void CExpGenSpawnable::AddEffectsQuad<1>(uint32_t pageNum, const VA_TYPE_TC& tl, const VA_TYPE_TC& tr, const VA_TYPE_TC& br, const VA_TYPE_TC& bl) const {
-	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { VA_TYPE_TC q[4] = {tl, tr, br, bl}; SupComAdjustQuad(q); AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3], animParams1, animProgress1); return; } // supcom
+	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { SupComAddQuad(pageNum, tl, tr, br, bl, 1); return; } // supcom
 	AddEffectsQuadImpl(pageNum, tl, tr, br, bl, animParams1, animProgress1);
 }
 
 template <>
 inline void CExpGenSpawnable::AddEffectsQuad<2>(uint32_t pageNum, const VA_TYPE_TC& tl, const VA_TYPE_TC& tr, const VA_TYPE_TC& br, const VA_TYPE_TC& bl) const {
-	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { VA_TYPE_TC q[4] = {tl, tr, br, bl}; SupComAdjustQuad(q); AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3], animParams2, animProgress2); return; } // supcom
+	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { SupComAddQuad(pageNum, tl, tr, br, bl, 2); return; } // supcom
 	AddEffectsQuadImpl(pageNum, tl, tr, br, bl, animParams2, animProgress2);
 }
 
 template <>
 inline void CExpGenSpawnable::AddEffectsQuad<3>(uint32_t pageNum, const VA_TYPE_TC& tl, const VA_TYPE_TC& tr, const VA_TYPE_TC& br, const VA_TYPE_TC& bl) const {
-	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { VA_TYPE_TC q[4] = {tl, tr, br, bl}; SupComAdjustQuad(q); AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3], animParams3, animProgress3); return; } // supcom
+	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { SupComAddQuad(pageNum, tl, tr, br, bl, 3); return; } // supcom
 	AddEffectsQuadImpl(pageNum, tl, tr, br, bl, animParams3, animProgress3);
 }
 
 template <>
 inline void CExpGenSpawnable::AddEffectsQuad<4>(uint32_t pageNum, const VA_TYPE_TC& tl, const VA_TYPE_TC& tr, const VA_TYPE_TC& br, const VA_TYPE_TC& bl) const {
-	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { VA_TYPE_TC q[4] = {tl, tr, br, bl}; SupComAdjustQuad(q); AddEffectsQuadImpl(pageNum, q[0], q[1], q[2], q[3], animParams4, animProgress4); return; } // supcom
+	if (supcomAdditive != 0.0f || supcomStretch != 0.0f) { SupComAddQuad(pageNum, tl, tr, br, bl, 4); return; } // supcom
 	AddEffectsQuadImpl(pageNum, tl, tr, br, bl, animParams4, animProgress4);
 }
 
