@@ -879,6 +879,61 @@ bool CSupComGroundMoveType::LineFits(const float3& a, const float3& b) const
 	return true;
 }
 
+bool CSupComGroundMoveType::NarrowGapCentre(const float3& p, bool& latIsX, float& centre) const
+{
+	// PTH-004-E: at p, a gap with walls on both sides across one axis whose open span is less than a square wider than the
+	// footprint (a one-cell gap); its centre line across that axis. Stateless and exact on the 1/8 elmo grid.
+	constexpr float SCAN = 0.125f;
+	const float w = HalfSize() * 2.0f;
+
+	for (int k = 0; k < 2; k++) {
+		const float3 lat = (k == 0)? float3(1.0f, 0.0f, 0.0f): float3(0.0f, 0.0f, 1.0f);
+
+		if (!FootprintBlocked(p + lat * w) || !FootprintBlocked(p - lat * w))
+			continue;
+
+		// a clear position across the gap nearest p
+		float d0 = 0.0f;
+		bool found = !FootprintBlocked(p);
+		for (int i = 1; !found && i * SCAN <= w; i++) {
+			if (!FootprintBlocked(p + lat * (i * SCAN))) { d0 = i * SCAN; found = true; }
+			else if (!FootprintBlocked(p - lat * (i * SCAN))) { d0 = -i * SCAN; found = true; }
+		}
+		if (!found)
+			continue;
+
+		float lo = d0, hi = d0;
+		while (lo - SCAN >= -w && !FootprintBlocked(p + lat * (lo - SCAN))) lo -= SCAN;
+		while (hi + SCAN <= w && !FootprintBlocked(p + lat * (hi + SCAN))) hi += SCAN;
+
+		if (hi - lo >= SQUARE_SIZE)
+			continue;
+
+		latIsX = (k == 0);
+		centre = (latIsX? p.x: p.z) + (lo + hi) * 0.5f;
+		return true;
+	}
+
+	return false;
+}
+
+void CSupComGroundMoveType::CentreInGap(float3& req) const
+{
+	// PTH-004-E: a step into a one-cell gap goes towards the gap's centre line across it and never past it, so a unit
+	// held at the gap stays on its row instead of swinging into the wall cells either side
+	bool latIsX = false;
+	float c = 0.0f;
+
+	if (!NarrowGapCentre(owner->pos + req, latIsX, c))
+		return;
+
+	const float cur = latIsX? owner->pos.x: owner->pos.z;
+	const float to = c - cur;
+	float& r = latIsX? req.x: req.z;
+	const float most = std::max(math::fabs(r), 0.25f);
+	r = (math::fabs(to) <= most)? to: ((to > 0.0f)? most: -most);
+}
+
 float3 CSupComGroundMoveType::FitWaypoint(const float3& wp) const
 {
 	// the nearest point to the waypoint (within a square and a half) where the footprint fits
@@ -890,6 +945,15 @@ float3 CSupComGroundMoveType::FitWaypoint(const float3& wp) const
 				fit = wp + o;
 				break;
 			}
+		}
+	}
+
+	// PTH-004-E: in a one-cell gap the waypoint is on the gap's centre line
+	{
+		bool latIsX = false;
+		float c = 0.0f;
+		if (!FootprintBlocked(fit) && NarrowGapCentre(fit, latIsX, c)) {
+			if (latIsX) fit.x = c; else fit.z = c;
 		}
 	}
 
@@ -1405,6 +1469,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			}
 
 			if (!blocked) {
+				CentreInGap(moveRequest);
+				moveRequest.x = GridStep(owner->pos.x, moveRequest.x);
+				moveRequest.z = GridStep(owner->pos.z, moveRequest.z);
 				float3 resultantMove;
 				UpdatePos(owner, moveRequest, resultantMove, ThreadPool::GetThreadNum());
 				blocked = !resultantMove.same(moveRequest);
