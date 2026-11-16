@@ -40,6 +40,7 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(wpDip),
 	CR_MEMBER(wpDipFrames),
 	CR_MEMBER(wpDipUntil),
+	CR_MEMBER(wpThrough),
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
 	CR_MEMBER(blockedRestart),
@@ -265,6 +266,9 @@ void CSupComGroundMoveType::ResetForNewOrder()
 	if (wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f) {
 		wpDipUntil = gs->frameNum + wpDipFrames;
 		scSpeed = std::min(scSpeed, wpDip * maxSpeed);
+		wpThrough = true;
+	} else {
+		wpThrough = false;
 	}
 }
 
@@ -999,6 +1003,19 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		case HEADING_CHANGED_MOVE: {
 			wantReverse = !HeadingLocked() && WantReverseTurnGo(waypointDir, flatFrontDir);
 			backTurn = !wantReverse && WantBackTurn();
+
+			// MOV-020 R4 (courses L5937, commander 150 deg turn-back): moved on to a new point while driving (the dip), the unit
+			// keeps driving forwards and turns while moving, with no reverse and no back-turn to rest, until the goal is no
+			// longer behind it or it has stopped
+			if (wpThrough) {
+				const float3 toGoal = (goalPos - owner->pos) * XZVector;
+				if (scSpeed <= 0.0f || toGoal.SqLength2D() <= 1e-6f || toGoal.dot(flatFrontDir) >= 0.0f) {
+					wpThrough = false;
+				} else {
+					wantReverse = false;
+					backTurn = false;
+				}
+			}
 		} break;
 		case HEADING_CHANGED_STOP:
 		case HEADING_CHANGED_STUN: {
