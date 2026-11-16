@@ -63,12 +63,10 @@ void SupComGapSnap::Snap(IPath::Path& path, const MoveDef& md)
 			if (c < 0.0f)
 				continue;
 
-			// this point and up to three neighbours each side that lead into or out of the gap (within the footprint and a square
-			// of the centre line: the planner's approach waypoint sat a whole cell off it, L6274)
-			const float reach = float(fs + 1) * SQUARE_SIZE;
-			for (int j = std::max(1, i - 3); j <= std::min(n - 2, i + 3); j++) {
+			// this point and up to two neighbours on the same line (within a square of the centre)
+			for (int j = std::max(1, i - 2); j <= std::min(n - 2, i + 2); j++) {
 				float& v = (axis == 0)? pts[j].x: pts[j].z;
-				if (std::fabs(v - c) <= reach)
+				if (std::fabs(v - c) <= SQUARE_SIZE)
 					v = c;
 			}
 			break;
