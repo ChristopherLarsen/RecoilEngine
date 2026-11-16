@@ -921,10 +921,20 @@ void CSupComGroundMoveType::CentreInGap(float3& req) const
 {
 	// PTH-004-E: a step into a one-cell gap goes towards the gap's centre line across it and never past it, so a unit
 	// held at the gap stays on its row instead of swinging into the wall cells either side
+	// only for a unit held at the gap (its steps refused): moving crowds keep their own line (PTH-002-B)
+	if (scBlockedFrames == 0)
+		return;
+
 	bool latIsX = false;
 	float c = 0.0f;
-
-	if (!NarrowGapCentre(owner->pos + req, latIsX, c))
+	bool found = false;
+	// the gap may lie ahead of the unit (a wall one cell thick that the footprint's front reaches): probe along the heading
+	// up to the footprint's front plus a square
+	const float reach = HalfSize() + SQUARE_SIZE;
+	const float3 fwd = (flatFrontDir * XZVector).SafeNormalize2D();
+	for (float d = 0.0f; d <= reach && !found; d += SQUARE_SIZE * 0.5f)
+		found = NarrowGapCentre(owner->pos + req + fwd * d, latIsX, c);
+	if (!found)
 		return;
 
 	const float cur = latIsX? owner->pos.x: owner->pos.z;
@@ -952,7 +962,7 @@ float3 CSupComGroundMoveType::FitWaypoint(const float3& wp) const
 	{
 		bool latIsX = false;
 		float c = 0.0f;
-		if (!FootprintBlocked(fit) && NarrowGapCentre(fit, latIsX, c)) {
+		if (scBlockedFrames > 0 && !FootprintBlocked(fit) && NarrowGapCentre(fit, latIsX, c)) {
 			if (latIsX) fit.x = c; else fit.z = c;
 		}
 	}
