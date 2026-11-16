@@ -43,6 +43,7 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(wpThrough),
 	CR_MEMBER(wpAdvance),
 	CR_MEMBER(wpCoast),
+	CR_MEMBER(wpFromCoast),
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
 	CR_MEMBER(blockedRestart),
@@ -269,7 +270,7 @@ void CSupComGroundMoveType::ResetForNewOrder()
 		wpDipUntil = gs->frameNum + wpDipFrames;
 		scSpeed = std::min(scSpeed, wpDip * maxSpeed);
 		wpThrough = true;
-	} else {
+	} else if (!wpFromCoast) {
 		wpThrough = false;
 	}
 }
@@ -324,7 +325,9 @@ void CSupComGroundMoveType::PushLuaState(lua_State* L) const
 void CSupComGroundMoveType::StartMovingRaw(const float3 moveGoalPos, float moveGoalRadius)
 {
 	// MOV-020 R3: an advance moves on from a point the unit has (nearly) reached; a new order from elsewhere is no advance
-	wpAdvance = wpCoast || ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
+	// after a coast (the dip already taken at the soft stop) the next order is no second advance
+	wpFromCoast = wpCoast;
+	wpAdvance = !wpCoast && ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
 	wpCoast = false;
 	CGroundMoveType::StartMovingRaw(moveGoalPos, moveGoalRadius);
 	ExactGoalRadius();
@@ -334,7 +337,9 @@ void CSupComGroundMoveType::StartMovingRaw(const float3 moveGoalPos, float moveG
 void CSupComGroundMoveType::StartMoving(float3 moveGoalPos, float moveGoalRadius)
 {
 	// MOV-020 R3: an advance moves on from a point the unit has (nearly) reached; a new order from elsewhere is no advance
-	wpAdvance = wpCoast || ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
+	// after a coast (the dip already taken at the soft stop) the next order is no second advance
+	wpFromCoast = wpCoast;
+	wpAdvance = !wpCoast && ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
 	wpCoast = false;
 	CGroundMoveType::StartMoving(moveGoalPos, moveGoalRadius);
 	ExactGoalRadius();
