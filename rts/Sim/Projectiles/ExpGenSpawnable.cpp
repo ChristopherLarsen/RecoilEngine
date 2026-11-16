@@ -35,6 +35,7 @@ CR_REG_METADATA(CExpGenSpawnable, (
 	CR_MEMBER(animProgress4),
 	CR_MEMBER_BEGINFLAG(CM_Config),
 		CR_MEMBER(rotParams),
+		CR_MEMBER(supcomAdditive), CR_MEMBER(supcomStretch), // supcom
 		CR_FAKE(animParams),
 		CR_MEMBER(animParams1),
 		CR_MEMBER(animParams2),
@@ -129,6 +130,7 @@ bool CExpGenSpawnable::GetMemberInfo(SExpGenSpawnableMemberInfo& memberInfo)
 	CHECK_MEMBER_INFO_BOOL_HASH  (CExpGenSpawnable, alwaysVisible, memberHashes[3]);
 
 	CHECK_MEMBER_INFO_FLOAT3(CExpGenSpawnable, rotParams);
+	CHECK_MEMBER_INFO_FLOAT (CExpGenSpawnable, supcomAdditive); CHECK_MEMBER_INFO_FLOAT(CExpGenSpawnable, supcomStretch); // supcom
 
 	CHECK_MEMBER_INFO_FLOAT3(CExpGenSpawnable, animParams1);
 	CHECK_MEMBER_INFO_FLOAT3(CExpGenSpawnable, animParams2);
