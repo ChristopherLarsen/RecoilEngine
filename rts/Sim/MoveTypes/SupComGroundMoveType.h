@@ -167,7 +167,8 @@ private:
 	float wpDip = 0.0f;          ///< MOV-020 R3: speed fraction of the top speed on moving on to a new point (0: none)
 	int wpDipFrames = 0;         ///< frames the dip lasts
 	int wpDipUntil = -1;         ///< frame the current dip ends
-	float3 dbgEndPos;            ///< diagnosis: the position at the end of the last update (not saved)
+	float3 dbgEndPos;            ///< the position at the end of the last update (PTH-004-E push guard; diagnosis)
+	bool dbgEndValid = false;
 	bool wpFromCoast = false;    ///< the current order followed a coast (its dip already taken)
 	bool wpCoast = false;        ///< MOV-020: a soft stop between queued points: coast at the dip speed until the next order
 	bool wpAdvance = false;      ///< MOV-020 R3: the current StartMoving moved on from a reached point (only then the dip)
