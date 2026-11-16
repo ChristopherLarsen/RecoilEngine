@@ -20,6 +20,7 @@
 #include "Sim/Weapons/WeaponDefHandler.h"
 #include "System/SpringMath.h"
 #include "System/UnorderedMap.hpp"
+#include "System/Log/ILog.h"
 
 CR_BIND_DERIVED(CSupComRibbonProjectile, CProjectile, )
 CR_REG_METADATA(CSupComRibbonProjectile, (
@@ -70,6 +71,8 @@ namespace {
 		 float3 oldPos; float3 oldDir; int seen = 0; int age = 0; };
 	spring::unordered_map<int, Trail> trails; // weapon projectile id -> its open segment (drawing only)
 	int lastPurge = 0;
+	std::vector<char> logged; // weapon defs whose first segment was logged
+	int segments = 0;         // segments made since the last count line
 }
 
 CSupComRibbonProjectile::CSupComRibbonProjectile(const CUnit* owner, int wdID, const float3& posNew, const float3& posOld, const float3& dirNew, const float3& dirOld)
@@ -157,6 +160,9 @@ void CSupComRibbonProjectile::OnWeaponUpdate(CWeaponProjectile* wp)
 
 		if ((t.age % p.period) == 0) {
 			t.seg = projMemPool.alloc<CSupComRibbonProjectile>(wp->owner(), wd->id, wp->pos, t.oldPos, dir, t.oldDir);
+			segments += 1;
+			if (wd->id >= (int)logged.size()) logged.resize(wd->id + 1, 0);
+			if (!logged[wd->id]) { logged[wd->id] = 1; LOG("[SupComRibbon] first segment for weapon %s at frame %d", wd->name.c_str(), now); }
 			t.oldPos = wp->pos;
 			t.oldDir = dir;
 		}
@@ -168,6 +174,7 @@ void CSupComRibbonProjectile::OnWeaponUpdate(CWeaponProjectile* wp)
 	// drop trails whose projectile went away without being seen with deleteMe set
 	if (now - lastPurge >= 30) { // frames between purges
 		lastPurge = now;
+		if (segments > 0 && now % 300 < 30) { LOG("[SupComRibbon] %d segments, %d open trails at frame %d", segments, (int)trails.size(), now); segments = 0; }
 		for (auto i = trails.begin(); i != trails.end(); ) {
 			if (now - i->second.seen > 2) i = trails.erase(i); else ++i;
 		}
