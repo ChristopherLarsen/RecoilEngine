@@ -594,6 +594,20 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 	return false;
 }
 
+bool CSupComGroundMoveType::FootprintOnStructure(const float3& pos) const
+{
+	// the same squares as FootprintBlocked, checked for structures (FootprintBlocked checks the terrain only)
+	const bool alongX = (math::fabs(flatFrontDir.x) > math::fabs(flatFrontDir.z));
+	const float hx = (alongX? footprintZ: footprintX) * 0.5f - (alongX? 0.0f: FOOTPRINT_SIDE_EPS);
+	const float hz = (alongX? footprintX: footprintZ) * 0.5f - (alongX? FOOTPRINT_SIDE_EPS: 0.0f);
+	const int sx0 = std::clamp(int((pos.x - hx) / SQUARE_SIZE), 0, mapDims.mapxm1);
+	const int sz0 = std::clamp(int((pos.z - hz) / SQUARE_SIZE), 0, mapDims.mapym1);
+	const int sx1 = std::clamp(std::max(sx0, int(math::ceil((pos.x + hx) / SQUARE_SIZE)) - 1), 0, mapDims.mapxm1);
+	const int sz1 = std::clamp(std::max(sz0, int(math::ceil((pos.z + hz) / SQUARE_SIZE)) - 1), 0, mapDims.mapym1);
+	const MoveTypes::CheckCollisionQuery q(owner);
+	return (CMoveMath::RangeIsBlocked(sx0, sx1, sz0, sz1, &q, ThreadPool::GetThreadNum()) & CMoveMath::BLOCK_STRUCTURE) != 0;
+}
+
 bool CSupComGroundMoveType::DirectLineClear()
 {
 	// re-checked a few times per second, and at once for a new goal
@@ -1289,6 +1303,14 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 					const int nsz = int(next.z / SQUARE_SIZE);
 
 					byStructure = (CMoveMath::IsBlockedStructure(*owner->moveDef, nsx, nsz, owner, ThreadPool::GetThreadNum()) != 0);
+
+					// courses L5866 lane 12 (MOV-020): a tank 4 elmos clear of a structure was refused by the engine's square
+					// footprint (the move def's size) while its own footprint (supcom_footprint_x/z) touched no structure square;
+					// this move type's footprint decides, so the step is taken
+					if (byStructure && !FootprintBlocked(next) && !FootprintOnStructure(next)) {
+						byStructure = false;
+						blocked = false;
+					}
 				}
 			}
 		}
