@@ -1070,7 +1070,16 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (owner->IsSkidding())
 		return;
 
-	bool stop = scStopNow;
+	// MOV-020 R3/R4 (courses L6040, ord_orders): the move type arrives (Done) at a point while the next one is still
+	// queued, and the game's waypoint step only starts about 12 frames later; a unit with the waypoint dip does not
+	// brake for that arrival but takes the dip there and coasts at the dip speed until the next order starts
+	if (progressState == Done && !wpCoast && wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f && owner->commandAI != nullptr && HasFurtherPoint()) {
+		wpCoast = true;
+		scSpeed = std::min(scSpeed, wpDip * maxSpeed);
+		wpDipUntil = gs->frameNum + wpDipFrames;
+		wpThrough = true;
+	}
+	bool stop = scStopNow && !wpCoast;
 	bool wantReverse = false;
 
 	switch (setHeading) {
@@ -1098,15 +1107,6 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			stop = true;
 		} break;
 		default: {
-			// MOV-020 R3/R4 (courses L6040, ord_orders): the move type arrives (Done) at a point while the next one is still
-			// queued, and the game's waypoint step only starts about 12 frames later; a unit with the waypoint dip does not
-			// brake for that arrival but takes the dip there and coasts at the dip speed until the next order starts
-			if (progressState == Done && !wpCoast && wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f && owner->commandAI != nullptr && HasFurtherPoint()) {
-				wpCoast = true;
-				scSpeed = std::min(scSpeed, wpDip * maxSpeed);
-				wpDipUntil = gs->frameNum + wpDipFrames;
-				wpThrough = true;
-			}
 			stop |= (progressState != Active && !(wpCoast && progressState == Done));
 		} break;
 	}
