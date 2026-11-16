@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "UnitHandler.h"
+#include "Sim/MoveTypes/SupComGroundMoveType.h" // supcom
 #include "Unit.h"
 #include "UnitDefHandler.h"
 #include "UnitMemPool.h"
@@ -468,6 +469,7 @@ void CUnitHandler::Update()
 
 	DeleteUnits();
 	UpdateUnitMoveTypes();
+	CSupComGroundMoveType::FlushCoastPolls(); // supcom
 	QueueDeleteUnits();
 	UpdateUnitLosStates();
 	SlowUpdateUnits();

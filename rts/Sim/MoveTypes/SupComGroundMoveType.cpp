@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "SupComGroundMoveType.h"
+#include "Sim/Units/UnitHandler.h"
 #include "Lua/LuaUtils.h"
 
 #include <algorithm>
@@ -623,6 +624,26 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 	}
 
 	return false;
+}
+
+std::vector<int> CSupComGroundMoveType::coastPolls;
+
+void CSupComGroundMoveType::FlushCoastPolls()
+{
+	// one-line hook in CUnitHandler::Update after the move-type loop: the command AI polls of units coasting between
+	// queued points (MOV-020 R1), outside the loop, in the order they were asked for
+	if (coastPolls.empty())
+		return;
+
+	std::vector<int> ids;
+	ids.swap(coastPolls);
+
+	for (const int id: ids) {
+		CUnit* u = unitHandler.GetUnit(id);
+		if (u == nullptr || u->commandAI == nullptr)
+			continue;
+		u->commandAI->SlowUpdate();
+	}
 }
 
 bool CSupComGroundMoveType::HasFurtherPoint() const
@@ -1741,8 +1762,10 @@ bool CSupComGroundMoveType::Update()
 	// MOV-020 R1 (courses L6087, commander course 3 advance 1.1 elmos): while a unit with the waypoint dip coasts between
 	// queued points, the game's inserted waypoint step is first polled at the command AI's slow update (up to 15 frames
 	// later, the unit long past the advance radius); the command AI is polled every frame of the coast, as an arrival does
+	// (deferred to after the move-type loop: a poll here ran Lua callins inside the loop and killed the engine when they
+	// spawned units, m3 formations L6122/L6125)
 	if (wpCoast && owner->commandAI != nullptr && progressState == Done)
-		owner->commandAI->SlowUpdate();
+		coastPolls.push_back(owner->id);
 
 	if (YieldLog() && FootprintBlocked(owner->pos) && owner->pos.SqDistance2D(updStart) > 1e-4f)
 		LOG("[SupComYield] f=%d unit %d on impassable squares: moved in its update (%.2f, %.2f) to (%.1f, %.1f) brk %d ho %d blk %d", gs->frameNum, owner->id, owner->pos.x - updStart.x, owner->pos.z - updStart.z, owner->pos.x, owner->pos.z, int(scBraking), scHandoverFrames, scBlockedFrames);
