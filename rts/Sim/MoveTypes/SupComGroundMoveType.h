@@ -172,6 +172,7 @@ private:
 	int wpDipUntil = -1;         ///< frame the current dip ends
 	float3 dbgEndPos;            ///< diagnosis: the position at the end of the last update (not saved)
 	bool wpFromCoast = false;    ///< the current order followed a coast (its dip already taken)
+	bool scHeldByStructure = false; ///< the last refused step was refused by a structure (PTH-004-E gap centring)
 	bool wpCoast = false;        ///< MOV-020: a soft stop between queued points: coast at the dip speed until the next order
 	bool wpAdvance = false;      ///< MOV-020 R3: the current StartMoving moved on from a reached point (only then the dip)
 	bool wpThrough = false;      ///< MOV-020 R4: moving through a point after a dip: forwards only until the goal is ahead
