@@ -43,6 +43,9 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(wpDipUntil),
 	CR_MEMBER(wpThrough),
 	CR_MEMBER(wpAdvance),
+	CR_MEMBER(reorderDip),
+	CR_MEMBER(reorderDipFrames),
+	CR_MEMBER(dipCap),
 	CR_MEMBER(wpCoast),
 	CR_MEMBER(wpFromCoast),
 	CR_MEMBER(settleRate),
@@ -228,6 +231,9 @@ CSupComGroundMoveType::CSupComGroundMoveType(CUnit* owner): CGroundMoveType(owne
 	// the unit accelerates again at its own rate (0 or no keys: no dip)
 	wpDip = std::clamp(CustomParam(ud, "supcom_wp_dip", 0.0f), 0.0f, 1.0f);
 	wpDipFrames = std::max(0, int(CustomParam(ud, "supcom_wp_dip_frames", 0.0f)));
+	// MOV-020 R7: a replacing order while driving dips the speed to this fraction for this many frames (0 or no keys: none)
+	reorderDip = std::clamp(CustomParam(ud, "supcom_reorder_dip", 0.0f), 0.0f, 1.0f);
+	reorderDipFrames = std::max(0, int(CustomParam(ud, "supcom_reorder_dip_frames", 0.0f)));
 	footprintX = std::max(0.0f, CustomParam(ud, "supcom_footprint_x", md->xsize * SQUARE_SIZE));
 	footprintZ = std::max(0.0f, CustomParam(ud, "supcom_footprint_z", md->zsize * SQUARE_SIZE));
 	sinkLower = (CustomParam(ud, "supcom_sink_lower", 0.0f) != 0.0f);
@@ -268,11 +274,18 @@ void CSupComGroundMoveType::ResetForNewOrder()
 
 	// MOV-020 R3: on to a new point while driving: the speed dip
 	if (wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f && wpAdvance) {
-		wpDipUntil = gs->frameNum + wpDipFrames;
+		wpDipUntil = gs->frameNum + wpDipFrames; dipCap = wpDip;
 		scSpeed = std::min(scSpeed, wpDip * maxSpeed);
 		wpThrough = true;
 	} else if (!wpFromCoast) {
 		wpThrough = false;
+	}
+
+	// MOV-020 R7: a replacing order (not an advance) while driving: the reorder dip
+	if (!wpAdvance && !wpFromCoast && reorderDip > 0.0f && reorderDipFrames > 0 && scSpeed > 0.0f) {
+		scSpeed = std::min(scSpeed, reorderDip * maxSpeed);
+		wpDipUntil = gs->frameNum + reorderDipFrames;
+		dipCap = reorderDip;
 	}
 }
 
@@ -360,7 +373,7 @@ void CSupComGroundMoveType::StopMoving(bool callScript, bool hardStop, bool canc
 	if (wpCoast) {
 		// the dip starts here, when the point is reached, not when the next order arrives
 		scSpeed = std::min(scSpeed, wpDip * maxSpeed);
-		wpDipUntil = gs->frameNum + wpDipFrames;
+		wpDipUntil = gs->frameNum + wpDipFrames; dipCap = wpDip;
 		wpThrough = true;
 		return;
 	}
@@ -774,6 +787,11 @@ bool CSupComGroundMoveType::LineOpen(const float3& a, const float3& b) const
 
 float3 CSupComGroundMoveType::SmoothedWaypoint(const float3& cwp, const float3& opos)
 {
+	// MOV-020 R2 (wpc case G): on the leg after a waypoint advance, steer straight at the goal while the straight line to it
+	// is clear and open ground, instead of onto the planner's square-centre waypoints (a 7-9 deg kick at each hand-over)
+	if ((wpAdvance || wpFromCoast) && goalPos.SqDistance2D(opos) > Square(SQUARE_SIZE) && LineOpen(opos, goalPos))
+		return goalPos;
+
 	if (!PathSmoothOn() || pathID == 0)
 		return cwp;
 
@@ -1097,7 +1115,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (progressState == Done && !wpCoast && wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f && owner->commandAI != nullptr && HasFurtherPoint()) {
 		wpCoast = true;
 		scSpeed = std::min(scSpeed, wpDip * maxSpeed);
-		wpDipUntil = gs->frameNum + wpDipFrames;
+		wpDipUntil = gs->frameNum + wpDipFrames; dipCap = wpDip;
 		wpThrough = true;
 	}
 	bool stop = scStopNow && !wpCoast;
@@ -1165,7 +1183,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	// MOV-020 R3: during the dip after moving on to a new point, no faster than the dip speed
 	if (gs->frameNum < wpDipUntil || wpCoast)
-		topSpeed = std::min(topSpeed, wpDip * maxSpeed);
+		topSpeed = std::min(topSpeed, dipCap * maxSpeed);
 
 	// corner speed (owner pathing courses 2026-11-15): before a queued move point whose next leg turns away, the unit
 	// slows so that the turn at its turn rate stays within the arrival radius of the point: the arc tangent to both legs

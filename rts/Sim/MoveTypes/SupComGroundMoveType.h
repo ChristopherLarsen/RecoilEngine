@@ -176,6 +176,9 @@ private:
 	float3 dbgEndPos;            ///< diagnosis: the position at the end of the last update (not saved)
 	bool wpFromCoast = false;    ///< the current order followed a coast (its dip already taken)
 	bool wpCoast = false;        ///< MOV-020: a soft stop between queued points: coast at the dip speed until the next order
+	float reorderDip = 0.0f;     ///< MOV-020 R7: speed fraction on a replacing order while driving (0: none)
+	int reorderDipFrames = 0;
+	float dipCap = 0.0f;         ///< the fraction of the top speed the current dip holds
 	bool wpAdvance = false;      ///< MOV-020 R3: the current StartMoving moved on from a reached point (only then the dip)
 	bool wpThrough = false;      ///< MOV-020 R4: moving through a point after a dip: forwards only until the goal is ahead
 	float inPlaceRate = 0.0f;    ///< heading units per frame while stopped or nearly stopped; 0 means none
