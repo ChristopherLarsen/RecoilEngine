@@ -965,7 +965,16 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (scHandoverFrames > 0) {
 		if (progressState == Active && owner->pos.SqDistance2D(scHandoverFrom) < Square(SQUARE_SIZE * 2.0f)) {
 			scHandoverFrames--;
+			const float3 before = owner->pos;
 			CGroundMoveType::UpdateUnitPosition();
+
+			// PTH-004-E (L5987): the engine's slide (its own square footprint) took a unit held at a block in a one-cell gap
+			// up to 6 elmos sideways into the wall cells; a slide that puts this move type's footprint onto impassable
+			// squares it was not on is undone
+			if (FootprintBlocked(owner->pos) && !FootprintBlocked(before)) {
+				owner->Move(before, false);
+				owner->SetVelocityAndSpeed(ZeroVector);
+			}
 
 			scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
 			scPhase = PHASE_DRIVE;
