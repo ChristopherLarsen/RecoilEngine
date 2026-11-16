@@ -3,7 +3,6 @@
 // #undef NDEBUG
 
 #include "PathManager.h"
-#include "SupComGapSnap.h" // supcom
 #include "PathingState.h"
 #include "PathConstants.h"
 #include "PathFinder.h"
@@ -237,7 +236,6 @@ std::int64_t CPathManager::PostFinalizeRefresh()
 void CPathManager::FinalizePath(MultiPath* path, const float3 startPos, const float3 goalPos, const bool cantGetCloser)
 {
 	ZoneScoped;
-	SupComGapSnap::Snap(path->maxResPath, *path->moveDef); // supcom
 	IPath::Path* sp = &path->lowResPath;
 	IPath::Path* ep = &path->maxResPath;
 
