@@ -640,11 +640,29 @@ bool CSupComGroundMoveType::FootprintBlocked(const float3& pos) const
 }
 
 std::vector<int> CSupComGroundMoveType::coastPolls;
+std::vector<int> CSupComGroundMoveType::arrivePolls;
 
 void CSupComGroundMoveType::FlushCoastPolls()
 {
 	// one-line hook in CUnitHandler::Update after the move-type loop: the command AI polls of units coasting between
 	// queued points (MOV-020 R1), outside the loop, in the order they were asked for
+	if (!arrivePolls.empty()) {
+		std::vector<int> ids;
+		ids.swap(arrivePolls);
+
+		for (const int id: ids) {
+			CUnit* u = unitHandler.GetUnit(id);
+			if (u == nullptr)
+				continue;
+			CSupComGroundMoveType* mt = dynamic_cast<CSupComGroundMoveType*>(u->moveType);
+			if (mt == nullptr || mt->progressState != Active)
+				continue;
+			mt->atGoal = true;
+			mt->atEndOfPath = true;
+			mt->Arrived(false);
+		}
+	}
+
 	if (coastPolls.empty())
 		return;
 
@@ -1784,6 +1802,14 @@ bool CSupComGroundMoveType::Update()
 	// spawned units, m3 formations L6122/L6125)
 	if (wpCoast && owner->commandAI != nullptr && progressState == Done)
 		coastPolls.push_back(owner->id);
+
+	// MOV-020-A (path-courses L6274-L6293): arrival is tested in the plan stage on the position the unit had before this
+	// frame's move, and reported a frame later; with the game's finish check one more frame on, the waypoint step finished
+	// 3.0 elmos from the point against R2's 4. A unit with the waypoint dip and a further queued point arrives on the frame
+	// its move takes it inside the goal radius (after the loop, in order, like the coast poll).
+	if (wpDip > 0.0f && progressState == Active && owner->commandAI != nullptr && !atGoal &&
+	    owner->pos.SqDistance2D(goalPos) <= Square(goalRadius + extraRadius) && ArrivalAllowed() && HasFurtherPoint())
+		arrivePolls.push_back(owner->id);
 
 	if (YieldLog() && FootprintBlocked(owner->pos) && owner->pos.SqDistance2D(updStart) > 1e-4f)
 		LOG("[SupComYield] f=%d unit %d on impassable squares: moved in its update (%.2f, %.2f) to (%.1f, %.1f) brk %d ho %d blk %d", gs->frameNum, owner->id, owner->pos.x - updStart.x, owner->pos.z - updStart.z, owner->pos.x, owner->pos.z, int(scBraking), scHandoverFrames, scBlockedFrames);

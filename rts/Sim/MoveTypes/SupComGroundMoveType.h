@@ -140,6 +140,7 @@ public:
 	static void FlushCoastPolls();
 private:
 	static std::vector<int> coastPolls;
+	static std::vector<int> arrivePolls; // MOV-020-A: arrivals found after the move, reported after the loop
 	/// the waypoint, or the nearest point where the footprint fits; round a corner, a point to go to first
 	float3 FitWaypoint(const float3& wp) const;
 	/// SupComPathSmooth: the furthest waypoint ahead on the path reached in a straight line over open ground
