@@ -1744,13 +1744,6 @@ bool CSupComGroundMoveType::Update()
 	if (wpCoast && owner->commandAI != nullptr && progressState == Done)
 		owner->commandAI->SlowUpdate();
 
-	// PTH-004-E (L6107): a unit held at a block in a one-cell gap swung 2.13 elmos either side of the gap line in its own
-	// update, into the wall cells (the step test did not see it); an own update that leaves the footprint deeper in
-	// impassable squares is undone (not the engine handovers, which free units pushed into walls)
-	if (scHandoverFrames == 0 && scBlockedFrames < BLOCKED_HANDOVER_FRAMES && owner->pos.SqDistance2D(updStart) > 1e-6f &&
-	    FootprintDepth(owner->pos) > FootprintDepth(updStart) + 1e-3f)
-		owner->Move(updStart, false);
-
 	if (YieldLog() && FootprintBlocked(owner->pos) && owner->pos.SqDistance2D(updStart) > 1e-4f)
 		LOG("[SupComYield] f=%d unit %d on impassable squares: moved in its update (%.2f, %.2f) to (%.1f, %.1f) brk %d ho %d blk %d", gs->frameNum, owner->id, owner->pos.x - updStart.x, owner->pos.z - updStart.z, owner->pos.x, owner->pos.z, int(scBraking), scHandoverFrames, scBlockedFrames);
 	dbgEndPos = owner->pos;
