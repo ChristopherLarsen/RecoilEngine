@@ -43,7 +43,6 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(wpThrough),
 	CR_MEMBER(wpAdvance),
 	CR_MEMBER(wpCoast),
-	CR_MEMBER(scHeldByStructure),
 	CR_MEMBER(wpFromCoast),
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
@@ -922,12 +921,9 @@ void CSupComGroundMoveType::CentreInGap(float3& req) const
 {
 	// PTH-004-E: a step into a one-cell gap goes towards the gap's centre line across it and never past it, so a unit
 	// held at the gap stays on its row instead of swinging into the wall cells either side
-	// only for a unit held at the gap by a structure: moving crowds and units held by other movers keep their own line
-	// (PTH-002-B: two units centring in a two-way gap held each other for 1300 ticks)
-	if (scBlockedFrames == 0 || !scHeldByStructure)
+	// only for a unit held at the gap (its steps refused): moving crowds keep their own line (PTH-002-B)
+	if (scBlockedFrames == 0)
 		return;
-
-	const float3 orig = req;
 
 	bool latIsX = false;
 	float c = 0.0f;
@@ -943,10 +939,6 @@ void CSupComGroundMoveType::CentreInGap(float3& req) const
 
 	const float cur = latIsX? owner->pos.x: owner->pos.z;
 	const float to = c - cur;
-
-	// a centre line more than a square off the unit's own line is another gap (L6131: row 11.4, 8 elmos into the wall)
-	if (math::fabs(to) > SQUARE_SIZE)
-		return;
 	float& r = latIsX? req.x: req.z;
 	const float most = std::max(math::fabs(r), 0.25f);
 	r = (math::fabs(to) <= most)? to: ((to > 0.0f)? most: -most);
@@ -955,10 +947,6 @@ void CSupComGroundMoveType::CentreInGap(float3& req) const
 	if (math::fabs(to) > 0.01f) {
 		if (latIsX) req.z = 0.0f; else req.x = 0.0f;
 	}
-
-	// never into the walls: a correction that leaves the footprint blocked or deeper is dropped
-	if (FootprintBlocked(owner->pos + req) && FootprintDepth(owner->pos + req) >= FootprintDepth(owner->pos) - 1e-3f)
-		req = orig;
 }
 
 float3 CSupComGroundMoveType::FitWaypoint(const float3& wp) const
@@ -1510,7 +1498,6 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 					const int nsz = int(next.z / SQUARE_SIZE);
 
 					byStructure = (CMoveMath::IsBlockedStructure(*owner->moveDef, nsx, nsz, owner, ThreadPool::GetThreadNum()) != 0);
-					scHeldByStructure = byStructure;
 
 					// courses L5866 lane 12 (MOV-020): a tank 4 elmos clear of a structure was refused by the engine's square
 					// footprint (the move def's size) while its own footprint (supcom_footprint_x/z) touched no structure square;
