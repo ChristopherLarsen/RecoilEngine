@@ -14,6 +14,7 @@
 #include "ConsoleHistory.h"
 #include "CommandMessage.h"
 #include "Game.h"
+#include "SupComFrameStep.h"
 #include "GameSetup.h"
 #include "GlobalUnsynced.h"
 #include "SelectedUnitsHandler.h"
@@ -1492,6 +1493,14 @@ public:
 		return true;
 	}
 
+};
+
+
+
+class SupComStepActionExecutor : public IUnsyncedActionExecutor {
+public:
+	SupComStepActionExecutor() : IUnsyncedActionExecutor("SupComStep", "supcom: run N sim frames then hold (captures); off ends") {}
+	bool Execute(const UnsyncedAction& action) const final { SupComFrameStep::Command(action.GetArgs()); return true; }
 };
 
 
@@ -4135,6 +4144,7 @@ void UnsyncedGameCommands::AddDefaultActionExecutors()
 	AddActionExecutor(AllocActionExecutor<TrackActionExecutor>());
 	AddActionExecutor(AllocActionExecutor<TrackModeActionExecutor>());
 	AddActionExecutor(AllocActionExecutor<PauseActionExecutor>());
+	AddActionExecutor(AllocActionExecutor<SupComStepActionExecutor>()); // supcom
 	AddActionExecutor(AllocActionExecutor<DebugActionExecutor>());
 	AddActionExecutor(AllocActionExecutor<DebugCubeMapActionExecutor>());
 	AddActionExecutor(AllocActionExecutor<DebugQuadFieldActionExecutor>());

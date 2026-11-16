@@ -3,6 +3,7 @@
 #include <cinttypes>
 
 #include "Game/Game.h"
+#include "Game/SupComFrameStep.h"
 #include "GameServer.h"
 
 #include "ExternalAI/EngineOutHandler.h"
@@ -299,6 +300,7 @@ void CGame::ClientReadNet()
 					memcpy(peekPacket->data + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(int32_t), &syncCheckSum, sizeof(syncCheckSum));
 				}
 			}
+			if (SupComFrameStep::Hold(peekPacket)) break; // supcom: SupComStep holds sim frames between steps
 		}
 
 

@@ -34,6 +34,7 @@ make_global_var(sources_engine_Game
 		"${CMAKE_CURRENT_SOURCE_DIR}/GlobalUnsynced.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComBuildSnap.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComLocalView.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/SupComFrameStep.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/IVideoCapturing.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/InMapDraw.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/InMapDrawModel.cpp"
