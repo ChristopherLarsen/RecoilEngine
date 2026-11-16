@@ -1043,6 +1043,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			}
 		}
 
+		float cornerFloor = 0.0f; // the corner arc speed below which the turn-circle cap must not go while a further point is queued
 		if (haveNext) {
 			const float3 here = owner->pos * XZVector;
 			const float3 in = (p0 - here).SafeNormalize2D();
@@ -1062,6 +1063,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				if (CornerLog() && (gs->frameNum + owner->id) % 5 == 0)
 					LOG("[SupComCorner] f=%d u=%d defl %.0f to point %.1f cap %.3f allow %.3f top %.3f speed %.3f", gs->frameNum, owner->id, d * math::RAD_TO_DEG, toPoint, cap, allow, topSpeed, scSpeed);
 				topSpeed = std::min(topSpeed, std::max(allow, cap));
+				cornerFloor = cap;
 			}
 		}
 
@@ -1090,6 +1092,11 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			float circ = CircleCap(p0);
 			if (haveNext && (p0 - here).Length2D() <= 3.0f * arrival)
 				circ = std::min(circ, CircleCap(p1));
+			// courses trace L5115 lane 12 (MOV-020 R2: no stop at an intermediate point): with a further point queued the cap
+			// keeps at least the corner arc speed (an arc passing within the arrival radius), so the unit rounds the
+			// corner instead of slowing to under 3 elmos/s and turning on the spot.
+			if (haveNext)
+				circ = std::max(circ, std::min(cornerFloor, topSpeed));
 			if (CornerLog() && circ < topSpeed && (gs->frameNum + owner->id) % 5 == 0)
 				LOG("[SupComCorner] f=%d u=%d circle cap %.3f (top %.3f, speed %.3f)", gs->frameNum, owner->id, circ, topSpeed, scSpeed);
 			topSpeed = std::min(topSpeed, circ);
