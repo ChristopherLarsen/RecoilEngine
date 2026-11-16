@@ -1115,8 +1115,11 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 				if (CornerLog() && (gs->frameNum + owner->id) % 5 == 0)
 					LOG("[SupComCorner] f=%d u=%d defl %.0f to point %.1f cap %.3f allow %.3f top %.3f speed %.3f", gs->frameNum, owner->id, d * math::RAD_TO_DEG, toPoint, cap, allow, topSpeed, scSpeed);
-				topSpeed = std::min(topSpeed, std::max(allow, cap));
-				cornerFloor = cap;
+				// MOV-020 R4 (courses L5937 commander course 3, 150 deg): a unit with the waypoint dip slows into a corner no
+				// further than the dip speed and makes the turn while moving after it
+				const float dipFloor = (wpDip > 0.0f && wpDipFrames > 0)? wpDip * maxSpeed: 0.0f;
+				topSpeed = std::min(topSpeed, std::max({allow, cap, dipFloor}));
+				cornerFloor = std::max(cap, dipFloor);
 			}
 		}
 
