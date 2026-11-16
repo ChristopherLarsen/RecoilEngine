@@ -232,6 +232,16 @@ void main() {
 		vAlpha   *= fade;
 	}
 
+	// supcom (TER-008 v2 R5, case G): a Lua decal with userDefined0.y > 0 is cut off at that camera distance (elmos), over a
+	// 10 % band so it does not pop; y = 0 (the default) changes nothing. Render-only.
+	if (decalType == 4u && userDefined0.y > 0.0) {
+		vec2 cutMid = (posTL + posTR + posBL + posBR) * 0.25;
+		vec3 cutCam = (gl_ModelViewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+		float cut = 1.0 - smoothstep(userDefined0.y * 0.9, userDefined0.y, distance(cutCam, vec3(cutMid.x, HeightAtWorldPos(cutMid), cutMid.y)));
+		alphaMax *= cut;
+		vAlpha   *= cut;
+	}
+
 	vDecalType = float(decalType); //copy type only, don't care about ID
 
 	#if 1
