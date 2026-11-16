@@ -1738,6 +1738,12 @@ bool CSupComGroundMoveType::Update()
 
 	const bool moved = CGroundMoveType::Update();
 
+	// MOV-020 R1 (courses L6087, commander course 3 advance 1.1 elmos): while a unit with the waypoint dip coasts between
+	// queued points, the game's inserted waypoint step is first polled at the command AI's slow update (up to 15 frames
+	// later, the unit long past the advance radius); the command AI is polled every frame of the coast, as an arrival does
+	if (wpCoast && owner->commandAI != nullptr && progressState == Done)
+		owner->commandAI->SlowUpdate();
+
 	if (YieldLog() && FootprintBlocked(owner->pos) && owner->pos.SqDistance2D(updStart) > 1e-4f)
 		LOG("[SupComYield] f=%d unit %d on impassable squares: moved in its update (%.2f, %.2f) to (%.1f, %.1f) brk %d ho %d blk %d", gs->frameNum, owner->id, owner->pos.x - updStart.x, owner->pos.z - updStart.z, owner->pos.x, owner->pos.z, int(scBraking), scHandoverFrames, scBlockedFrames);
 	dbgEndPos = owner->pos;
