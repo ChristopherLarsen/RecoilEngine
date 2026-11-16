@@ -349,8 +349,13 @@ void CSupComGroundMoveType::StopMoving(bool callScript, bool hardStop, bool canc
 	// is already queued, and the next order starts about 12 frames later; a unit with the waypoint dip does not brake
 	// for that stop but coasts at the dip speed until the next order starts
 	wpCoast = (!hardStop && wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f && owner->commandAI != nullptr && owner->commandAI->commandQue.size() > 1);
-	if (wpCoast)
+	if (wpCoast) {
+		// the dip starts here, when the point is reached, not when the next order arrives
+		scSpeed = std::min(scSpeed, wpDip * maxSpeed);
+		wpDipUntil = gs->frameNum + wpDipFrames;
+		wpThrough = true;
 		return;
+	}
 
 	// a stop order brakes at once
 	scStopNow = true;
