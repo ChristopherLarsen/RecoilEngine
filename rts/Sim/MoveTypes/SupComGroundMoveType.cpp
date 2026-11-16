@@ -787,9 +787,9 @@ bool CSupComGroundMoveType::LineOpen(const float3& a, const float3& b) const
 
 float3 CSupComGroundMoveType::SmoothedWaypoint(const float3& cwp, const float3& opos)
 {
-	// MOV-020 R2 (wpc case G): on the leg after a waypoint advance, steer straight at the goal while the straight line to it
+	// MOV-020 R2 (wpc case G): a unit with the waypoint dip (every leg, the first too: 0.5 drift on it, L6191) steers straight at the goal while the straight line to it
 	// is clear and open ground, instead of onto the planner's square-centre waypoints (a 7-9 deg kick at each hand-over)
-	if ((wpAdvance || wpFromCoast) && goalPos.SqDistance2D(opos) > Square(SQUARE_SIZE) && LineOpen(opos, goalPos))
+	if (wpDip > 0.0f && wpDipFrames > 0 && goalPos.SqDistance2D(opos) > Square(SQUARE_SIZE) && LineOpen(opos, goalPos))
 		return goalPos;
 
 	if (!PathSmoothOn() || pathID == 0)
