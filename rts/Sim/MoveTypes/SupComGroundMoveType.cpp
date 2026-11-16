@@ -44,8 +44,6 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(wpAdvance),
 	CR_MEMBER(wpCoast),
 	CR_MEMBER(wpFromCoast),
-	CR_MEMBER(dbgEndPos),
-	CR_MEMBER(dbgEndValid),
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
 	CR_MEMBER(blockedRestart),
@@ -1088,7 +1086,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			stop = true;
 		} break;
 		default: {
-			stop |= (progressState != Active && !wpCoast);
+			stop |= (progressState != Active);
 		} break;
 	}
 
@@ -1713,12 +1711,6 @@ bool CSupComGroundMoveType::Update()
 {
 	// diagnosis (PTH-004-E): with the footprint on impassable squares, where the unit was moved: between updates (the
 	// collision pass) or in this update
-	// PTH-004-E (L6075): pushed between updates (the collision pass) deeper into impassable squares than this move type
-	// left the unit: the push is undone (a push that does not go deeper is kept)
-	if (dbgEndValid && owner->pos.SqDistance2D(dbgEndPos) > 1e-6f && FootprintDepth(owner->pos) > FootprintDepth(dbgEndPos) + 1e-3f) {
-		owner->Move(dbgEndPos, false);
-	}
-
 	const float3 updStart = owner->pos;
 	if (YieldLog() && FootprintBlocked(owner->pos) && updStart.SqDistance2D(dbgEndPos) > 1e-4f)
 		LOG("[SupComYield] f=%d unit %d on impassable squares: moved between updates (%.2f, %.2f) to (%.1f, %.1f)", gs->frameNum, owner->id, updStart.x - dbgEndPos.x, updStart.z - dbgEndPos.z, updStart.x, updStart.z);
@@ -1728,7 +1720,6 @@ bool CSupComGroundMoveType::Update()
 	if (YieldLog() && FootprintBlocked(owner->pos) && owner->pos.SqDistance2D(updStart) > 1e-4f)
 		LOG("[SupComYield] f=%d unit %d on impassable squares: moved in its update (%.2f, %.2f) to (%.1f, %.1f) brk %d ho %d blk %d", gs->frameNum, owner->id, owner->pos.x - updStart.x, owner->pos.z - updStart.z, owner->pos.x, owner->pos.z, int(scBraking), scHandoverFrames, scBlockedFrames);
 	dbgEndPos = owner->pos;
-	dbgEndValid = true;
 
 	// MOV-009 R8: Land -> Seabed at the switch depth, back to Land as the depth falls to zero
 	if (seabedSwitchDepth > 0.0f) {
