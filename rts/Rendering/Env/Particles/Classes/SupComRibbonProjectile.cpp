@@ -147,7 +147,7 @@ void CSupComRibbonProjectile::OnWeaponUpdate(CWeaponProjectile* wp)
 	} else {
 		Trail& t = it->second;
 		const float3 moved = wp->pos - t.oldPos;
-		const float3 dir = (wp->speed.SqLength() > 1e-6f)? float3(wp->speed).ANormalize(): ((moved.SqLength() > 1e-6f)? moved.ANormalize(): t.oldDir);
+		const float3 dir = (wp->speed.SqLength() > 1e-6f)? float3(wp->speed).ANormalize(): ((moved.SqLength() > 1e-6f)? float3(moved).ANormalize(): t.oldDir);
 		t.seen = now;
 		t.age += 1;
 
