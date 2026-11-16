@@ -41,6 +41,7 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(wpDipFrames),
 	CR_MEMBER(wpDipUntil),
 	CR_MEMBER(wpThrough),
+	CR_MEMBER(wpAdvance),
 	CR_MEMBER(settleRate),
 	CR_MEMBER(stopSpeed),
 	CR_MEMBER(blockedRestart),
@@ -263,7 +264,7 @@ void CSupComGroundMoveType::ResetForNewOrder()
 		scPhase = PHASE_DRIVE;
 
 	// MOV-020 R3: on to a new point while driving: the speed dip
-	if (wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f) {
+	if (wpDip > 0.0f && wpDipFrames > 0 && scSpeed > 0.0f && wpAdvance) {
 		wpDipUntil = gs->frameNum + wpDipFrames;
 		scSpeed = std::min(scSpeed, wpDip * maxSpeed);
 		wpThrough = true;
@@ -321,6 +322,8 @@ void CSupComGroundMoveType::PushLuaState(lua_State* L) const
 
 void CSupComGroundMoveType::StartMovingRaw(const float3 moveGoalPos, float moveGoalRadius)
 {
+	// MOV-020 R3: an advance moves on from a point the unit has (nearly) reached; a new order from elsewhere is no advance
+	wpAdvance = ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
 	CGroundMoveType::StartMovingRaw(moveGoalPos, moveGoalRadius);
 	ExactGoalRadius();
 	ResetForNewOrder();
@@ -328,6 +331,8 @@ void CSupComGroundMoveType::StartMovingRaw(const float3 moveGoalPos, float moveG
 
 void CSupComGroundMoveType::StartMoving(float3 moveGoalPos, float moveGoalRadius)
 {
+	// MOV-020 R3: an advance moves on from a point the unit has (nearly) reached; a new order from elsewhere is no advance
+	wpAdvance = ((owner->pos - goalPos) * XZVector).Length2D() <= 2.0f * SQUARE_SIZE;
 	CGroundMoveType::StartMoving(moveGoalPos, moveGoalRadius);
 	ExactGoalRadius();
 	ResetForNewOrder();

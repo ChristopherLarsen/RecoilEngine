@@ -166,6 +166,7 @@ private:
 	float wpDip = 0.0f;          ///< MOV-020 R3: speed fraction of the top speed on moving on to a new point (0: none)
 	int wpDipFrames = 0;         ///< frames the dip lasts
 	int wpDipUntil = -1;         ///< frame the current dip ends
+	bool wpAdvance = false;      ///< MOV-020 R3: the current StartMoving moved on from a reached point (only then the dip)
 	bool wpThrough = false;      ///< MOV-020 R4: moving through a point after a dip: forwards only until the goal is ahead
 	float inPlaceRate = 0.0f;    ///< heading units per frame while stopped or nearly stopped; 0 means none
 	float settleRate = 1.0f;     ///< per frame
