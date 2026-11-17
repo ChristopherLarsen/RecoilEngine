@@ -360,11 +360,15 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 				if (fb.seenGen[ni] == gen)
 					continue;
 
-				fb.seenGen[ni] = gen;
-
-				// diagonal steps only past two open orthogonal neighbours (no corner cutting)
+				// diagonal steps only past two open orthogonal neighbours (no corner cutting). A refused diagonal does not
+				// mark the square seen: it may still be entered orthogonally from another square (PTH-004-A: the first
+				// visit to a square of a gap exactly one footprint wide was a corner-cut diagonal from beside the gap,
+				// which closed the gap to the fill while the planner and the move type drove through it)
 				if (dx != 0 && dz != 0 && (!standable(cx + dx, cz) || !standable(cx, cz + dz)))
 					continue;
+
+				fb.seenGen[ni] = gen;
+
 				if (!standable(nx, nz))
 					continue;
 
