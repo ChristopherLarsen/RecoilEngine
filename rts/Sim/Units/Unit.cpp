@@ -3,6 +3,7 @@
 #include "System/RangesCompat.h"
 #include "UnitDef.h"
 #include "Unit.h"
+#include "Game/SupComSelect.h" // supcom
 #include "UnitHandler.h"
 #include "UnitDefHandler.h"
 #include "UnitLoader.h"
@@ -2594,6 +2595,7 @@ bool CUnit::AttachUnit(CUnit* unit, int piece, bool force)
 		}
 
 		unit->UpdateVoidState(piece < 0);
+		SupComSelect::AfterAttach(unit); // supcom
 		return false;
 	}
 
@@ -2613,6 +2615,7 @@ bool CUnit::AttachUnit(CUnit* unit, int piece, bool force)
 	unit->loadingTransportId = -1;
 	unit->SetStunned(!unitDef->isFirePlatform && unitDef->IsTransportUnit());
 	unit->UpdateVoidState(piece < 0);
+	SupComSelect::AfterAttach(unit); // supcom
 
 	// make sure unit does not fire etc in transport
 	if (unit->IsStunned())

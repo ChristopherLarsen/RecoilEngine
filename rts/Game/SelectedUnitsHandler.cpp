@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "SelectedUnitsHandler.h"
+#include "SupComSelect.h" // supcom
 #include "SelectedUnitsAI.h"
 #include "Camera.h"
 #include "GlobalUnsynced.h"
@@ -407,7 +408,7 @@ void CSelectedUnitsHandler::AddUnit(CUnit* unit)
 	// if unit is being transported, we should not be able to select it
 	const CUnit* trans = unit->GetTransporter();
 
-	if (trans != nullptr && trans->unitDef->IsTransportUnit() && !trans->unitDef->isFirePlatform)
+	if (trans != nullptr && trans->unitDef->IsTransportUnit() && !trans->unitDef->isFirePlatform && !SupComSelect::CarriedSelectable(unit)) // supcom
 		return;
 
 	if (unit->noSelect)
