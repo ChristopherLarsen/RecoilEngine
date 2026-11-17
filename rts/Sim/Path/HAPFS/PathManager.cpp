@@ -29,20 +29,6 @@
 // #include "Game/GlobalUnsynced.h"
 // #include "Game/SelectedUnitsHandler.h"
 // #include "Rendering/IPathDrawer.h"
-
-// supcom diag (PTH-005-H profile, temporary): springsetting SupComPathProf=1 logs per-stage time of IssuePathRequest every 500 calls
-#include "System/Config/ConfigHandler.h"
-#include "System/Log/ILog.h"
-#include <chrono>
-CONFIG(bool, SupComPathProf).defaultValue(false);
-namespace {
-	struct PP { double st[8] = {}; long n = 0; long res[4] = {}; long lvl[4] = {}; std::chrono::steady_clock::time_point t0, tl; bool on = false; };
-	PP pp;
-	inline int bestSearchOf(const HAPFS::CPathManager::MultiPath& p) { return !p.lowResPath.path.empty() ? 0 : (!p.medResPath.path.empty() ? 1 : 2); }
-}
-#define SUPCOM_PP_BEGIN() do { static const bool on_ = configHandler->GetBool("SupComPathProf"); pp.on = on_; if (pp.on) pp.t0 = pp.tl = std::chrono::steady_clock::now(); } while (0)
-#define SUPCOM_PP_T(i) do { if (pp.on) { auto n_ = std::chrono::steady_clock::now(); pp.st[i] += std::chrono::duration<double, std::micro>(n_ - pp.tl).count(); pp.tl = n_; } } while (0)
-#define SUPCOM_PP_END(lv, r) do { if (pp.on) { auto n_ = std::chrono::steady_clock::now(); pp.st[6] += std::chrono::duration<double, std::micro>(n_ - pp.tl).count(); pp.st[7] += std::chrono::duration<double, std::micro>(n_ - pp.t0).count(); pp.res[std::min(3, int(r))]++; pp.lvl[lv]++; if (++pp.n % 500 == 0) { LOG("[PathProf] n=%ld us: early %.0f arrange %.0f lowres2max %.0f pre-fin %.0f finalize %.0f tail %.0f total %.0f | result ok %ld cgc %ld fail %ld err %ld | path low %ld med %ld max %ld", pp.n, pp.st[1], pp.st[2], pp.st[3], pp.st[4], pp.st[5], pp.st[6], pp.st[7], pp.res[0], pp.res[1], pp.res[2], pp.res[3], pp.lvl[0], pp.lvl[1], pp.lvl[2]); pp = PP(); pp.on = true; } } } while (0)
 // #define DEBUG_DRAWING_ENABLED ((gs->cheatEnabled || gu->spectatingFullView) && pathDrawer->IsEnabled())
 
 // MH Note: Init NumThreads * 3 Finders (IPAthFinder) rather than static init here.
@@ -505,7 +491,6 @@ CPathManager::MultiPath CPathManager::IssuePathRequest(
 ) {
 	ZoneScoped;
 
-	SUPCOM_PP_BEGIN();
 	startPos.ClampInBounds();
 	goalPos.ClampInBounds();
 
@@ -524,14 +509,11 @@ CPathManager::MultiPath CPathManager::IssuePathRequest(
 		return newPath;
 	}
 
-	SUPCOM_PP_T(1);
 	const IPath::SearchResult result = ArrangePath(&newPath, moveDef, startPos, goalPos, caller);
-	SUPCOM_PP_T(2);
 	if (result != IPath::Error) {
 		if (newPath.maxResPath.path.empty()) {
 			if (result != IPath::CantGetCloser) {
 				LowRes2MaxRes(newPath, startPos, caller, synced);
-				SUPCOM_PP_T(3);
 			} else {
 				// add one dummy waypoint so that the calling MoveType
 				// does not consider this request a failure, which can
@@ -545,12 +527,9 @@ CPathManager::MultiPath CPathManager::IssuePathRequest(
 			}
 		}
 
-		SUPCOM_PP_T(4);
 		FinalizePath(&newPath, startPos, goalPos, result == IPath::CantGetCloser);
-		SUPCOM_PP_T(5);
 	}
 	newPath.searchResult = result;
-	SUPCOM_PP_END(bestSearchOf(newPath), result);
 
 	return newPath;
 }
