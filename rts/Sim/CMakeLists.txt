@@ -49,6 +49,7 @@ add_library(engineSim STATIC
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/MoveMath/GroundMoveMath.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/MoveMath/HoverMoveMath.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/MoveMath/MoveMath.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/MoveMath/SupComPathFast.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/MoveMath/ShipMoveMath.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/MoveType.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/MoveTypeFactory.cpp"
