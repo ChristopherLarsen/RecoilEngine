@@ -18,6 +18,10 @@
 
 // #include <mutex>
 
+#include <chrono>
+struct SupComPFProf { double blk = 0, spd = 0, tb = 0, srch = 0, fin = 0; long nodes = 0, tested = 0, searches = 0; bool on = false; double ph[6] = {}; };
+extern SupComPFProf supcomPFProf;
+
 namespace HAPFS {
 
 static std::vector<PathNodeStateBuffer> nodeStateBuffers;
@@ -112,6 +116,8 @@ IPath::SearchResult IPathFinder::GetPath(
 	const unsigned int maxNodes
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
+	const bool pfo = supcomPFProf.on && BLOCK_SIZE == 1; auto pft = std::chrono::steady_clock::now();
+	auto PFT = [&](int k) { if (pfo) { auto n = std::chrono::steady_clock::now(); supcomPFProf.ph[k] += std::chrono::duration<double, std::micro>(n - pft).count(); pft = n; } };
 	startPos.ClampInBounds();
 
 	// clear the path
@@ -148,7 +154,9 @@ IPath::SearchResult IPathFinder::GetPath(
 	// }
 
 
+	PFT(0);
 	const CPathCache::CacheItem& ci = GetCache(mStartBlock, goalBlock, pfDef.sqGoalRadius, moveDef.pathType, pfDef.synced);
+	PFT(1);
 
 	if (ci.pathType != -1) {
 		path = ci.path;
@@ -159,8 +167,10 @@ IPath::SearchResult IPathFinder::GetPath(
 	const IPath::SearchResult result = InitSearch(moveDef, pfDef, owner);
 
 	// if search was successful, generate new path and cache it
+	PFT(2);
 	if (result == IPath::Ok || result == IPath::GoalOutOfRange) {
 		FinishSearch(moveDef, pfDef, path);
+		PFT(3);
 
 		//if (ci.pathType == -1)
 		// When the MT 'Pathing System' is running, it will handle updating the cache separately.
@@ -259,7 +269,7 @@ IPath::SearchResult IPathFinder::InitSearch(const MoveDef& moveDef, const CPathF
 	assert(allowRawPath || allowDefPath);
 
 	// cleanup after the last search
-	ResetSearch();
+	{ const bool o = supcomPFProf.on && BLOCK_SIZE == 1; auto a = std::chrono::steady_clock::now(); ResetSearch(); if (o) supcomPFProf.ph[4] += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - a).count(); }
 
 	IPath::SearchResult results[] = {IPath::CantGetCloser, IPath::Ok, IPath::CantGetCloser};
 

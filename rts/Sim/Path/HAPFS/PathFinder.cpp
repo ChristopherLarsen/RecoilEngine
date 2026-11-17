@@ -24,7 +24,7 @@
 
 #include <chrono>
 // supcom diag (temporary): refine search counters, printed by PathManager's SupComPathProf line
-struct SupComPFProf { double blk = 0, spd = 0, tb = 0, srch = 0, fin = 0; long nodes = 0, tested = 0, searches = 0; bool on = false; };
+struct SupComPFProf { double blk = 0, spd = 0, tb = 0, srch = 0, fin = 0; long nodes = 0, tested = 0, searches = 0; bool on = false; double ph[6] = {}; };
 SupComPFProf supcomPFProf;
 #define PFP_NOW() std::chrono::steady_clock::now()
 #define PFP_US(a, b) std::chrono::duration<double, std::micro>((b) - (a)).count()
@@ -264,7 +264,7 @@ void CPathFinder::TestNeighborSquares(
 			continue;
 
 		// IsBlockedNoSpeedModCheck; very expensive call but with a ~20% (?) chance of early-out
-		{ const bool o_ = supcomPFProf.on; std::chrono::steady_clock::time_point a_; if (o_) a_ = PFP_NOW();
+		{ const bool o_ = false; std::chrono::steady_clock::time_point a_; if (o_) a_ = PFP_NOW();
 		sqState.blockMask = CMoveMath::IsBlockedNoSpeedModCheckDiff(moveDef, squarePos, ngbSquareCoors, owner, thread);
 		if (o_) supcomPFProf.blk += PFP_US(a_, PFP_NOW()); }
 		if (sqState.blockMask & MMBT::BLOCK_STRUCTURE) {
@@ -273,7 +273,7 @@ void CPathFinder::TestNeighborSquares(
 			continue;
 		}
 
-		const bool o2_ = supcomPFProf.on; std::chrono::steady_clock::time_point a2_; if (o2_) a2_ = PFP_NOW();
+		const bool o2_ = false; std::chrono::steady_clock::time_point a2_; if (o2_) a2_ = PFP_NOW();
 		struct S2 { bool o; std::chrono::steady_clock::time_point a; ~S2() { if (o) supcomPFProf.spd += PFP_US(a, PFP_NOW()); } } s2_{o2_, a2_};
 		if (moveDef.allowDirectionalPathing) {
 			sqState.speedMod = CMoveMath::GetPosSpeedMod(moveDef, ngbSquareCoors.x, ngbSquareCoors.y, PF_DIRECTION_VECTORS_3D[optDir]);
@@ -375,7 +375,7 @@ bool CPathFinder::TestBlock(
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
 	testedBlocks++;
-	struct S3 { bool o; std::chrono::steady_clock::time_point a; ~S3() { if (o) { supcomPFProf.tb += PFP_US(a, PFP_NOW()); supcomPFProf.tested++; } } } s3_{supcomPFProf.on, supcomPFProf.on ? PFP_NOW() : std::chrono::steady_clock::time_point()};
+	struct S3 { bool o; std::chrono::steady_clock::time_point a; ~S3() { if (o) { supcomPFProf.tb += PFP_US(a, PFP_NOW()); supcomPFProf.tested++; } } } s3_{false, std::chrono::steady_clock::time_point()};
 
 	// initial calculations of the new block
 	const int2 square = parentSquare->nodePos + PF_DIRECTION_VECTORS_2D[pathOptDir];
