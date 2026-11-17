@@ -11,7 +11,7 @@
 #include "System/Config/ConfigHandler.h"
 #include "System/Log/ILog.h"
 
-CONFIG(int, SupComPathFast).defaultValue(1).minimumValue(0).maximumValue(2).description("supcom: path blocking test without the collision query on empty footprint squares (0 stock, 1 on, 2 on and cross-checked against stock; same results)");
+CONFIG(int, SupComPathFast).defaultValue(0).minimumValue(0).maximumValue(2).description("supcom: path blocking test without the collision query on empty footprint squares (0 stock (default until proven faster), 1 on, 2 on and cross-checked against stock; same results)");
 
 static constexpr int FOOTPRINT_XSTEP = 2;   // as MoveMath.cpp
 static constexpr int FOOTPRINT_ZSTEP = 2;

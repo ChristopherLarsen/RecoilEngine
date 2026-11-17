@@ -4,7 +4,7 @@
 #include "MoveMath.h"
 
 namespace SupComPathFast {
-	// springsetting SupComPathFast: 0 = stock, 1 = fast (default), 2 = fast and cross-checked against stock (logs every mismatch)
+	// springsetting SupComPathFast: 0 = stock (default), 1 = fast, 2 = fast and cross-checked against stock (logs every mismatch)
 	int Mode();
 	// true while the cross-check runs the stock code (the hook in MoveMath.cpp lets it through)
 	bool InStockCheck();
