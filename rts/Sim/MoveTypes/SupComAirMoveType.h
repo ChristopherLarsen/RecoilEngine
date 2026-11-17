@@ -46,6 +46,9 @@ public:
 	CSupComAirMoveType(CUnit* owner);
 
 	static bool IsWantedBy(const UnitDef* ud);
+	// MOV-016 v8 R10 (G0-AIRCOL): an airborne SupCom aircraft is not pushed by, and does not push, another airborne air unit
+	// (hook in CHoverAirMoveType::HandleCollisions); ground objects (R11) and landed aircraft collide as before
+	static bool AirPassThrough(const CUnit* owner, const CUnit* other);
 
 	bool Update() override;
 	void StartMoving(float3 pos, float goalRadius) override;

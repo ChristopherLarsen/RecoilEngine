@@ -2,6 +2,7 @@
 
 
 #include "HoverAirMoveType.h"
+#include "SupComAirMoveType.h" // supcom
 #include "Game/Players/Player.h"
 #include "Map/Ground.h"
 #include "Map/MapInfo.h"
@@ -1097,6 +1098,7 @@ bool CHoverAirMoveType::HandleCollisions(bool checkCollisions)
 
 				if (loadingUnit || loadingOwner || unit == owner->transporter || unit->transporter != nullptr)
 					continue;
+				if (CSupComAirMoveType::AirPassThrough(owner, unit)) continue; // supcom
 
 
 				const float sqDist = (pos - unit->pos).SqLength();

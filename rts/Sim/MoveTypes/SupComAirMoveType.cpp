@@ -623,3 +623,12 @@ void CSupComAirMoveType::UpdateFall()
 		// and x86 and arm64 compilers give different results there (cross-architecture desync, Q120)
 		owner->AddHeading(short(int(tumbleRate)), false, false, 0.0f);
 }
+
+bool CSupComAirMoveType::AirPassThrough(const CUnit* owner, const CUnit* other)
+{
+	if (owner == nullptr || other == nullptr || dynamic_cast<const CSupComAirMoveType*>(owner->moveType) == nullptr)
+		return false;
+	if (!owner->IsInAir() || !other->IsInAir())
+		return false;
+	return other->unitDef->IsAirUnit();
+}
