@@ -22,6 +22,13 @@
 
 // #include "Game/SelectedUnitsHandler.h"
 
+#include <chrono>
+// supcom diag (temporary): refine search counters, printed by PathManager's SupComPathProf line
+struct SupComPFProf { double blk = 0, spd = 0, tb = 0, srch = 0, fin = 0; long nodes = 0, tested = 0, searches = 0; bool on = false; };
+SupComPFProf supcomPFProf;
+#define PFP_NOW() std::chrono::steady_clock::now()
+#define PFP_US(a, b) std::chrono::duration<double, std::micro>((b) - (a)).count()
+
 namespace HAPFS {
 
 // extern bool TEST_ACTIVE;
@@ -168,7 +175,10 @@ IPath::SearchResult CPathFinder::DoSearch(
     //     LOG("%s Block Size [%d] search started", __func__, BLOCK_SIZE);
     // }}
 
+	const bool pfpOn = supcomPFProf.on; const auto pfpS = PFP_NOW(); if (pfpOn) supcomPFProf.searches++;
+	struct PfpEnd { bool on; std::chrono::steady_clock::time_point s; ~PfpEnd() { if (on) supcomPFProf.srch += PFP_US(s, PFP_NOW()); } } pfpEnd{pfpOn, pfpS};
 	while (!openBlocks.empty() && (openBlockBuffer.GetSize() < maxBlocksToBeSearched)) {
+		if (pfpOn) supcomPFProf.nodes++;
 
 		// get the open square with lowest expected path-cost
 		const PathNode* openSquare = openBlocks.top();
@@ -254,13 +264,17 @@ void CPathFinder::TestNeighborSquares(
 			continue;
 
 		// IsBlockedNoSpeedModCheck; very expensive call but with a ~20% (?) chance of early-out
+		{ const bool o_ = supcomPFProf.on; std::chrono::steady_clock::time_point a_; if (o_) a_ = PFP_NOW();
 		sqState.blockMask = CMoveMath::IsBlockedNoSpeedModCheckDiff(moveDef, squarePos, ngbSquareCoors, owner, thread);
+		if (o_) supcomPFProf.blk += PFP_US(a_, PFP_NOW()); }
 		if (sqState.blockMask & MMBT::BLOCK_STRUCTURE) {
 			blockStates.nodeMask[ngbSquareIdx] |= PATHOPT_CLOSED;
 			dirtyBlocks.push_back(ngbSquareIdx);
 			continue;
 		}
 
+		const bool o2_ = supcomPFProf.on; std::chrono::steady_clock::time_point a2_; if (o2_) a2_ = PFP_NOW();
+		struct S2 { bool o; std::chrono::steady_clock::time_point a; ~S2() { if (o) supcomPFProf.spd += PFP_US(a, PFP_NOW()); } } s2_{o2_, a2_};
 		if (moveDef.allowDirectionalPathing) {
 			sqState.speedMod = CMoveMath::GetPosSpeedMod(moveDef, ngbSquareCoors.x, ngbSquareCoors.y, PF_DIRECTION_VECTORS_3D[optDir]);
 		} else {
@@ -361,6 +375,7 @@ bool CPathFinder::TestBlock(
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
 	testedBlocks++;
+	struct S3 { bool o; std::chrono::steady_clock::time_point a; ~S3() { if (o) { supcomPFProf.tb += PFP_US(a, PFP_NOW()); supcomPFProf.tested++; } } } s3_{supcomPFProf.on, supcomPFProf.on ? PFP_NOW() : std::chrono::steady_clock::time_point()};
 
 	// initial calculations of the new block
 	const int2 square = parentSquare->nodePos + PF_DIRECTION_VECTORS_2D[pathOptDir];
