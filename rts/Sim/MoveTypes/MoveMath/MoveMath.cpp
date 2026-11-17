@@ -176,7 +176,7 @@ CMoveMath::BlockType CMoveMath::IsBlockedNoSpeedModCheck(const MoveDef& moveDef,
 CMoveMath::BlockType CMoveMath::IsBlockedNoSpeedModCheckDiff(const MoveDef& moveDef, int2 prevSqr, int2 newSqr, const CSolidObject* collider, int thread)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (SupComPathFast::Mode() != 0 && !SupComPathFast::InStockCheck()) return SupComPathFast::IsBlockedDiff(moveDef, prevSqr, newSqr, collider, thread); // supcom
+	if (SupComPathFast::Mode() == 1 || (SupComPathFast::Mode() == 2 && !SupComPathFast::InStockCheck())) return SupComPathFast::IsBlockedDiff(moveDef, prevSqr, newSqr, collider, thread); // supcom
 	// prev allows {-1, -1} so that the first check is always treated as a full test
 	const int prev_xmin = std::max(prevSqr.x - moveDef.xsizeh,               -1);
 	const int prev_zmin = std::max(prevSqr.y - moveDef.zsizeh,               -1);

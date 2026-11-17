@@ -18,7 +18,8 @@ static constexpr int FOOTPRINT_ZSTEP = 2;
 
 static thread_local bool inStockCheck = false;
 
-int SupComPathFast::Mode() { static const int m = configHandler->GetInt("SupComPathFast"); return m; }
+static int pathFastMode = -1;
+int SupComPathFast::Mode() { if (pathFastMode < 0) pathFastMode = configHandler->GetInt("SupComPathFast"); return pathFastMode; }
 bool SupComPathFast::InStockCheck() { return inStockCheck; }
 
 // CMoveMath::IsBlockedNoSpeedModCheckDiff, the same squares in the same order. The stock code builds the collision query (with
