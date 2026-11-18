@@ -37,7 +37,9 @@ bool SupComFactoryPad::Blocked(const CFactory* factory, const float3& buildPos)
 	if (static_cast<unsigned int>(x) >= mapDims.mapx || static_cast<unsigned int>(z) >= mapDims.mapy)
 		return false;
 
-	for (const CSolidObject* obj: groundBlockingObjectMap.GetCellUnsafeConst(z * mapDims.mapx + x)) {
+	const CGroundBlockingObjectMap::BlockingMapCell& cell = groundBlockingObjectMap.GetCellUnsafeConst(z * mapDims.mapx + x);
+	for (size_t i = 0, n = cell.size(); i < n; i++) {
+		const CSolidObject* obj = cell[i];
 		if (obj == factory)
 			continue;
 		const CUnit* u = dynamic_cast<const CUnit*>(obj);
