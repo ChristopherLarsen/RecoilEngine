@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Factory.h"
+#include "Map/ReadMap.h"
 #include "Sim/Misc/GroundBlockingObjectMap.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
