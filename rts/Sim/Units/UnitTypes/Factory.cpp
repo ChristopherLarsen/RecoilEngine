@@ -2,6 +2,7 @@
 
 
 #include "Factory.h"
+#include "SupComFactoryPad.h" // supcom
 #include "Game/GameHelper.h"
 #include "Game/WaitCommandsAI.h"
 #include "Map/Ground.h"
@@ -188,7 +189,7 @@ void CFactory::StartBuild(const UnitDef* buildeeDef) {
 	// it might rarely be the case that a unit got stuck inside the factory
 	// or died right after completion and left some wreckage, but that is up
 	// to players to fix
-	if (groundBlockingObjectMap.GroundBlocked(buildPos, this))
+	if (SupComFactoryPad::Blocked(this, buildPos)) // supcom (stock test without customParams.supcom_pad_clear)
 		return;
 
 	UnitLoadParams buildeeParams = {buildeeDef, this, buildPos, ZeroVector, -1, team, buildFacing, true, false};
