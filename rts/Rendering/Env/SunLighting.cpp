@@ -107,6 +107,7 @@ bool CSunLighting::SetValue(const char* key, const float4 value) {
 		case hashString("groundShadowDensity"): {
 			groundShadowDensity = value.x; return true;
 		} break;
+		case hashString("unitShadowDensity"): // supcom: the mapinfo key (MapInfo.cpp reads it), as the unit colour keys
 		case hashString("modelShadowDensity"): {
 			modelShadowDensity = value.x; return true;
 		} break;
