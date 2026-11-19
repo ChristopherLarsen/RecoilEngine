@@ -174,7 +174,7 @@ float GetWaterDepthFromDepthBuffer(float waterdepth)
 	#if 0
 	float fragZ = eyeVertexZ;
 	#endif
-	float diffZ = abs(texZ - fragZ) * 0.333;
+	float diffZ = abs(texZ - fragZ) * 0.05; // supcom TER-008 H: fade in over about 20 elmos of depth (stock 0.333: 3 elmos, a hard step at the water line)
 
 	return clamp(diffZ, 0.0, 1.0);
 #else
