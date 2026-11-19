@@ -3,6 +3,7 @@
 // #undef NDEBUG
 
 #include "PathManager.h"
+#include "SupComGapSnap.h" // supcom
 #include "PathingState.h"
 #include "PathConstants.h"
 #include "PathFinder.h"
@@ -254,6 +255,8 @@ void CPathManager::FinalizePath(MultiPath* path, const float3 startPos, const fl
 
 	if (!path->medResPath.path.empty() && !path->lowResPath.path.empty())
 		path->lowResPath.path.back() = path->medResPath.path.front();
+
+	SupComGapSnap::Snap(path->maxResPath.path, *path->moveDef, path->medResPath.path.empty() && path->lowResPath.path.empty()); // supcom PTH-004-E
 
 	if (cantGetCloser)
 		return;
