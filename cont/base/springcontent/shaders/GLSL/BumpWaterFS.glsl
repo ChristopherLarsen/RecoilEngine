@@ -315,7 +315,7 @@ void main()
     refrColor = mix(refrColor, origRefrColor, mixback);
   #endif
 
-    gl_FragColor.rgb = mix(refrColor, waterSurface, 0.1 + surfaceMix * 0.100);
+    gl_FragColor.rgb = mix(refrColor, waterSurface, (0.1 + surfaceMix * 0.100) * shallowScale); // supcom TER-008 H: no surface tint at depth 0 (no hard step at the water line)
 #else
     gl_FragColor.rgb = waterSurface;
     gl_FragColor.a   = surfaceMix + specular;
