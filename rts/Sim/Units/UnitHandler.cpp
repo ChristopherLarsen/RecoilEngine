@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "UnitHandler.h"
+#include "SupComUnitStatic.h"
 #include "Sim/MoveTypes/SupComGroundMoveType.h" // supcom
 #include "Unit.h"
 #include "UnitDefHandler.h"
@@ -457,7 +458,7 @@ void CUnitHandler::UpdatePreFrame()
 	inUpdateCall = true;
 
 	for (CUnit* unit : activeUnits) {
-		unit->UpdatePrevFrameTransform();
+		if (!SupComUnitUnchanged(unit)) unit->UpdatePrevFrameTransform(); // supcom: SupComUnitStatic.h
 	}
 
 	inUpdateCall = false;
