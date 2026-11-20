@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <cstring>
 #include <algorithm>
 
 #include "System/creg/creg_cond.h"
@@ -62,6 +63,7 @@ struct LocalModelPiece
 	void SetDirtyRaw(bool state) { dirty = state; }
 	void SetDirty();
 	bool GetDirty() const { return dirty; }
+	bool SupComPrevSame() const { return !dirty && std::memcmp(&prevModelSpaceTra, &modelSpaceTra, sizeof(Transform)) == 0; } // SupComFeatureStatic.h
 	void SetFloat3(const float3& src, float3& dst); // anim-script only
 	void SetFloat(const float& src, float& dst); // anim-script only
 	void SetPosition(const float3& p) { SetFloat3(p, pos); } // anim-script only

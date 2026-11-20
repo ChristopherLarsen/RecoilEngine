@@ -138,6 +138,8 @@ public:
 	const FeatureDef* def = nullptr;
 	const UnitDef* udef = nullptr; /// type of unit this feature should be resurrected to
 
+	float supcomSavedMat[16] = {}; // SupComFeatureStatic.h: synced matrix at the last prev-frame save (not saved state)
+
 	/// object on top of us if we are a geothermal vent
 	CSolidObject* solidOnTop = nullptr;
 

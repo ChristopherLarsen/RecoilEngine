@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "FeatureHandler.h"
+#include "SupComFeatureStatic.h"
 #include "Feature.h"
 #include "FeatureDef.h"
 #include "FeatureDefHandler.h"
@@ -191,7 +192,7 @@ void CFeatureHandler::UpdatePreFrame()
 	SCOPED_TIMER("Sim::Features::UpdatePreFrame");
 
 	for (auto fid : activeFeatureIDs) {
-		features[fid]->UpdatePrevFrameTransform();
+		if (!SupComFeatureUnchanged(features[fid])) features[fid]->UpdatePrevFrameTransform();
 	}
 }
 
