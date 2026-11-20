@@ -1,4 +1,5 @@
 #include "FeatureDrawerData.h"
+#include "SupComFeatureDrawSkip.h"
 
 #include "System/Config/ConfigHandler.h"
 #include "System/StringHash.h"
@@ -93,12 +94,14 @@ void CFeatureDrawerData::Update()
 	if (mtModelDrawer) {
 		for_mt_chunk(0, unsortedObjects.size(), [this](const int k) {
 			CFeature* f = unsortedObjects[k];
+			if (SupComFeatureDrawSkip(f, featureDrawDistance)) return;
 			UpdateDrawPos(f);
 			UpdateCommon(f);
 		}, CModelDrawerDataConcept::MT_CHUNK_OR_MIN_CHUNK_SIZE_UPDT);
 	}
 	else {
 		for (CFeature* f : unsortedObjects) {
+			if (SupComFeatureDrawSkip(f, featureDrawDistance)) continue;
 			UpdateDrawPos(f);
 			UpdateCommon(f);
 		}
