@@ -2202,7 +2202,7 @@ int LuaUnsyncedCtrl::SetUnitNoDraw(lua_State* L)
  */
 int LuaUnsyncedCtrl::SetUnitEngineDrawMask(lua_State* L)
 {
-	CUnit* unit = ParseCtrlUnit(L, __func__, 1);
+	CUnit* unit = ParseRawUnit(L, __func__, 1); // supcom: drawing only, any unit (model cull of enemy and allied units; was own team only)
 
 	if (unit == nullptr)
 		return 0;
