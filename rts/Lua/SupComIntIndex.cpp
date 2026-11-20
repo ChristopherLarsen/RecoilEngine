@@ -5,7 +5,8 @@
 //       circle of unit id for ally team a; r2: the bucket box radius squared (and the exact test d2 <= r2 when no cell);
 //       ce: reach under the cell rule (covered when ce > 0 and d2 < ce * ce at the target cell centre)
 //   Spring.SupComIntFree(kind, a, id)
-//   Spring.SupComIntSweep(kind, a, stamp)         drops circles whose last Put stamp differs (stamp -1: all)
+//   Spring.SupComIntSweep(kind, a, stamp [, mod, rem])   drops circles whose last Put stamp differs (stamp -1: all);
+//       with mod, only circles whose id % mod == rem (Lua's floored %)
 //   Spring.SupComIntClear([kind])                 everything of kind (nil: all kinds)
 //   Spring.SupComIntSees(kind, allyList, x, z) -> bool
 //   Spring.SupComIntSeesMany(kind, allyList, xs, zs, n [, out]) -> out   out[i] = bool for (xs[i], zs[i])
@@ -109,9 +110,12 @@ namespace {
 		if (ti == k->teams.end()) return 0;
 		const int stamp = luaL_checkint(L, 3);
 		Team& t = ti->second;
-		if (stamp == -1) { t.circles.clear(); t.buckets.clear(); return 0; }
+		const bool slice = lua_isnumber(L, 4);
+		const long long mod = slice ? (long long)lua_tonumber(L, 4) : 0, rem = slice ? (long long)lua_tonumber(L, 5) : 0;
+		if (stamp == -1 && !slice) { t.circles.clear(); t.buckets.clear(); return 0; }
 		for (auto it = t.circles.begin(); it != t.circles.end(); ) {
-			if (it->second.stamp != stamp) { Unhook(t, it->first, it->second); it = t.circles.erase(it); }
+			const bool inSlice = !slice || mod == 0 || ((((long long)it->first % mod) + mod) % mod) == rem;   // Lua's % (floored)
+			if (inSlice && (stamp == -1 || it->second.stamp != stamp)) { Unhook(t, it->first, it->second); it = t.circles.erase(it); }
 			else ++it;
 		}
 		return 0;
