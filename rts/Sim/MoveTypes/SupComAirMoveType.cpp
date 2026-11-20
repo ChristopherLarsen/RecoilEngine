@@ -254,6 +254,11 @@ bool CSupComAirMoveType::Update()
 		case AIRCRAFT_LANDED: {
 			// no air movement on the ground
 			horSpeed = 0.0f;
+			// idle half rate (SupComHalfRate.h): an aircraft at rest on the ground (no speed, standing at the ground height)
+			// re-settles only every 16th frame (staggered by id), which picks up terrain changes; the settle at rest moves it by
+			// zero and recomputes the same direction vectors (two Move calls and UpdateDirVectors per aircraft per frame)
+			if (SupComHalfRate::LandedRest(owner))
+				return false;
 			UpdateLanded();
 			return false;
 		}

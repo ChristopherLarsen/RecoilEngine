@@ -5,7 +5,9 @@
 
 #include "Game/GameSetup.h"
 #include "Sim/Misc/GlobalSynced.h"
+#include "Sim/MoveTypes/AAirMoveType.h"
 #include "Sim/MoveTypes/GroundMoveType.h"
+#include "Sim/Units/UnitDef.h"
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "System/Log/ILog.h"
@@ -72,4 +74,16 @@ int SupComHalfRate::Air(CUnit* u, bool idleHere)
 	if (!half)
 		return 0;
 	return ((u->id + gs->frameNum) & 1) != 0 ? 1 : 2;
+}
+
+extern AAirMoveType::GetGroundHeightFunc amtGetGroundHeightFuncs[6];   // AAirMoveType.cpp
+
+bool SupComHalfRate::LandedRest(CUnit* u)
+{
+	if (!Enabled() || u->beingBuilt)
+		return false;
+	const bool rest = u->speed.x == 0.0f && u->speed.y == 0.0f && u->speed.z == 0.0f
+		&& u->pos.y == amtGetGroundHeightFuncs[u->unitDef->canSubmerge](u->pos.x, u->pos.z);   // the height UpdateLanded settles to
+	Tally(false, rest);
+	return rest && ((u->id + gs->frameNum) & 15) != 0;
 }

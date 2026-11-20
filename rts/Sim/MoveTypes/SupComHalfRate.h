@@ -18,6 +18,8 @@ namespace SupComHalfRate {
 	bool SkipGround(CUnit* u);
 	/// CSupComAirMoveType::Update: 0 every-frame update, 1 coast this frame, 2 update with a doubled turn
 	int Air(CUnit* u, bool idleHere);
+	/// CSupComAirMoveType, landed: true = skip this frame's UpdateLanded (at rest, not the unit's 16th frame)
+	bool LandedRest(CUnit* u);
 }
 
 #endif
