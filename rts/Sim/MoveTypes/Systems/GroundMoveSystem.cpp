@@ -3,6 +3,7 @@
 // #undef NDEBUG
 
 #include "GroundMoveSystem.h"
+#include "Sim/MoveTypes/SupComHalfRate.h"
 
 #include "Sim/Ecs/Registry.h"
 #include "Sim/Features/Feature.h"
@@ -95,6 +96,7 @@ void GroundMoveSystem::Update() {
 			CGroundMoveType* moveType = static_cast<CGroundMoveType*>(unit->moveType);
             assert(moveType != nullptr);
 
+			if (SupComHalfRate::SkipGround(unit)) return; // supcom: idle half rate (SupComHalfRate.h)
 			moveType->UpdatePreCollisions();
 
             // this unit is not coming back, kill it now without any death

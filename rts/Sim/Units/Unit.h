@@ -251,8 +251,9 @@ protected:
 	void UpdateResources();
 	float GetFlankingDamageBonus(const float3& attackDir);
 
-	float supcomSavedMat[16] = {}; // SupComUnitStatic.h: synced matrix at the last prev-frame save (not saved state)
 public: // unsynced methods
+	int supcomIdleRun = 0; // SupComHalfRate.h: frames idle in a row (not saved state)
+	float supcomSavedMat[16] = {}; // SupComUnitStatic.h: synced matrix at the last prev-frame save (not saved state)
 	bool SetGroup(CGroup* newGroup, bool autoSelect = true);
 
 	const CGroup* GetGroup() const;

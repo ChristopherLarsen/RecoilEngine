@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "SupComAirMoveType.h"
+#include "SupComHalfRate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -239,6 +240,16 @@ bool CSupComAirMoveType::Update()
 	if (owner->beingBuilt)
 		return false;
 
+	// idle half rate (SupComHalfRate.h): flying or hovering with nothing to do, well above the ground
+	const bool idleHere = (aircraftState == AIRCRAFT_FLYING || aircraftState == AIRCRAFT_HOVERING)
+		&& AttackTarget() == nullptr && !InTransportOrder() && !InAttackOrder() && !InInternalMove()
+		&& owner->pos.y - CGround::GetHeightReal(owner->pos.x, owner->pos.z) > 3.0f * owner->radius;
+	const int halfRate = SupComHalfRate::Air(owner, idleHere);
+	if (halfRate == 1) {
+		ApplyStep(float3(owner->speed));   // coast one step at the current velocity
+		return true;
+	}
+
 	switch (aircraftState) {
 		case AIRCRAFT_LANDED: {
 			// no air movement on the ground
@@ -276,6 +287,8 @@ bool CSupComAirMoveType::Update()
 		turnRate = defTurnRate;
 	} else {
 		UpdateHeading();
+		if (halfRate == 2)
+			UpdateHeading();               // half rate: the turn of the coasted frame too (doubled dt)
 	}
 
 	if (winged)

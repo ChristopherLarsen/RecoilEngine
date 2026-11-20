@@ -123,6 +123,7 @@ public:
 	float GetGoalRadius(float s = 0.0f) const override { return (goalRadius + extraRadius * s); }
 
 	unsigned int GetPathID() const { return pathID; }
+	bool SupComQuiet() const { return pathID == 0 && deletePathId == 0 && !pathingArrived && !pathingFailed && resultantForces.SqLength() == 0.f; } // supcom: SupComHalfRate.h
 
 	const SyncedFloat3& GetCurrWayPoint() const { return currWayPoint; }
 	const SyncedFloat3& GetNextWayPoint() const { return nextWayPoint; }
