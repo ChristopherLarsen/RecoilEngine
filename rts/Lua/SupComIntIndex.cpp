@@ -10,6 +10,9 @@
 //   Spring.SupComIntClear([kind])                 everything of kind (nil: all kinds)
 //   Spring.SupComIntSees(kind, allyList, x, z) -> bool
 //   Spring.SupComIntSeesMany(kind, allyList, xs, zs, n [, out]) -> out   out[i] = bool for (xs[i], zs[i])
+//   Spring.SupComIntFacts(ids, n, ox, oy, oz, ogh, oflags) -> n   read-only facts of units ids[1..n] into the tables given:
+//       position (as GetUnitPosition), ground height at (x, z) (as GetGroundHeight), flags 1 carried, 2 active (activated),
+//       4 being built, 8 cloaked (isCloaked), 16 movement layer "sub" (supcomLayer); an invalid id gets nil in every table
 // Any-hit answers do not depend on the order circles were stored in, so results equal the Lua index (VSees, height term 0).
 
 #include "SupComIntIndex.h"
@@ -21,6 +24,10 @@
 
 #include "LuaHandle.h"
 #include "LuaUtils.h"
+#include "Map/Ground.h"
+#include "Sim/MoveTypes/SupComGroundMoveType.h"
+#include "Sim/Units/Unit.h"
+#include "Sim/Units/UnitHandler.h"
 
 namespace {
 	struct Circle { double x, z, r2, ce; int stamp; long long gx0, gx1, gz0, gz1; };
@@ -188,8 +195,44 @@ namespace {
 	}
 }
 
+namespace {
+	int Facts(lua_State* L) {
+		if (!Synced(L)) return 0;
+		luaL_checktype(L, 1, LUA_TTABLE);
+		const int n = luaL_checkint(L, 2);
+		for (int t = 3; t <= 7; ++t) luaL_checktype(L, t, LUA_TTABLE);
+		for (int i = 1; i <= n; ++i) {
+			lua_rawgeti(L, 1, i);
+			const int id = lua_toint(L, -1);
+			lua_pop(L, 1);
+			const CUnit* u = unitHandler.GetUnit(id);
+			if (u == nullptr) {
+				for (int t = 3; t <= 7; ++t) { lua_pushnil(L); lua_rawseti(L, t, i); }
+				continue;
+			}
+			const float3& p = u->pos;
+			int flags = 0;
+			if (u->GetTransporter() != nullptr) flags |= 1;
+			if (u->activated) flags |= 2;
+			if (u->beingBuilt) flags |= 4;
+			if (u->isCloaked) flags |= 8;
+			if (const auto* gm = dynamic_cast<const CSupComGroundMoveType*>(u->moveType)) {
+				if (std::string(gm->GetLayerName()) == "sub") flags |= 16;
+			}
+			lua_pushnumber(L, p.x); lua_rawseti(L, 3, i);
+			lua_pushnumber(L, p.y); lua_rawseti(L, 4, i);
+			lua_pushnumber(L, p.z); lua_rawseti(L, 5, i);
+			lua_pushnumber(L, CGround::GetHeightReal(p.x, p.z, true)); lua_rawseti(L, 6, i);
+			lua_pushnumber(L, flags); lua_rawseti(L, 7, i);
+		}
+		lua_pushnumber(L, n);
+		return 1;
+	}
+}
+
 void SupComIntIndex::PushSyncedCtrl(lua_State* L)
 {
+	LuaPushRawNamedCFunc(L, "SupComIntFacts", Facts);
 	LuaPushRawNamedCFunc(L, "SupComIntInit", Init);
 	LuaPushRawNamedCFunc(L, "SupComIntPut", Put);
 	LuaPushRawNamedCFunc(L, "SupComIntFree", Free);
