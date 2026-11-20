@@ -310,10 +310,17 @@ bool CSupComAirMoveType::SetMemberValue(unsigned int memberHash, void* memberVal
 	static const unsigned int luaAttackGoalHash = spring::LiteHash("supcomLuaAttackGoal", 19, 0);
 	static const unsigned int combatTurnRateHash = spring::LiteHash("supcomCombatTurnRate", 20, 0);
 	static const unsigned int orbitRadiusHash = spring::LiteHash("supcomOrbitRadius", 17, 0);
+	static const unsigned int idleLandDelayHash = spring::LiteHash("supcomIdleLandDelay", 19, 0);
 
 	if (memberHash == luaAttackGoalHash) {
 		// Lua passes a boolean as bool*, a number as float*; the key is boolean
 		luaAttackGoal = *reinterpret_cast<bool*>(memberValue);
+		return true;
+	}
+	if (memberHash == idleLandDelayHash) {
+		// seconds idle before landing (the IDLE_WAIT delay); < 0 never lands idle (customParams supcom_air_idle_land_delay at creation)
+		const float d = *reinterpret_cast<float*>(memberValue);
+		idleLandDelay = (d < 0.0f)? -1.0f: (d * GAME_SPEED);
 		return true;
 	}
 	if (memberHash == orbitRadiusHash) {

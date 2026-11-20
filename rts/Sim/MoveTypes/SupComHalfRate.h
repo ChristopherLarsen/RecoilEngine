@@ -1,5 +1,5 @@
 /* SupCom: idle units update their movement every other frame (owner decision 2026-11-20, replacing profile cut G).
- * Game key: mod option supcom_half_rate = "1" (absent or other: stock, every frame).
+ * Game key: mod option supcom_half_rate; on unless it is "0" (then stock, every frame).
  * A unit is idle when it has no orders, has not been hit for 30 frames, is not carried, built, stunned or skidding, and
  *   ground: stands still with no path, no pending path event and no collision push;
  *   air (CSupComAirMoveType): flies or hovers with no attack target, well above the ground.

@@ -22,7 +22,7 @@ namespace {
 		if (enabled < 0) {
 			const auto& mo = CGameSetup::GetModOptions();
 			const auto it = mo.find("supcom_half_rate");
-			enabled = (it != mo.end() && it->second == "1") ? 1 : 0;
+			enabled = (it != mo.end() && it->second == "0") ? 0 : 1;   // on unless the game turns it off
 		}
 		return enabled == 1;
 	}
