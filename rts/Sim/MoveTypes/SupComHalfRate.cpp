@@ -13,8 +13,8 @@
 #include "System/Log/ILog.h"
 
 namespace {
-	constexpr int IDLE_FRAMES = 30;   // DESIGN: frames idle before half rate (1 s)
-	constexpr int HIT_FRAMES = 30;    // DESIGN: frames after damage on every frame
+	constexpr int IDLE_FRAMES = 0;    // PRF-002 v1 R2: idle from the tick after an update that shows no change
+	constexpr int HIT_FRAMES = 1;     // PRF-002 v1 R4: damage wakes the unit for the next tick
 
 	int enabled = -1;                 // -1 unknown, then 0 or 1 (mod options are fixed for the game)
 	int countFrame = -1;
@@ -65,16 +65,6 @@ bool SupComHalfRate::SkipGround(CUnit* u)
 	return half && ((u->id + gs->frameNum) & 1) != 0;
 }
 
-int SupComHalfRate::Air(CUnit* u, bool idleHere)
-{
-	if (!Enabled())
-		return 0;
-	const bool half = Half(u, idleHere && UnitIdle(u));
-	Tally(false, half);
-	if (!half)
-		return 0;
-	return ((u->id + gs->frameNum) & 1) != 0 ? 1 : 2;
-}
 
 extern AAirMoveType::GetGroundHeightFunc amtGetGroundHeightFuncs[6];   // AAirMoveType.cpp
 
@@ -85,5 +75,5 @@ bool SupComHalfRate::LandedRest(CUnit* u)
 	const bool rest = u->speed.x == 0.0f && u->speed.y == 0.0f && u->speed.z == 0.0f
 		&& u->pos.y == amtGetGroundHeightFuncs[u->unitDef->canSubmerge](u->pos.x, u->pos.z);   // the height UpdateLanded settles to
 	Tally(false, rest);
-	return rest && ((u->id + gs->frameNum) & 15) != 0;
+	return rest && ((u->id + gs->frameNum) & 1) != 0;   // PRF-002 v1 R1: updated when tick + id is even
 }

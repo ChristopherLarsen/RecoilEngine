@@ -240,23 +240,13 @@ bool CSupComAirMoveType::Update()
 	if (owner->beingBuilt)
 		return false;
 
-	// idle half rate (SupComHalfRate.h): flying or hovering with nothing to do, well above the ground
-	const bool idleHere = (aircraftState == AIRCRAFT_FLYING || aircraftState == AIRCRAFT_HOVERING)
-		&& AttackTarget() == nullptr && !InTransportOrder() && !InAttackOrder() && !InInternalMove()
-		&& owner->pos.y - CGround::GetHeightReal(owner->pos.x, owner->pos.z) > 3.0f * owner->radius;
-	const int halfRate = SupComHalfRate::Air(owner, idleHere);
-	if (halfRate == 1) {
-		ApplyStep(float3(owner->speed));   // coast one step at the current velocity
-		return true;
-	}
-
 	switch (aircraftState) {
 		case AIRCRAFT_LANDED: {
 			// no air movement on the ground
 			horSpeed = 0.0f;
-			// idle half rate (SupComHalfRate.h): an aircraft at rest on the ground (no speed, standing at the ground height)
-			// re-settles only every 16th frame (staggered by id), which picks up terrain changes; the settle at rest moves it by
-			// zero and recomputes the same direction vectors (two Move calls and UpdateDirVectors per aircraft per frame)
+			// idle half rate (PRF-002 v1, SupComHalfRate.h): an aircraft at rest on the ground (no speed, standing at the ground
+			// height) re-settles on every other tick (tick + id even); the settle at rest moves it by zero and recomputes the same
+			// direction vectors (two Move calls and UpdateDirVectors per aircraft per tick)
 			if (SupComHalfRate::LandedRest(owner))
 				return false;
 			UpdateLanded();
@@ -292,8 +282,6 @@ bool CSupComAirMoveType::Update()
 		turnRate = defTurnRate;
 	} else {
 		UpdateHeading();
-		if (halfRate == 2)
-			UpdateHeading();               // half rate: the turn of the coasted frame too (doubled dt)
 	}
 
 	if (winged)
