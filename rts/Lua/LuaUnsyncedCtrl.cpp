@@ -2410,7 +2410,7 @@ int LuaUnsyncedCtrl::SetFeatureNoDraw(lua_State* L)
  */
 int LuaUnsyncedCtrl::SetFeatureEngineDrawMask(lua_State* L)
 {
-	CFeature* feature = ParseCtrlFeature(L, __func__, 1);
+	CFeature* feature = ParseRawFeature(L, __func__, 1); // supcom: draw-only and local, so any feature (map features are Gaia's, which LuaUI does not control)
 
 	if (feature == nullptr)
 		return 0;
