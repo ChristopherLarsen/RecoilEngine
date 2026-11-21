@@ -366,6 +366,18 @@ const float SMF_SHALLOW_WATER_DEPTH_INV = 1.0 / SMF_SHALLOW_WATER_DEPTH;
 
 const float EPS = 3e-3;
 
+
+// supcom: fog of war as a map-space mask (Spring.SupComSetFogMask): signed distance in elmos to the vision edge, factor outside
+uniform sampler2D fogMaskTex;
+uniform vec4 fogMaskRect;   // x0, z0, 1/(x1-x0), 1/(z1-z0)
+uniform float fogMaskFactor; // 1: off
+float SupComFogMul(vec2 xz) {
+	if (fogMaskFactor >= 1.0) return 1.0;
+	float v = texture2D(fogMaskTex, (xz - fogMaskRect.xy) * fogMaskRect.zw).r;
+	float px = max(length(dFdx(xz)), length(dFdy(xz)));
+	return mix(fogMaskFactor, 1.0, clamp(0.5 + v / max(px, 0.02), 0.0, 1.0));
+}
+
 void main() {
 	vec3 worldPos = GetFragmentWorldPos();
 
@@ -481,4 +493,6 @@ void main() {
 	fragColor.a *=
 		smoothstep(0.0, EPS, relUV.x) * (1.0 - smoothstep(1.0 - EPS, 1.0, relUV.x)) *
 		smoothstep(0.0, EPS, relUV.y) * (1.0 - smoothstep(1.0 - EPS, 1.0, relUV.y));
+
+	fragColor.rgb *= SupComFogMul(worldPos.xz); // supcom
 }
