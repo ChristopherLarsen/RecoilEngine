@@ -6,6 +6,7 @@
 #include "LuaSyncedCtrl.h"
 #include "Rendering/Units/SupComGhosts.h"
 #include "Lua/SupComIntIndex.h"
+#include "Lua/SupComTargeting.h"
 
 #include "LuaInclude.h"
 #include "LuaConfig.h"
@@ -389,6 +390,7 @@ bool LuaSyncedCtrl::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(SetRadarErrorParams);
 	SupComGhosts::PushSyncedCtrl(L); // supcom: SetDeadGhostsByLua, RemoveDeadGhost, ShareDeadGhost
 	SupComIntIndex::PushSyncedCtrl(L); // supcom: intel coverage index (SupComInt*)
+	SupComTargeting::PushSyncedCtrl(L); // supcom: CMB-004 target choice (SupComTgt*)
 
 	// Unfortunatly classes within classes does not work well in emmylua
 	/*** @field Spring.MoveCtrl MoveCtrl */
