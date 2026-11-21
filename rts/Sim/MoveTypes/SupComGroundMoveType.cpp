@@ -1500,13 +1500,18 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				const bool alongX = (math::fabs(stepAsked.x) >= math::fabs(stepAsked.z));
 				const float3 lat = alongX? float3(0.0f, 0.0f, 1.0f): float3(1.0f, 0.0f, 0.0f);
 				const float m = std::max(stepAsked.Length2D(), 0.01f);
-				const float here = FootprintOverlapArea(owner->pos);
-				const float3 up = lat * m, down = lat * -m;
-				const float aUp = FootprintOverlapArea(owner->pos + up), aDown = FootprintOverlapArea(owner->pos + down);
-				if (aUp < here - 1e-3f || aDown < here - 1e-3f) {
-					moveRequest = (aUp <= aDown)? up: down;
-					moveRequest.x = GridStep(owner->pos.x, moveRequest.x);
-					moveRequest.z = GridStep(owner->pos.z, moveRequest.z);
+				// the smallest sideways shift, up to the step's length, after which the footprint is clear (L8985 cycle 2: a full step overshot
+				// and the unit dithered across the gap line); the positive side first on a tie. Held there, a later step that would
+				// enter the overlap again is refused (a step onto impassable squares from a clear footprint), so it keeps the line.
+				float shift = 0.0f;
+				for (float d = 0.05f; d <= m + 1e-4f && shift == 0.0f; d += 0.05f) {
+					if (!FootprintBlocked(owner->pos + lat * d))
+						shift = d;
+					else if (!FootprintBlocked(owner->pos - lat * d))
+						shift = -d;
+				}
+				if (shift != 0.0f) {
+					moveRequest = lat * shift;
 					blocked = false;
 				}
 			}
