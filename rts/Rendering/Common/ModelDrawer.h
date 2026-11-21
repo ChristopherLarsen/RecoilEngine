@@ -323,10 +323,24 @@ inline void CModelDrawerBase<TDrawerData, TDrawer>::DrawImpl(bool drawReflection
 
 	assert((CCameraHandler::GetActiveCamera())->GetCamType() != CCamera::CAMTYPE_SHADOW);
 
+	// supcom (render-only, 2026-11-21): with every model bin empty (all objects Lua-masked to 0) the deferred and forward
+	// passes have nothing to draw; skip their fixed setup (vision-rebuild L8928: ~1.9 ms at 8,692 masked features)
+	{
+		bool anyObj = false;
+		for (int mt = MODELTYPE_3DO; mt < MODELTYPE_CNT; ++mt) anyObj |= !modelDrawerData->GetModelRenderer(mt).empty();
+		if (!anyObj) {
+			if constexpr (legacy) { glDisable(GL_FOG); glDisable(GL_TEXTURE_2D); }
+			return;
+		}
+	}
+
 	// first do the deferred pass; conditional because
 	// most of the water renderers use their own FBO's
-	if (drawDeferred && !drawReflection && !drawRefraction)
+	if (drawDeferred && !drawReflection && !drawRefraction) {
+		constexpr static auto dzone = spring::Concat(spring::TypeToCharN<TDrawer>().str, "::DeferredPass");
+		SCOPED_TIMER(dzone.str);
 		LuaObjectDrawer::DrawDeferredPass(lot);
+	}
 
 	// now do the regular forward pass
 	if (drawForward)
