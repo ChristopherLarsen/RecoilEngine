@@ -4,6 +4,7 @@
 
 #include "UnitHandler.h"
 #include "SupComUnitStatic.h"
+#include "SupComUnitPass.h"
 #include "Sim/MoveTypes/SupComGroundMoveType.h" // supcom
 #include "Unit.h"
 #include "UnitDefHandler.h"
@@ -471,6 +472,7 @@ void CUnitHandler::Update()
 	DeleteUnits();
 	UpdateUnitMoveTypes();
 	CSupComGroundMoveType::FlushCoastPolls(); // supcom
+	SupComUnitPass::Update(); // supcom: the unit pass (SupComUnitPass.h)
 	QueueDeleteUnits();
 	UpdateUnitLosStates();
 	SlowUpdateUnits();

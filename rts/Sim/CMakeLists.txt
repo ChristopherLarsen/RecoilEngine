@@ -45,6 +45,8 @@ add_library(engineSim STATIC
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/SupComAirMoveType.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/SupComGroundMoveType.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/SupComHalfRate.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/Units/SupComUnitPass.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/Units/SupComUnitPassMove.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/GroundMoveType.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/MoveDefHandler.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/MoveTypes/MoveMath/GroundMoveMath.cpp"

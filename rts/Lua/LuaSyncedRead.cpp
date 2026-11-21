@@ -4,6 +4,7 @@
 #include "Rendering/Units/SupComGhosts.h"
 #include "Lua/SupComUnitQuery.h"
 #include "Sim/MoveTypes/SupComHalfRate.h"
+#include "Sim/Units/SupComUnitPass.h"
 
 #include "LuaInclude.h"
 
@@ -249,6 +250,7 @@ bool LuaSyncedRead::PushEntries(lua_State* L)
 	SupComGhosts::PushSyncedRead(L); // supcom: GetDeadGhosts
 	SupComUnitQuery::PushSyncedRead(L); // supcom: GetUnitArrays, GetUnitChanges
 	SupComHalfRate::PushSyncedRead(L); // supcom: SupComHalfRateInfo (PRF-002 cases)
+	SupComUnitPass::PushSyncedRead(L); // supcom: SupComUnitPassEvents
 	REGISTER_LUA_CFUNC(GetUnitBasePosition);
 	REGISTER_LUA_CFUNC(GetUnitVectors);
 	REGISTER_LUA_CFUNC(GetUnitRotation);
