@@ -243,6 +243,9 @@ bool CSupComAirMoveType::Update()
 	if (owner->beingBuilt)
 		return false;
 
+	if (aircraftState != AIRCRAFT_LANDED)
+		SupComHalfRate::Moved(owner);   // PRF-002 cases: flying and hovering aircraft update every tick (R6)
+
 	switch (aircraftState) {
 		case AIRCRAFT_LANDED: {
 			// no air movement on the ground

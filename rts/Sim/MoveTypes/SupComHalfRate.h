@@ -11,12 +11,17 @@
 #define SUPCOM_HALF_RATE_H
 
 class CUnit;
+struct lua_State;
 
 namespace SupComHalfRate {
 	/// one-line hook in GroundMoveSystem before UpdatePreCollisions: true = skip it this frame
 	bool SkipGround(CUnit* u);
 	/// CSupComAirMoveType, landed: true = skip this frame's UpdateLanded (at rest, not the unit's 16th frame)
 	bool LandedRest(CUnit* u);
+	/// a movement update ran this frame (air move types outside LandedRest)
+	void Moved(CUnit* u);
+	/// one-line hook in LuaSyncedRead: Spring.SupComHalfRateInfo
+	void PushSyncedRead(lua_State* L);
 }
 
 #endif

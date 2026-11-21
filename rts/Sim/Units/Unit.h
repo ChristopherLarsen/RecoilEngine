@@ -253,6 +253,8 @@ protected:
 
 public: // unsynced methods
 	int supcomIdleRun = 0; // SupComHalfRate.h: frames idle in a row (not saved state)
+	int supcomMoveFrame = -1; // SupComHalfRate.h: the last frame its movement update ran (cases read it)
+	float supcomLastHealth = -1.0f; // SupComHalfRate.h: health at the last check (a change wakes it, PRF-002 v1 R2)
 	float supcomSavedMat[16] = {}; // SupComUnitStatic.h: synced matrix at the last prev-frame save (not saved state)
 	bool SetGroup(CGroup* newGroup, bool autoSelect = true);
 

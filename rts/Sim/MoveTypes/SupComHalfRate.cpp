@@ -8,6 +8,8 @@
 #include "Sim/MoveTypes/AAirMoveType.h"
 #include "Sim/MoveTypes/GroundMoveType.h"
 #include "Sim/Units/UnitDef.h"
+#include "Sim/Units/UnitHandler.h"
+#include "Lua/LuaUtils.h"
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "System/Log/ILog.h"
@@ -40,8 +42,11 @@ namespace {
 		if (ground) { ++gTot; gHalf += half; } else { ++aTot; aHalf += half; }
 	}
 
-	bool UnitIdle(const CUnit* u) {
-		return !u->beingBuilt && !u->isDead && !u->IsStunned() && !u->IsSkidding() && u->GetTransporter() == nullptr
+	bool UnitIdle(CUnit* u) {
+		// PRF-002 v1 R2: a change of health (damage or regeneration) is a change: awake on the next tick
+		const bool sameHealth = (u->health == u->supcomLastHealth);
+		u->supcomLastHealth = u->health;
+		return sameHealth && !u->beingBuilt && !u->isDead && !u->IsStunned() && !u->IsSkidding() && u->GetTransporter() == nullptr
 			&& u->commandAI != nullptr && u->commandAI->commandQue.empty()
 			&& u->lastAttackFrame < gs->frameNum - HIT_FRAMES;
 	}
@@ -62,7 +67,9 @@ bool SupComHalfRate::SkipGround(CUnit* u)
 	const bool idle = UnitIdle(u) && u->speed.w == 0.0f && mt->SupComQuiet();
 	const bool half = Half(u, idle);
 	Tally(true, half);
-	return half && ((u->id + gs->frameNum) & 1) != 0;
+	const bool skip = half && ((u->id + gs->frameNum) & 1) != 0;
+	if (!skip) u->supcomMoveFrame = gs->frameNum;
+	return skip;
 }
 
 
@@ -72,8 +79,29 @@ bool SupComHalfRate::LandedRest(CUnit* u)
 {
 	if (!Enabled() || u->beingBuilt)
 		return false;
-	const bool rest = u->speed.x == 0.0f && u->speed.y == 0.0f && u->speed.z == 0.0f
+	const bool rest = UnitIdle(u) && u->speed.x == 0.0f && u->speed.y == 0.0f && u->speed.z == 0.0f
 		&& u->pos.y == amtGetGroundHeightFuncs[u->unitDef->canSubmerge](u->pos.x, u->pos.z);   // the height UpdateLanded settles to
-	Tally(false, rest);
-	return rest && ((u->id + gs->frameNum) & 1) != 0;   // PRF-002 v1 R1: updated when tick + id is even
+	const bool half = Half(u, rest);
+	Tally(false, half);
+	const bool skip = half && ((u->id + gs->frameNum) & 1) != 0;   // PRF-002 v1 R1: updated when tick + id is even
+	if (!skip) u->supcomMoveFrame = gs->frameNum;
+	return skip;
+}
+
+void SupComHalfRate::Moved(CUnit* u) { u->supcomMoveFrame = gs->frameNum; }
+
+// Spring.SupComHalfRateInfo(unitID) -> lastMoveFrame, idleRun   (synced read; nil for an invalid unit; PRF-002 cases)
+static int HalfRateInfo(lua_State* L)
+{
+	const CUnit* u = unitHandler.GetUnit(luaL_checkint(L, 1));
+	if (u == nullptr)
+		return 0;
+	lua_pushnumber(L, u->supcomMoveFrame);
+	lua_pushnumber(L, u->supcomIdleRun);
+	return 2;
+}
+
+void SupComHalfRate::PushSyncedRead(lua_State* L)
+{
+	LuaPushRawNamedCFunc(L, "SupComHalfRateInfo", HalfRateInfo);
 }
