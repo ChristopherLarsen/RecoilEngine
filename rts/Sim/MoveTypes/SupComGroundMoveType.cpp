@@ -1446,6 +1446,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			// grazing the wall face by a hundredth of an elmo, was refused every step): the nearest sideways offset,
 			// across the step's main axis, from which the forward part of the step fits, approached by at most the
 			// step's length. Nearest first, the positive side first on a tie (deterministic).
+			const float3 stepAsked = moveRequest;
 			if (blocked && MakeWayOn()) {
 				const bool alongX = (math::fabs(moveRequest.x) >= math::fabs(moveRequest.z));
 				const float3 fwd = alongX? float3(moveRequest.x, 0.0f, 0.0f): float3(0.0f, 0.0f, moveRequest.z);
@@ -1489,6 +1490,24 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 						moveRequest = side;
 						blocked = false;
 					}
+				}
+			}
+
+			// PTH-004-E (builder, L8996: 4.73 to 1.51 elmos with the overlap rule alone): a unit pressed against a wall face with part of its footprint
+			// on impassable squares (held in front of a one-cell gap by a structure, off the gap's line by the path's off-line waypoint) moves sideways,
+			// across the refused step's axis, to the side that takes the overlap off, by at most the step's length; it settles on the gap line first
+			if (blocked && FootprintBlocked(owner->pos)) {
+				const bool alongX = (math::fabs(stepAsked.x) >= math::fabs(stepAsked.z));
+				const float3 lat = alongX? float3(0.0f, 0.0f, 1.0f): float3(1.0f, 0.0f, 0.0f);
+				const float m = std::max(stepAsked.Length2D(), 0.01f);
+				const float here = FootprintOverlapArea(owner->pos);
+				const float3 up = lat * m, down = lat * -m;
+				const float aUp = FootprintOverlapArea(owner->pos + up), aDown = FootprintOverlapArea(owner->pos + down);
+				if (aUp < here - 1e-3f || aDown < here - 1e-3f) {
+					moveRequest = (aUp <= aDown)? up: down;
+					moveRequest.x = GridStep(owner->pos.x, moveRequest.x);
+					moveRequest.z = GridStep(owner->pos.z, moveRequest.z);
+					blocked = false;
 				}
 			}
 
