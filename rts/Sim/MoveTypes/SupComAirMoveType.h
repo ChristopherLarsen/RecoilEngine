@@ -132,6 +132,10 @@ private:
 	/// customParams supcom_air_pass_overflight (elmos; 0: the pass swing): how far past the aim point a pass runs out
 	/// before turning back, where it differs from the break-off distance
 	float passRun = 0.0f;
+	/// customParams supcom_air_pass_random_mult (>= 1; 1: none, MOV-016 v5 R4): each pass runs out to its distance times a factor
+	/// drawn from the synced generator between 1 and this (the occasional wider break-off, in place of mov_air_pass's move leg)
+	float passRandomMult = 1.0f;
+	float passFactor = 1.0f;     ///< this pass's factor
 	/// Lua supcomOrbitRadius (elmos; 0: off): a winged aircraft with no attack target circles its goal at this radius instead of passes
 	float orbitRadius = 0.0f;
 

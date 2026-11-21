@@ -53,6 +53,8 @@ CR_REG_METADATA(CSupComAirMoveType, (
 	CR_MEMBER(takeoffOvershoot),
 	CR_MEMBER(takeoffPeak),
 	CR_MEMBER(passRun),
+	CR_MEMBER(passRandomMult),
+	CR_MEMBER(passFactor),
 
 	CR_MEMBER(horSpeed),
 	CR_MEMBER(idleStage),
@@ -121,6 +123,7 @@ CSupComAirMoveType::CSupComAirMoveType(CUnit* owner): CHoverAirMoveType(owner)
 	pickupCmd = int(CustomParam(ud, "supcom_air_pickup_cmd", 0.0f));
 	attackDip = std::max(0.0f, CustomParam(ud, "supcom_air_attack_dip", 0.0f));
 	passRun = std::max(0.0f, CustomParam(ud, "supcom_air_pass_overflight", 0.0f));
+	passRandomMult = std::max(1.0f, CustomParam(ud, "supcom_air_pass_random_mult", 1.0f));
 	passSpeedFactor = std::clamp(CustomParam(ud, "supcom_air_pass_speed_factor", 1.0f), 0.05f, 1.0f);
 	takeoffOvershoot = std::max(0.0f, CustomParam(ud, "supcom_air_takeoff_overshoot", 0.0f));
 
@@ -374,12 +377,14 @@ void CSupComAirMoveType::UpdateFlight()
 		// passes: overshoot the aim point, run straight out to the swing distance, then turn back
 		if (passSwing > 0.0f) {
 			if (passOut) {
-				passOut = (aimDist < ((passRun > 0.0f)? passRun: passSwing));
+				passOut = (aimDist < ((passRun > 0.0f)? passRun: passSwing) * passFactor);
 				passTurn = !passOut;
 			} else if ((aimDist < passSwing * 0.25f || aimDist < passRun) && aimDist > lastAimDist) {
 				// moving away inside the overflight distance (supcom_air_pass_overflight) also runs out: a pass the game
 				// lengthened with a move leg (mov_air_pass) resumes the attack outbound and holds its line to that distance
 				passOut = true;
+				// supcom_air_pass_random_mult: this pass's run-out factor, one synced draw per pass (no draw when it is 1)
+				passFactor = (passRandomMult > 1.0f)? (1.0f + (passRandomMult - 1.0f) * gsRNG.NextFloat()): 1.0f;
 			}
 		}
 
