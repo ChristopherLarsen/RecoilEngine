@@ -4778,6 +4778,9 @@ int LuaUnsyncedCtrl::SetWaterParams(lua_State* L)
 						waterRendering->specularPower = value;
 					} break;
 
+					case hashString("reflectionStrength"): {
+						waterRendering->reflectionStrength = std::clamp(value, 0.0f, 1.0f);
+					} break;
 					case hashString("fresnelMin"): {
 						waterRendering->fresnelMin = value;
 					} break;

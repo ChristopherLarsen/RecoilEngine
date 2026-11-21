@@ -7583,6 +7583,10 @@ int LuaOpenGL::GetWaterRendering(lua_State* L)
 			lua_pushnumber(L, waterRendering->specularPower);
 			return 1;
 		} break;
+		case hashString("reflectionStrength"): {
+			lua_pushnumber(L, waterRendering->reflectionStrength);
+			return 1;
+		} break;
 		case hashString("fresnelMin"): {
 			lua_pushnumber(L, waterRendering->fresnelMin);
 			return 1;

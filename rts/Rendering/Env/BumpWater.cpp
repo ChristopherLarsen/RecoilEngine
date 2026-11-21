@@ -566,7 +566,7 @@ void CBumpWater::UpdateWater(const CGame* game)
 
 	glPushAttrib(GL_FOG_BIT);
 	if (refraction > 1) DrawRefraction(game);
-	if (reflection > 0) DrawReflection(game);
+	if (reflection > 0 && waterRendering->reflectionStrength > 0.0f) DrawReflection(game);
 	if (reflection || refraction) {
 		FBO::Unbind();
 		globalRendering->LoadViewport();
