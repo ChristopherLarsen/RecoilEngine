@@ -2415,7 +2415,9 @@ int LuaUnsyncedCtrl::SetFeatureEngineDrawMask(lua_State* L)
 	if (feature == nullptr)
 		return 0;
 
+	const uint8_t oldMask = feature->engineDrawMask;
 	feature->engineDrawMask = static_cast<uint8_t>(luaL_checkint(L, 2));
+	if ((oldMask == 0) != (feature->engineDrawMask == 0) && feature->def->drawType == DRAWTYPE_MODEL) CFeatureDrawer::SupComSetMasked(feature, feature->engineDrawMask == 0); // supcom
 	return 0;
 }
 

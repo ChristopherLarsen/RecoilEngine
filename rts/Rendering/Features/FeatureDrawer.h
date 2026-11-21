@@ -34,6 +34,7 @@ public:
 	static const std::vector<CFeature*>& GetUnsortedFeatures() { return modelDrawerData->GetUnsortedObjects(); }
 
 	static void ClearPreviousDrawFlags() { modelDrawerData->ClearPreviousDrawFlags(); }
+	static void SupComSetMasked(const CFeature* f, bool masked) { modelDrawerData->SupComSetMasked(f, masked); } // supcom
 public:
 	virtual void DrawFeatureModel(const CFeature* feature, bool noLuaCall) const = 0;
 protected:

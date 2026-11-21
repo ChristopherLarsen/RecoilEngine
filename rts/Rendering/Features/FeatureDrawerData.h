@@ -8,6 +8,8 @@ class CCamera;
 
 class CFeatureDrawerData : public CFeatureDrawerDataBase {
 public:
+	// supcom: a feature Lua masked to 0 leaves the draw bins, and comes back when unmasked (SupComFeatureDrawSkip.h)
+	void SupComSetMasked(const CFeature* f, bool masked) { if (f->model == nullptr) return; if (masked) DelObject(f, false); else UpdateObject(f, false); }
 	// CEventClient interface
 	bool WantsEvent(const std::string & eventName) override {
 		return
