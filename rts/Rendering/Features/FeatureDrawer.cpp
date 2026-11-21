@@ -55,6 +55,9 @@ bool CFeatureDrawer::ShouldDrawOpaqueFeature(CFeature* f, uint8_t thisPassMask)
 	assert(f);
 	assert(f->model);
 
+	if ((f->engineDrawMask & thisPassMask) != thisPassMask) // supcom: masked features stop before the Lua material bins
+		return false;
+
 	if (f->drawFlag == 0)
 		return false;
 
@@ -73,9 +76,6 @@ bool CFeatureDrawer::ShouldDrawOpaqueFeature(CFeature* f, uint8_t thisPassMask)
 	if (LuaObjectDrawer::AddOpaqueMaterialObject(f, LUAOBJ_FEATURE))
 		return false;
 
-	if ((f->engineDrawMask & thisPassMask) != thisPassMask)
-		return false;
-
 	return true;
 }
 
@@ -84,6 +84,9 @@ bool CFeatureDrawer::ShouldDrawAlphaFeature(CFeature* f, uint8_t thisPassMask)
 	RECOIL_DETAILED_TRACY_ZONE;
 	assert(f);
 	assert(f->model);
+
+	if ((f->engineDrawMask & thisPassMask) != thisPassMask) // supcom: masked features stop before the Lua material bins
+		return false;
 
 	if (f->drawFlag == 0)
 		return false;
@@ -103,9 +106,6 @@ bool CFeatureDrawer::ShouldDrawAlphaFeature(CFeature* f, uint8_t thisPassMask)
 	if (LuaObjectDrawer::AddAlphaMaterialObject(f, LUAOBJ_FEATURE))
 		return false;
 
-	if ((f->engineDrawMask & thisPassMask) != thisPassMask)
-		return false;
-
 	return true;
 }
 
@@ -117,13 +117,13 @@ bool CFeatureDrawer::ShouldDrawFeatureShadow(CFeature* f)
 
 	static constexpr uint8_t thisPassMask = DrawFlags::SO_SHOPAQ_FLAG;
 
+	if ((f->engineDrawMask & thisPassMask) != thisPassMask) // supcom: masked features stop before the Lua material bins
+		return false;
+
 	if (!f->HasDrawFlag(DrawFlags::SO_SHOPAQ_FLAG))
 		return false;
 
 	if (LuaObjectDrawer::AddShadowMaterialObject(f, LUAOBJ_FEATURE))
-		return false;
-
-	if ((f->engineDrawMask & thisPassMask) != thisPassMask)
 		return false;
 
 	return true;

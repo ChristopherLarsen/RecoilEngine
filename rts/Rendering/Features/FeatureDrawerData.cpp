@@ -94,14 +94,14 @@ void CFeatureDrawerData::Update()
 	if (mtModelDrawer) {
 		for_mt_chunk(0, unsortedObjects.size(), [this](const int k) {
 			CFeature* f = unsortedObjects[k];
-			if (SupComFeatureDrawSkip(f, featureDrawDistance)) return;
+			if (SupComFeatureDrawSkip(f, featureDrawDistance)) { if (f->engineDrawMask == 0) f->drawFlag = 0; return; }
 			UpdateDrawPos(f);
 			UpdateCommon(f);
 		}, CModelDrawerDataConcept::MT_CHUNK_OR_MIN_CHUNK_SIZE_UPDT);
 	}
 	else {
 		for (CFeature* f : unsortedObjects) {
-			if (SupComFeatureDrawSkip(f, featureDrawDistance)) continue;
+			if (SupComFeatureDrawSkip(f, featureDrawDistance)) { if (f->engineDrawMask == 0) f->drawFlag = 0; continue; }
 			UpdateDrawPos(f);
 			UpdateCommon(f);
 		}
