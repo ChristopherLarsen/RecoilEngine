@@ -1,7 +1,7 @@
 /* SupCom: one engine walk over the units per sim frame that runs the absorbed per-unit systems in turn
  * (docs/engine/UNIT-PASS-DESIGN.md, owner-approved 2026-11-20).
  * Order: ascending unit id, every client the same (no sort: ids are walked in order). Each step has a filter, kept per
- * unit def as a bit mask, so it never visits units it has no work for; an optional rate runs it where (frame + id) % rate == 0.
+ * unit def as a bit mask, so it never visits units it has no work for; an optional rate runs it where id % rate == frame % rate (int_coverage F.pm slicing).
  * Each step is behind mod option unitpass_<name> ("1" on; default off until its Lua-parity proof lands).
  * Results reach Lua as one batch per frame: Spring.SupComUnitPassEvents() -> frame, ids, kinds, a, b (flat arrays).
  * With no step on, Update returns at once (the zero-cost check of the skeleton). */

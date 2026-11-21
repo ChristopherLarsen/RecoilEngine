@@ -77,7 +77,7 @@ void SupComUnitPass::Update()
 		if (u == nullptr || u->isDead)
 			continue;
 		for (Step* s: live) {
-			if (s->rate > 1 && ((f + id) % s->rate) != 0)
+			if (s->rate > 1 && (id % s->rate) != (f % s->rate))   // the Lua phase rule: id % rate == frame % rate
 				continue;
 			if (s->filter != nullptr && !s->filter(u))
 				continue;
