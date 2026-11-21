@@ -2,6 +2,7 @@
 
 
 #include "InputReceiver.h"
+#include "SupComReceiverTimers.h"
 #include "Lua/LuaInputReceiver.h"
 #include "Rendering/GL/myGL.h"
 #include "Rml/Backends/RmlUi_Backend.h"
@@ -69,7 +70,7 @@ void CInputReceiver::DrawReceivers()
 		if (r == nullptr)
 			continue;
 
-		r->Draw();
+		SupComDrawReceiver(r); // supcom: a timer per receiver (SupComReceiverTimers.h)
 	}
 }
 

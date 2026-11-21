@@ -74,6 +74,8 @@ CONFIG(bool, MiniMapIcons).defaultValue(true).headlessValue(false);
 CONFIG(int, MiniMapDrawCommands).defaultValue(1).headlessValue(0).minimumValue(0);
 
 CONFIG(bool, MiniMapDrawProjectiles).defaultValue(true).headlessValue(false);
+// supcom: 0 skips the engine's unit icons on the minimap (a game that draws its own in DrawInMiniMap); drawing only
+CONFIG(bool, SupComMiniMapUnitIcons).defaultValue(true).headlessValue(false);
 CONFIG(bool, MiniMapDrawPings).defaultValue(true).headlessValue(false).description("Whether to draw pings on the minimap.");
 CONFIG(bool, SimpleMiniMapColors).defaultValue(false);
 
@@ -1398,9 +1400,9 @@ void CMiniMap::DrawForReal(bool useNormalizedCoors, bool updateTex, bool luaCall
 	DrawBackground();
 
 	// allow Lua scripts to overdraw the background image
-	eventHandler.DrawInMiniMapBackground();
+	{ SCOPED_TIMER("Draw::Screen::MiniMap::LuaBackground"); eventHandler.DrawInMiniMapBackground(); } // supcom: sub-timer
 
-	DrawUnitIcons();
+	if (configHandler->GetBool("SupComMiniMapUnitIcons")) { SCOPED_TIMER("Draw::Screen::MiniMap::UnitIcons"); DrawUnitIcons(); } // supcom: setting + sub-timer
 	DrawWorldStuff();
 
 	if (useNormalizedCoors)
@@ -1411,7 +1413,7 @@ void CMiniMap::DrawForReal(bool useNormalizedCoors, bool updateTex, bool luaCall
 
 	// allow Lua scripts to draw into the minimap
 	SetClipPlanes(true);
-	eventHandler.DrawInMiniMap();
+	{ SCOPED_TIMER("Draw::Screen::MiniMap::Lua"); eventHandler.DrawInMiniMap(); } // supcom: sub-timer
 
 	if (!updateTex) {
 		glPushMatrix();
