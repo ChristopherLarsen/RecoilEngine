@@ -136,6 +136,7 @@
 #include "System/LoadLock.h"
 
 #include "System/Misc/TracyDefs.h"
+#include "Lua/SupComCallinBatch.h" // supcom
 
 #include "fmt/ranges.h"
 
@@ -1816,6 +1817,7 @@ void CGame::SimFrame() {
 
 		teamHandler.GameFrame(gs->frameNum);
 		playerHandler.GameFrame(gs->frameNum);
+		SupComCib::FrameEnd(); // supcom: hand queued fight call-ins to Lua before the frame ends
 		eventHandler.GameFramePost(gs->frameNum);
 	}
 

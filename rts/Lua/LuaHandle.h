@@ -104,6 +104,9 @@ class CLuaHandle : public CEventClient
 		LuaRBOs& GetRBOs(const lua_State* L = nullptr) { return GetLuaContextData(L)->rbos; }
 		CLuaDisplayLists& GetDisplayLists(const lua_State* L = NULL) { return GetLuaContextData(L)->displayLists; }
 #endif
+	public:
+		int SupComCibCall(int op); // supcom: fight call-in batching (SupComCallinBatch.cpp)
+
 	public: // call-ins
 		bool WantsEvent(const std::string& name) override { return HasCallIn(L, name); }
 		virtual bool HasCallIn(lua_State* L, const std::string& name) const;

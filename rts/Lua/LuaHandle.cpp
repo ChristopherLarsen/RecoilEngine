@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaHandle.h"
+#include "SupComCallinBatch.h" // supcom: fight call-in batching
 #include "Game/SupComLocalView.h"
 #include "lua_privileges.h"
 
@@ -362,6 +363,7 @@ int CLuaHandle::RunCallInTraceback(
 	bool popErrorFunc
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (SupComCib::pending > 0) SupComCib::BeforeCallIn(this); // supcom: queued fight call-ins first
 	// do not signal floating point exceptions in user Lua code
 	ScopedDisableFpuExceptions fe;
 
@@ -1407,6 +1409,7 @@ void CLuaHandle::UnitDamaged(
 	int projectileID,
 	bool paralyzer)
 {
+	if (SupComCib::UnitDamaged(this, unit, attacker, damage, weaponDefID, projectileID, paralyzer)) return; // supcom: batched
 	LUA_CALL_IN_CHECK(L);
 	luaL_checkstack(L, 11, __func__);
 
@@ -2177,6 +2180,7 @@ void CLuaHandle::ProjectileCreated(const CProjectile* p)
 	if (p->piece && !watchProjectileDefs[watchProjectileDefs.size() - 1])
 		return;
 
+	if (SupComCib::ProjectileCreated(this, p->id, ((owner != nullptr)? owner->id: -1), ((wd != nullptr)? wd->id: -1))) return; // supcom: batched
 	LUA_CALL_IN_CHECK(L);
 	luaL_checkstack(L, 5, __func__);
 
@@ -2232,6 +2236,7 @@ void CLuaHandle::ProjectileDestroyed(const CProjectile* p)
 	if (p->piece && !watchProjectileDefs[watchProjectileDefs.size() - 1])
 		return;
 
+	if (SupComCib::ProjectileDestroyed(this, p->id, ownerID, pwdefID)) return; // supcom: batched
 	LUA_CALL_IN_CHECK(L);
 	luaL_checkstack(L, 6, __func__);
 
@@ -2297,6 +2302,7 @@ bool CLuaHandle::Explosion(int weaponDefID, const WeaponDef* weaponDef, const CE
 	if (!synced && !IsExplosionVisible(weaponDef, params))
 		return false;
 
+	if (SupComCib::Explosion(this, weaponDefID, params)) return false; // supcom: batched (no noGfx from a queued call)
 	LUA_CALL_IN_CHECK(L, false);
 	luaL_checkstack(L, 7, __func__);
 

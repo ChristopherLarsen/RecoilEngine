@@ -2,6 +2,7 @@
 
 #include "System/RangesCompat.h"
 #include "LuaHandleSynced.h"
+#include "SupComCallinBatch.h" // supcom: fight call-in batching
 
 #include "LuaInclude.h"
 
@@ -1549,6 +1550,7 @@ bool CSyncedLuaHandle::UnitPreDamaged(
 	//   RunCallInTraceback removes the error-handler by default
 	//   this has to be disabled when using ScopedDebugTraceBack
 	//   or it would mess up the stack
+	SupComCib::PreDamagedNext(this); // supcom: optional relaxed order (SupComCallinBatch.h, mask bit 16)
 	if (!RunCallInTraceback(L, cmdStr, inArgCount, outArgCount, dbgTrace.GetErrFuncIdx(), false))
 		return false;
 
