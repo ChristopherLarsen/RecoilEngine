@@ -314,6 +314,10 @@ bool CSupComAirMoveType::SetMemberValue(unsigned int memberHash, void* memberVal
 		// seconds idle before landing (the IDLE_WAIT delay); < 0 never lands idle (customParams supcom_air_idle_land_delay at creation)
 		const float d = *reinterpret_cast<float*>(memberValue);
 		idleLandDelay = (d < 0.0f)? -1.0f: (d * GAME_SPEED);
+		// set at runtime on an aircraft already idle longer than the new delay: the lowering starts now, from the current
+		// height (MOV-015 v4 R3, empty tank), not as if it had begun at idle start + delay
+		if (idleLandDelay >= 0.0f && idleStage == IDLE_WAIT && (gs->frameNum - idleFrame) >= idleLandDelay)
+			idleFrame = gs->frameNum - int(idleLandDelay);
 		return true;
 	}
 	if (memberHash == orbitRadiusHash) {
