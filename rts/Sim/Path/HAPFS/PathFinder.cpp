@@ -12,6 +12,7 @@
 #include "Map/Ground.h"
 #include "Map/ReadMap.h"
 #include "Sim/MoveTypes/MoveDefHandler.h"
+#include "Sim/MoveTypes/MoveMath/SupComPathFast.h"
 #include "Sim/Misc/ModInfo.h"
 #include "Sim/Misc/GeometricObjects.h"
 #include "System/MathConstants.h"
@@ -136,6 +137,7 @@ IPath::SearchResult CPathFinder::DoRawSearch(
 	const CSolidObject* owner
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
+	SupComNewSearchStamp();
 	if (!moveDef.allowRawMovement)
 		return IPath::Error;
 
@@ -153,12 +155,54 @@ IPath::SearchResult CPathFinder::DoRawSearch(
 	return (haveFullPath) ? IPath::Ok : IPath::Error;
 }
 
+void CPathFinder::SupComNewSearchStamp()
+{
+	if (SupComPathFast::Mode() == 0)
+		return;
+
+	const size_t n = size_t(nbrOfBlocks.x) * size_t(nbrOfBlocks.y);
+
+	if (posSpeedStamp.size() != n) {
+		posSpeedMod.assign(n, 0.0f);
+		posSpeedStamp.assign(n, 0u);
+		posSpeedSearch = 0;
+	}
+
+	if (++posSpeedSearch == 0) {
+		std::fill(posSpeedStamp.begin(), posSpeedStamp.end(), 0u);
+		posSpeedSearch = 1;
+	}
+}
+
+float CPathFinder::SupComPosSpeedMod(const MoveDef& moveDef, int2 sqr, unsigned int sqrIdx)
+{
+	if (posSpeedStamp.empty())
+		return CMoveMath::GetPosSpeedMod(moveDef, sqr.x, sqr.y);
+
+	if (posSpeedStamp[sqrIdx] != posSpeedSearch) {
+		posSpeedMod[sqrIdx] = CMoveMath::GetPosSpeedMod(moveDef, sqr.x, sqr.y);
+		posSpeedStamp[sqrIdx] = posSpeedSearch;
+	} else if (SupComPathFast::Mode() == 2) {
+		const float stock = CMoveMath::GetPosSpeedMod(moveDef, sqr.x, sqr.y);
+		if (stock != posSpeedMod[sqrIdx]) {
+			static int mismatches = 0;
+			if (++mismatches <= 50)
+				LOG_L(L_ERROR, "[SupComPathFast] speed-mod mismatch %d: movedef %s (%d,%d) cached %f stock %f", mismatches, moveDef.name.c_str(), sqr.x, sqr.y, posSpeedMod[sqrIdx], stock);
+			return stock;
+		}
+	}
+
+	return posSpeedMod[sqrIdx];
+}
+
+
 IPath::SearchResult CPathFinder::DoSearch(
 	const MoveDef& moveDef,
 	const CPathFinderDef& pfDef,
 	const CSolidObject* owner
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
+	SupComNewSearchStamp();
 	bool foundGoal = false;
 	int curThread = ThreadPool::GetThreadNum();
 
@@ -271,7 +315,7 @@ void CPathFinder::TestNeighborSquares(
 			//
 			// only close node if search is directionally independent, since it
 			// might still be entered from another (better) direction otherwise
-			sqState.speedMod = CMoveMath::GetPosSpeedMod(moveDef, ngbSquareCoors.x, ngbSquareCoors.y);
+			sqState.speedMod = SupComPosSpeedMod(moveDef, ngbSquareCoors, ngbSquareIdx);   // supcom PTH-005-H option 2 (stock call with SupComPathFast 0)
 			if (sqState.speedMod == 0.0f) {
 				blockStates.nodeMask[ngbSquareIdx] |= PATHOPT_CLOSED;
 				dirtyBlocks.push_back(ngbSquareIdx);
@@ -402,7 +446,7 @@ bool CPathFinder::TestBlock(
 		}
 	}
 
-	const float heatCost  = (pfDef.testMobile) ? gPathHeatMap.GetHeatCost(square.x, square.y, moveDef, ((owner != nullptr)? owner->id: -1U)) : 0.0f;
+	const float heatCost  = (pfDef.testMobile && moveDef.heatMapping) ? gPathHeatMap.GetHeatCost(square.x, square.y, moveDef, ((owner != nullptr)? owner->id: -1U)) : 0.0f;
 	//const float flowCost  = (pfDef.testMobile) ? (PathFlowMap::GetInstance())->GetFlowCost(square.x, square.y, moveDef, pathOptDir) : 0.0f;
 	const float extraCost = blockStates.GetNodeExtraCost(square.x, square.y, pfDef.synced);
 

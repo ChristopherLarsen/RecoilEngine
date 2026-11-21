@@ -30,6 +30,14 @@ public:
 	typedef CMoveMath::BlockType (*BlockCheckFunc)(const MoveDef&, int, int, const CSolidObject*);
 
 protected:
+	// supcom (PTH-005-H option 2): the positional speed-mod of a square is read once per search (a square is a neighbour of up to 8 expanded nodes);
+	// a stamp per square replaces a reset, the value is the stock CMoveMath::GetPosSpeedMod (springsetting SupComPathFast 1, 2 cross-checks)
+	std::vector<float> posSpeedMod;
+	std::vector<unsigned int> posSpeedStamp;
+	unsigned int posSpeedSearch = 0;
+	void SupComNewSearchStamp();
+	float SupComPosSpeedMod(const MoveDef& moveDef, int2 sqr, unsigned int sqrIdx);
+
 	/// Performs the actual search.
 	IPath::SearchResult DoRawSearch(const MoveDef& moveDef, const CPathFinderDef& pfDef, const CSolidObject* owner) override;
 	IPath::SearchResult DoSearch(const MoveDef& moveDef, const CPathFinderDef& pfDef, const CSolidObject* owner) override;
