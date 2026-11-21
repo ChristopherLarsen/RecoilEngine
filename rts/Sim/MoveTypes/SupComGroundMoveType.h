@@ -134,6 +134,7 @@ private:
 	bool FootprintBlocked(const float3& pos) const;
 	bool FootprintOnStructure(const float3& pos) const;
 	float FootprintDepth(const float3& pos) const;
+	float FootprintOverlapArea(const float3& pos) const;
 	bool HasFurtherPoint() const;
 public:
 	/// one-line hook in CUnitHandler::Update after UpdateUnitMoveTypes (MOV-020 R1 coast polls)

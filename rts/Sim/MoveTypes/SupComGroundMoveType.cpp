@@ -715,6 +715,36 @@ float CSupComGroundMoveType::FootprintDepth(const float3& pos) const
 	return depth;
 }
 
+// PTH-004-E (builder, L8985 trace): the total overlap, over the impassable squares the footprint reaches, in square elmos. FootprintDepth is the
+// shorter axis of the worst square and stays put while a unit held in front of a one-cell gap creeps 0.1 elmos a frame along the wall face or
+// sideways towards an off-line waypoint (depth 0.55 to 1.73 over 190 frames); the overlap area grows with every such step.
+float CSupComGroundMoveType::FootprintOverlapArea(const float3& pos) const
+{
+	const bool alongX = (math::fabs(flatFrontDir.x) > math::fabs(flatFrontDir.z));
+	const float hx = (alongX? footprintZ: footprintX) * 0.5f - (alongX? 0.0f: FOOTPRINT_SIDE_EPS);
+	const float hz = (alongX? footprintX: footprintZ) * 0.5f - (alongX? FOOTPRINT_SIDE_EPS: 0.0f);
+	const float x0 = pos.x - hx, x1 = pos.x + hx, z0 = pos.z - hz, z1 = pos.z + hz;
+	const int sx0 = std::clamp(int(x0 / SQUARE_SIZE), 0, mapDims.mapxm1);
+	const int sz0 = std::clamp(int(z0 / SQUARE_SIZE), 0, mapDims.mapym1);
+	const int sx1 = std::clamp(std::max(sx0, int(math::ceil(x1 / SQUARE_SIZE)) - 1), 0, mapDims.mapxm1);
+	const int sz1 = std::clamp(std::max(sz0, int(math::ceil(z1 / SQUARE_SIZE)) - 1), 0, mapDims.mapym1);
+	const MoveDef* md = owner->moveDef;
+	float area = 0.0f;
+
+	for (int sz = sz0; sz <= sz1; sz++) {
+		for (int sx = sx0; sx <= sx1; sx++) {
+			if (CMoveMath::GetPosSpeedMod(*md, sx, sz) > 0.0f)
+				continue;
+			const float ox = std::min(x1, (sx + 1) * float(SQUARE_SIZE)) - std::max(x0, sx * float(SQUARE_SIZE));
+			const float oz = std::min(z1, (sz + 1) * float(SQUARE_SIZE)) - std::max(z0, sz * float(SQUARE_SIZE));
+			if (ox > 0.0f && oz > 0.0f)
+				area += ox * oz;
+		}
+	}
+
+	return area;
+}
+
 bool CSupComGroundMoveType::FootprintOnStructure(const float3& pos) const
 {
 	// the same squares as FootprintBlocked, checked for structures (FootprintBlocked checks the terrain only)
@@ -1408,7 +1438,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			// PTH-004-E (L6040): a unit already overlapping impassable squares (0.6 elmos, held at a block in a one-cell gap)
 			// was no longer refused, so steering towards an off-centre waypoint took it 6 elmos into the wall; a step that
 			// goes deeper into impassable squares is refused, one that comes out (or keeps the depth) is taken
-			if (!blocked && FootprintBlocked(owner->pos) && FootprintDepth(owner->pos + moveRequest) > FootprintDepth(owner->pos) + 1e-3f)
+			if (!blocked && FootprintBlocked(owner->pos) && (FootprintDepth(owner->pos + moveRequest) > FootprintDepth(owner->pos) + 1e-3f
+					|| FootprintOverlapArea(owner->pos + moveRequest) > FootprintOverlapArea(owner->pos) + 1e-3f))   // (PTH-004-E: a step that adds overlap on either axis is refused)
 				blocked = true;
 
 			// a refused step lines up first (PTH-002: a unit at a gap its own width, a few elmos off its line, or
