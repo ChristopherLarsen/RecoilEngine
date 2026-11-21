@@ -191,8 +191,15 @@ void CFeatureHandler::UpdatePreFrame()
 {
 	SCOPED_TIMER("Sim::Features::UpdatePreFrame");
 
+	auto& quiet = SupComFeaturePre::Quiet();
+	if (quiet.size() < features.size()) quiet.resize(features.size(), 0);
+	const int frame = gs->frameNum;
 	for (auto fid : activeFeatureIDs) {
-		if (!SupComFeatureUnchanged(features[fid])) features[fid]->UpdatePrevFrameTransform();
+		uint8_t& q = quiet[fid];
+		if (q >= SupComFeaturePre::QUIET && ((frame + fid) & 15) != 0) continue;
+		CFeature* f = features[fid];
+		if (SupComFeatureUnchanged(f)) { if (q < SupComFeaturePre::QUIET) ++q; }
+		else { q = 0; f->UpdatePrevFrameTransform(); }
 	}
 }
 

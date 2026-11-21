@@ -25,4 +25,17 @@ inline bool SupComFeatureUnchanged(CFeature* f)
 	return true;
 }
 
+
+/* supcom 2026-11-21: features unchanged for QUIET frames are tested only every 16th frame ((frame + id) & 15), so a field
+ * of static props costs one byte read each instead of a matrix compare (vision-rebuild L8924: 1.3 ms per drawn frame at
+ * 8,692 features). ForcedMove wakes a feature at once. preFrameTra is read for interpolation only (render), so a missed
+ * piece change shows at most 15 frames late as an interpolation, never in the simulation. */
+#include <vector>
+#include <cstdint>
+namespace SupComFeaturePre {
+	constexpr uint8_t QUIET = 30;
+	inline std::vector<uint8_t>& Quiet() { static std::vector<uint8_t> q; return q; }
+	inline void Wake(int id) { auto& q = Quiet(); if (id >= 0 && id < int(q.size())) q[id] = 0; }
+}
+
 #endif

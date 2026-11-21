@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "Feature.h"
+#include "SupComFeatureStatic.h"
 #include "FeatureDef.h"
 #include "FeatureDefHandler.h"
 #include "FeatureMemPool.h"
@@ -479,6 +480,7 @@ void CFeature::SetVelocity(const float3& v)
 void CFeature::ForcedMove(const float3& newPos)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	SupComFeaturePre::Wake(id); // supcom
 
 	// shouldn't rely on preFrameTra.t here, as ForcedMove can be called multiple times a synced frame
 	// and we better convey each movement separately
