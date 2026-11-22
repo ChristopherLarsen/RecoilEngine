@@ -125,6 +125,7 @@ class LuaUnsyncedRead {
 
 		static int GetCameraNames(lua_State* L);
 		static int GetCameraState(lua_State* L);
+		static int SupComGetZoomLevel(lua_State* L);
 		static int GetCameraPosition(lua_State* L);
 		static int GetCameraDirection(lua_State* L);
 		static int GetCameraRotation(lua_State* L);
