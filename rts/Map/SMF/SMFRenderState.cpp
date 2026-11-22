@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "SMFRenderState.h"
+#include "SupComLuaMapShadows.h"
 #include "SMFGroundDrawer.h"
 #include "SMFReadMap.h"
 #include "Game/Camera.h"
@@ -234,6 +235,7 @@ void SMFRenderStateGLSL::Enable(const CSMFGroundDrawer* smfGroundDrawer, const D
 	if (useLuaShaders) {
 		// use raw, GLSLProgramObject::Enable also calls RecompileIfNeeded
 		currShader->EnableRaw();
+		SupComLuaMapShadows::Enable(currShader); // supcom
 		// diffuse textures are always bound (SMFGroundDrawer::SetupBigSquare)
 		glActiveTexture(GL_TEXTURE0);
 		return;
@@ -300,6 +302,7 @@ void SMFRenderStateGLSL::Enable(const CSMFGroundDrawer* smfGroundDrawer, const D
 void SMFRenderStateGLSL::Disable(const CSMFGroundDrawer* smfGroundDrawer, const DrawPass::e& drawPass) {
 	RECOIL_DETAILED_TRACY_ZONE;
 	if (useLuaShaders) {
+		SupComLuaMapShadows::Disable(currShader); // supcom
 		glActiveTexture(GL_TEXTURE0);
 		currShader->DisableRaw();
 		return;
