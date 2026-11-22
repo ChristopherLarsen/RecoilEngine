@@ -19,6 +19,13 @@ namespace SupComThreading {
 
 	/// reads the springsetting (once the config exists) into pathCacheMainThreadOnly and returns it
 	bool PathCacheMainThreadOnly();
+
+	// supcom: springsetting PathRequestsSerial (default 1; 0 is stock). On, the HAPFS path requests of a frame run one
+	// after another on the main thread instead of in a for_mt. Stock hands them to worker threads by timing, and each
+	// thread has its own path finders: which searches shared a finder (and so its leftover state) depended on load and on
+	// the core count, and replays and multiplayer clients diverged (desync 11460, bisected 2026-11-22). The searches run
+	// inside a parallel-section flag either way, so the shared path cache gets no adds from them in both modes.
+	bool PathRequestsSerial();
 }
 
 #endif

@@ -3,6 +3,7 @@
 // #undef NDEBUG
 
 #include "PathManager.h"
+#include "System/Threading/SupComPathRequests.h"
 #include "PathingState.h"
 #include "PathConstants.h"
 #include "PathFinder.h"
@@ -828,7 +829,7 @@ void CPathManager::Update()
 		SCOPED_TIMER("Sim::PathRequests");
 
 		auto pathSearchView = registry.view<PathSearch>();
-		for_mt(0, pathSearchView.size(), [this, &pathSearchView](int idx){
+		const auto pathSearchFn = [this, &pathSearchView](int idx){
 			entt::entity searchEntity = pathSearchView.begin()[idx];
 
 			PathSearch& pathSearch = pathSearchView.get<PathSearch>( searchEntity );
@@ -855,7 +856,8 @@ void CPathManager::Update()
 			// LOG("%s: ent = %x, pathId = %d, result = %d, steps = %d", __func__
 			// 		, entt::to_integral(entities[idx]), pathSearch.pathId, newPath.searchResult
 			// 		, (int)newPath.maxResPath.path.size());
-		});
+		};
+		SupComThreading::ForPathRequests(pathSearchView.size(), pathSearchFn); // supcom: SupComThreading.h, PathRequestsSerial
 
 		// Clear out the search entities.
 		for ( entt::entity entity : pathSearchView ) { registry.destroy(entity); }
