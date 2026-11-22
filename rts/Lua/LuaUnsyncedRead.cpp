@@ -1685,7 +1685,7 @@ int LuaUnsyncedRead::GetFeatureNoDraw(lua_State* L)
  */
 int LuaUnsyncedRead::GetFeatureEngineDrawMask(lua_State* L)
 {
-	return (GetSolidObjectEngineDrawMask(L, ParseFeature(L, __func__, 1)));
+	return (GetSolidObjectEngineDrawMask(L, featureHandler.GetFeature(luaL_checkint(L, 1)))); // supcom: any feature, as SetFeatureEngineDrawMask (a3296dc942); a nil read left Lua-hidden map props masked for good
 }
 
 /***
