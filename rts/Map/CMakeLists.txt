@@ -18,6 +18,7 @@ set(sources_engine_Map
 		"${CMAKE_CURRENT_SOURCE_DIR}/SMF/SMFMapFile.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SMF/SMFReadMap.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SMF/SMFRenderState.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/SMF/SupComLuaMapShadows.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SMF/Basic/BasicMeshDrawer.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SMF/ROAM/Patch.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SMF/ROAM/RoamMeshDrawer.cpp"
