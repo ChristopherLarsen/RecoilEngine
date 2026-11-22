@@ -641,6 +641,21 @@ bool SupComTargeting::OwnsAutoTarget(const CWeapon* w)
 	return false;
 }
 
+// Spring.SupComTgtProf(begin): the A/B section timer for the Lua side (synced Lua has no clock): true starts, false adds the
+// elapsed time to the "Lua::SupComTargeting" profiler timer. Timing only, never read by the sim.
+static spring_time profStart;
+static int Prof(lua_State* L)
+{
+	static TimerNameRegistrar tnr("Lua::SupComTargeting");
+	if (lua_toboolean(L, 1)) {
+		profStart = spring_gettime();
+	} else {
+		const spring_time now = spring_gettime();
+		CTimeProfiler::GetInstance().AddTime(hashString("Lua::SupComTargeting"), profStart, now - profStart);
+	}
+	return 0;
+}
+
 void SupComTargeting::PushSyncedCtrl(lua_State* L)
 {
 	LuaPushRawNamedCFunc(L, "SupComTgtInit", Init);
@@ -653,4 +668,5 @@ void SupComTargeting::PushSyncedCtrl(lua_State* L)
 	LuaPushRawNamedCFunc(L, "SupComTgtInflight", Inflight);
 	LuaPushRawNamedCFunc(L, "SupComTgtGet", Get);
 	LuaPushRawNamedCFunc(L, "SupComTgtStats", Stats);
+	LuaPushRawNamedCFunc(L, "SupComTgtProf", Prof);
 }
