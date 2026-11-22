@@ -14,6 +14,9 @@
 // leaving lag (vision_leave, asked only when the previous state was seen, the unit is not cloaked and vision missed) use the
 // unit position, which the vision kinds snap to their cell themselves; radar, sonar, omni and water vision use the position.
 // Rate: a unit is visited when id % rate == frame % rate, or out of its slice when it is new or changed owner since its last visit.
+// When: Lua calls Spring.SupComIntRun() in F.Step, after it has placed this frame's sensor circles (the unit pass runs before
+// synced Lua's GameFrame, so deciding there used the previous frame's circles: check mode L9198, 0.8% seen-vs-none). The pass
+// step itself only carries the mod option; Run walks the units in ascending id and emits into the same frame's event batch.
 
 #include "SupComUnitPass.h"
 
@@ -31,6 +34,7 @@
 #include "Sim/MoveTypes/SupComGroundMoveType.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
+#include "Sim/Units/UnitHandler.h"
 
 namespace {
 	struct Rules { bool exact = false, waterSeesSub = false, sonarShips = false; double cell = 0.0; int rate = 1; };
@@ -115,10 +119,7 @@ namespace {
 }
 
 namespace {
-	void Step(CUnit* u, const SupComUnitPass::Facts& facts) {
-		if (!rules.exact)
-			return;
-		const int f = facts.frame;
+	void Visit(CUnit* u, int f) {
 		UnitRec& r = recs[u->id];
 		const bool fresh = (r.ptr != u) || (r.ally != u->allyteam);
 		if (r.ptr != u) {                                                // a new unit on this id: its states start over
@@ -136,6 +137,22 @@ namespace {
 		if (r.fake)
 			return;
 		Decide(u, r, f);
+	}
+
+	void Step(CUnit*, const SupComUnitPass::Facts&) {}   // the option holder; the work is Run, called by Lua
+
+	int Run(lua_State* L) {
+		if (!CLuaHandle::GetHandleSynced(L)) return 0;
+		if (!SupComUnitPass::IsOn("intel") || !rules.exact) return 0;
+		const int f = gs->frameNum;
+		const int maxID = int(unitHandler.MaxUnits());
+		for (int id = 0; id < maxID; ++id) {                         // ascending id: the same order on every client
+			CUnit* u = unitHandler.GetUnit(id);
+			if (u == nullptr || u->isDead)
+				continue;
+			Visit(u, f);
+		}
+		return 0;
 	}
 
 	bool Bool(lua_State* L, int t, const char* k) {
@@ -208,5 +225,6 @@ namespace SupComUnitPass {
 		LuaPushRawNamedCFunc(L, "SupComIntGroup", PushGroup);
 		LuaPushRawNamedCFunc(L, "SupComIntUnitFlags", PushUnitFlags);
 		LuaPushRawNamedCFunc(L, "SupComIntState", ReadState);
+		LuaPushRawNamedCFunc(L, "SupComIntRun", Run);
 	}
 }

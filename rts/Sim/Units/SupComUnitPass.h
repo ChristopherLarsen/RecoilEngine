@@ -23,6 +23,8 @@ namespace SupComUnitPass {
 	int Register(const char* name, FilterFn filter, StepFn fn, int rate);
 	/// a step's event for Lua (kind: the step's own code)
 	void Emit(int unitID, int kind, float a, float b);
+	/// whether step `name` is on (its mod option); steps run by Lua (intel) ask this
+	bool IsOn(const char* name);
 
 	/// one-line hook in CUnitHandler::Update, after the move types
 	void Update();

@@ -47,7 +47,16 @@ int SupComUnitPass::Register(const char* name, FilterFn filter, StepFn fn, int r
 
 void SupComUnitPass::Emit(int unitID, int kind, float a, float b)
 {
+	const int f = gs->frameNum;
+	if (eventFrame != f) { events.clear(); eventFrame = f; }    // an emit from Lua's call before this frame's pass ran
 	events.push_back({ unitID, kind, a, b });
+}
+
+bool SupComUnitPass::IsOn(const char* name)
+{
+	for (Step& s: Steps())
+		if (s.name == name) return On(s);
+	return false;
 }
 
 void SupComUnitPass::Update()
