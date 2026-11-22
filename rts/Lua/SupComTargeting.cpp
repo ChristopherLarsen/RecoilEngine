@@ -25,6 +25,7 @@
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
 #include "Sim/Units/UnitHandler.h"
+#include "System/TimeProfiler.h"
 #include "Sim/Weapons/Weapon.h"
 #include "Sim/Weapons/WeaponDef.h"
 #include "Sim/Weapons/WeaponDefHandler.h"
@@ -596,6 +597,7 @@ int Stats(lua_State* L) {
 
 void SupComTargeting::Update(int f)
 {
+	SCOPED_TIMER("Sim::SupComTargeting");
 	if (mode == 0)
 		return;
 	todo.clear();
