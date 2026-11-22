@@ -37,14 +37,6 @@ namespace SupComLuaMapShadows {
 	void Enable(Shader::IProgramObject* prog)
 	{
 		bound = false;
-		static int dbgNext = 0;                                         // diagnosis (RND-001, 2026-11-22): once a second of game time
-		const bool dbg = (gs->frameNum >= dbgNext);
-		if (dbg) {
-			dbgNext = gs->frameNum + 30;
-			GLint cur = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &cur);
-			LOG("[SupComLuaMapShadows] f=%d prog %p id %u current %d shadowsLoaded %d depthTex %u colorTex %u", gs->frameNum, (void*)prog,
-				prog ? prog->GetObjID() : 0u, cur, int(shadowHandler.ShadowsLoaded()), shadowHandler.GetShadowTextureID(), shadowHandler.GetColorTextureID());
-		}
 		if (prog == nullptr)
 			return;
 		MapInputs(prog);
@@ -55,8 +47,6 @@ namespace SupComLuaMapShadows {
 		const GLint locTex = glGetUniformLocation(id, "shadowTex");
 		const GLint locCol = glGetUniformLocation(id, "shadowColorTex");
 		const GLint locMat = glGetUniformLocation(id, "shadowMat");
-		if (dbg)
-			LOG("[SupComLuaMapShadows] locations shadowTex %d shadowColorTex %d shadowMat %d", locTex, locCol, locMat);
 		if (locTex < 0 && locCol < 0 && locMat < 0)
 			return;
 
