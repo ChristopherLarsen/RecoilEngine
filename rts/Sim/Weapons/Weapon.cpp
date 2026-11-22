@@ -31,6 +31,7 @@
 #include "System/creg/DefTypes.h"
 #include "System/Sound/ISoundChannels.h"
 #include "System/Log/ILog.h"
+#include "Lua/SupComTargeting.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -679,6 +680,10 @@ bool CWeapon::HaveDeniedInterceptTarget() const
 bool CWeapon::AllowWeaponAutoTarget() const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	// supcom: the engine targeting step chooses for this weapon (unitpass_target = 1): no search here, no Lua call-ins per candidate
+	if (SupComTargeting::OwnsAutoTarget(this))
+		return false;
+
 	const int checkAllowed = eventHandler.AllowWeaponTargetCheck(owner->id, weaponNum, weaponDef->id);
 	if (checkAllowed >= 0)
 		return checkAllowed;

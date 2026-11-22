@@ -134,6 +134,7 @@
 #include "System/Sync/DumpState.h"
 #include "System/TimeProfiler.h"
 #include "System/LoadLock.h"
+#include "Lua/SupComTargeting.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -1780,6 +1781,7 @@ void CGame::SimFrame() {
 				eventHandler.CollectGarbage(false);
 
 			SupComUnitQuery::OnUnitsUpdated(); // supcom: change lists for Spring.GetUnitChanges
+			SupComTargeting::Update(gs->frameNum); // supcom: CMB-004 target choice (unitpass_target), before the Lua GameFrame
 			eventHandler.GameFrame(gs->frameNum);
 		}
 

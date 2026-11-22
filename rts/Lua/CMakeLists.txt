@@ -46,6 +46,7 @@ set(sources_engine_Lua
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaSyncedRead.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComUnitQuery.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComIntIndex.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/SupComTargeting.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaSyncedTable.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaTableExtra.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaTextures.cpp"
