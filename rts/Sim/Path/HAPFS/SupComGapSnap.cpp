@@ -65,19 +65,29 @@ void SupComGapSnap::Snap(IPath::path_list_type& path, const MoveDef& md, bool ke
 		const int z = int(w.z / SQUARE_SIZE);
 
 		for (int k = 0; k < 2; k++) {
-			// the gap at the waypoint or up to 2 squares along the passage (k = 0: the passage runs along z)
-			static constexpr int ALONG[5] = {0, -1, 1, -2, 2};
+			// the nearest one-footprint gap whose centre square is up to 4 squares (2 cells) along the passage and up to 4 across from the
+			// waypoint (k = 0: a passage along z, centre line across x; k = 1: along x, across z); the waypoint is moved onto the gap's
+			// centre line when it lies within 4 squares of it across the passage (an approach waypoint a cell off the line, L9250)
+			static constexpr int REACH = 4;
 			float c = -1.0f;
-			for (int a: ALONG) {
-				c = (k == 0)? GapCentre(md, x, z + a, 0, f): GapCentre(md, x + a, z, 1, f);
-				if (c >= 0.0f)
-					break;
+			int bestD = 1 << 20;
+			for (int along = -REACH; along <= REACH; along++) {
+				for (int cross = -REACH; cross <= REACH; cross++) {
+					const int d = std::abs(along) * 2 + std::abs(cross);
+					if (d >= bestD)
+						continue;
+					const float g = (k == 0)? GapCentre(md, x + cross, z + along, 0, f): GapCentre(md, x + along, z + cross, 1, f);
+					if (g >= 0.0f) {
+						c = g;
+						bestD = d;
+					}
+				}
 			}
 			if (c < 0.0f)
 				continue;
 
 			float& across = (k == 0)? w.x: w.z;
-			if (std::abs(across - c) <= SQUARE_SIZE * 1.5f)
+			if (std::abs(across - c) <= SQUARE_SIZE * REACH)
 				across = c;
 			break;
 		}
