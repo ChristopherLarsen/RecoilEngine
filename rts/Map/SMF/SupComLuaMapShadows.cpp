@@ -4,12 +4,35 @@
 
 #include "Rendering/GL/myGL.h"
 #include "Rendering/ShadowHandler.h"
+#include "Map/ReadMap.h"
+#include "Sim/Misc/GlobalConstants.h"
 #include "Rendering/Shaders/Shader.h"
 #include "System/Log/ILog.h"
 #include "Sim/Misc/GlobalSynced.h"
 
 namespace SupComLuaMapShadows {
 	static bool bound = false;
+
+	// the inputs SMFVertProg reads, which the engine sets only on its own SMF shader: the heightmap on unit 1 (heightMapTex),
+	// specularTexGen (1 / map size in elmos), mapSize (size, 1 / size) and mapHeights (current min, max); each only if declared
+	static void MapInputs(Shader::IProgramObject* prog)
+	{
+		const GLuint id = prog->GetObjID();
+		const GLint locHM = glGetUniformLocation(id, "heightMapTex");
+		const GLint locTG = glGetUniformLocation(id, "specularTexGen");
+		const GLint locMS = glGetUniformLocation(id, "mapSize");
+		const GLint locMH = glGetUniformLocation(id, "mapHeights");
+		const float sx = mapDims.mapx * SQUARE_SIZE, sz = mapDims.mapy * SQUARE_SIZE;
+		if (locHM >= 0) {
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, readMap->GetHeightMapTexture());
+			glActiveTexture(GL_TEXTURE0);
+			glUniform1i(locHM, 1);
+		}
+		if (locTG >= 0) glUniform2f(locTG, 1.0f / sx, 1.0f / sz);
+		if (locMS >= 0) glUniform4f(locMS, sx, sz, 1.0f / sx, 1.0f / sz);
+		if (locMH >= 0) glUniform2f(locMH, readMap->GetCurrMinHeight(), readMap->GetCurrMaxHeight());
+	}
 
 	void Enable(Shader::IProgramObject* prog)
 	{
@@ -22,7 +45,10 @@ namespace SupComLuaMapShadows {
 			LOG("[SupComLuaMapShadows] f=%d prog %p id %u current %d shadowsLoaded %d depthTex %u colorTex %u", gs->frameNum, (void*)prog,
 				prog ? prog->GetObjID() : 0u, cur, int(shadowHandler.ShadowsLoaded()), shadowHandler.GetShadowTextureID(), shadowHandler.GetColorTextureID());
 		}
-		if (prog == nullptr || !shadowHandler.ShadowsLoaded())
+		if (prog == nullptr)
+			return;
+		MapInputs(prog);
+		if (!shadowHandler.ShadowsLoaded())
 			return;
 
 		const GLuint id = prog->GetObjID();
