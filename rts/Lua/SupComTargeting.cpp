@@ -597,7 +597,7 @@ int Stats(lua_State* L) {
 
 void SupComTargeting::Update(int f)
 {
-	SCOPED_TIMER("Sim::SupComTargeting");
+	SCOPED_SPECIAL_TIMER("Sim::SupComTargeting");
 	if (mode == 0)
 		return;
 	todo.clear();
@@ -651,7 +651,7 @@ static int Prof(lua_State* L)
 		profStart = spring_gettime();
 	} else {
 		const spring_time now = spring_gettime();
-		CTimeProfiler::GetInstance().AddTime(hashString("Lua::SupComTargeting"), profStart, now - profStart);
+		CTimeProfiler::GetInstance().AddTime(hashString("Lua::SupComTargeting"), profStart, now - profStart, false, true);
 	}
 	return 0;
 }
