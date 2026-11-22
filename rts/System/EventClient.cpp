@@ -52,6 +52,7 @@ void CEventClient::UnsyncedHeightMapUpdate(const SRectangle& rect) {}
 void CEventClient::SunChanged() {}
 
 void CEventClient::ViewResize() {}
+void CEventClient::SupComZoomLevelChanged(int newLevel, int oldLevel) {}
 
 bool CEventClient::DefaultCommand(const CUnit* unit, const CFeature* feature, int& cmd) { return false; }
 

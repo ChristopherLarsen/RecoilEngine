@@ -3,6 +3,7 @@
 #include "Rendering/GL/myGL.h"
 
 #include "WorldDrawer.h"
+#include "SupComZoomLevel.h"
 #include "Sim/Units/UnitDefHandler.h"
 #include "Sim/Features/FeatureDefHandler.h"
 #include "Sim/Weapons/WeaponDefHandler.h"
@@ -346,13 +347,13 @@ void CWorldDrawer::DrawOpaqueObjects() const
 			eventHandler.DrawPreDecals();
 			SCOPED_TIMER("Draw::World::Decals");
 			SCOPED_GL_DEBUGGROUP("Draw::World::Decals");
-			groundDecals->Draw();
-			projectileDrawer->DrawGroundFlashes();
+			if (!SupComZoomLevel::Skip(SupComZoomLevel::Decals)) groundDecals->Draw();
+			if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawGroundFlashes();
 		}
 		{
 			SCOPED_TIMER("Draw::World::Foliage");
 			SCOPED_GL_DEBUGGROUP("Draw::World::Foliage");
-			grassDrawer->Draw();
+			if (!SupComZoomLevel::Skip(SupComZoomLevel::Foliage)) grassDrawer->Draw();
 		}
 		smoothHeightMeshDrawer->Draw(1.0f);
 	}
@@ -361,7 +362,7 @@ void CWorldDrawer::DrawOpaqueObjects() const
 	{
 		SCOPED_GL_DEBUGGROUP("Draw::World::Sky");
 		const auto& sky = ISky::GetSky();
-		sky->Draw();
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Sky)) sky->Draw();
 	}
 
 	{
@@ -373,13 +374,13 @@ void CWorldDrawer::DrawOpaqueObjects() const
 	{
 		SCOPED_TIMER("Draw::World::Models::Opaque");
 		SCOPED_GL_DEBUGGROUP("Draw::World::Models::Opaque");
-		unitDrawer->Draw(false);
-		featureDrawer->Draw(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Units)) unitDrawer->Draw(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Features)) featureDrawer->Draw(false);
 	}
 	{
 		SCOPED_TIMER("Draw::World::Models::Projectiles");
 		SCOPED_GL_DEBUGGROUP("Draw::World::Models::Projectiles");
-		projectileDrawer->DrawOpaque(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawOpaque(false);
 	}
 	{
 		SCOPED_TIMER("Draw::OpaqueObjects::Debug");
@@ -414,14 +415,14 @@ void CWorldDrawer::DrawAlphaObjects() const
 		}
 
 		// draw alpha-objects below water surface (farthest)
-		unitDrawer->DrawAlphaPass(false);
-		featureDrawer->DrawAlphaPass(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Units)) unitDrawer->DrawAlphaPass(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Features)) featureDrawer->DrawAlphaPass(false);
 	}
 	{
 		SCOPED_TIMER("Draw::World::Particles");
 		SCOPED_GL_DEBUGGROUP("Draw::World::Particles");
-		projectileDrawer->DrawAlpha(!hasWaterRendering, true, false, false);
-		NanoParticles::Draw(!hasWaterRendering, true, false, false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawAlpha(!hasWaterRendering, true, false, false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Particles)) NanoParticles::Draw(!hasWaterRendering, true, false, false);
 
 		if (hasWaterRendering)
 			glDisable(GL_CLIP_PLANE3);
@@ -454,14 +455,14 @@ void CWorldDrawer::DrawAlphaObjects() const
 		glEnable(GL_CLIP_PLANE3);
 
 		// draw alpha-objects above water surface (closest)
-		unitDrawer->DrawAlphaPass(false);
-		featureDrawer->DrawAlphaPass(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Units)) unitDrawer->DrawAlphaPass(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Features)) featureDrawer->DrawAlphaPass(false);
 	}
 	{
 		SCOPED_TIMER("Draw::World::Particles");
 		SCOPED_GL_DEBUGGROUP("Draw::World::Particles");
-		projectileDrawer->DrawAlpha(true, false, false, false);
-		NanoParticles::Draw(true, false, false, false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawAlpha(true, false, false, false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Particles)) NanoParticles::Draw(true, false, false, false);
 
 		glDisable(GL_CLIP_PLANE3);
 	}

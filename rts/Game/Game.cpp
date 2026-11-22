@@ -134,6 +134,7 @@
 #include "System/Sync/DumpState.h"
 #include "System/TimeProfiler.h"
 #include "System/LoadLock.h"
+#include "Rendering/SupComZoomLevel.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -759,6 +760,7 @@ void CGame::PreLoadRendering()
 void CGame::PostLoadRendering() {
 	ZoneScoped;
 	worldDrawer.InitPost();
+	SupComZoomLevel::Init();
 }
 
 
@@ -1513,6 +1515,7 @@ bool CGame::Draw() {
 	//FIXME move both to UpdateUnsynced?
 	CTeamHighlight::Enable(spring_tomsecs(currentTimePreDraw));
 	{
+		SupComZoomLevel::Update(); // before any drawer and draw call-in of this frame
 		minimap->Update();
 
 		// note: neither this call nor DrawWorld can be made conditional on minimap->GetMaximized()

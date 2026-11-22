@@ -2571,6 +2571,24 @@ void CLuaHandle::Update()
 }
 
 
+/*** Kardashev: the shared zoom level changed (presentation only; unsynced handles only).
+ * @function Callins:SupComZoomLevelChanged
+ * @param newLevel integer 0..7
+ * @param oldLevel integer 0..7
+ */
+void CLuaHandle::SupComZoomLevelChanged(int newLevel, int oldLevel)
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	LUA_CALL_IN_CHECK(L);
+	luaL_checkstack(L, 4, __func__);
+	static const LuaHashString cmdStr(__func__);
+	if (!cmdStr.GetGlobalFunc(L))
+		return;
+	lua_pushnumber(L, newLevel);
+	lua_pushnumber(L, oldLevel);
+	RunCallIn(L, cmdStr, 2, 0);
+}
+
 /*** Called whenever the window is resized.
  *
  * @function Callins:ViewResize

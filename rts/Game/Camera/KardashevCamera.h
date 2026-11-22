@@ -115,6 +115,9 @@ private:
 	float curU = 0.5f;            // zoom position 0 (closest) .. 1 (furthest), log distance
 	float tgtU = 0.5f;            // where the wheel glide goes (notches accumulate here)
 	float curDist = 1000.0f;
+public:
+	float GetSupComDist() const override { return curDist; }
+private:
 	float heldElev = -1.0f;       // manual tilt (elevation), < 0: the zoom curve owns the angle
 	float glideScale = 1.0f;      // 0: every zoom is instant (reduced motion)
 
