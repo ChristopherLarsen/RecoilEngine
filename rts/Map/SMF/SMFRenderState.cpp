@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "Game/CameraHandler.h"
 #include "SMFRenderState.h"
 #include "SMFGroundDrawer.h"
 #include "SMFReadMap.h"
@@ -292,7 +293,7 @@ void SMFRenderStateGLSL::Enable(const CSMFGroundDrawer* smfGroundDrawer, const D
 	currShader->Enable();
 	currShader->SetUniform("mapHeights", readMap->GetCurrMinHeight(), readMap->GetCurrMaxHeight());
 	currShader->SetUniform("infoTexIntensityMul", float(infoTextureHandler->InMetalMode()) + 1.0f);
-	fogMaskBound = CCamera::GetActiveCamera()->GetCamType() == CCamera::CAMTYPE_PLAYER && SupComFogMask::Bind(20); // supcom: not in the water reflection or refraction
+	fogMaskBound = CCameraHandler::GetActiveCamera()->GetCamType() == CCamera::CAMTYPE_PLAYER && SupComFogMask::Bind(20); // supcom: not in the water reflection or refraction
 	SupComFogMask::SetUniforms(currShader, fogMaskBound);
 
 	if (isAdv) {

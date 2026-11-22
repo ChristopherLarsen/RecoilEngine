@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 
+#include "Game/CameraHandler.h"
 #include "GroundDecal.h"
 #include "GroundDecalHandler.h"
 #include "Game/Camera.h"
@@ -519,7 +520,7 @@ void CGroundDecalHandler::BindTextures()
 	glActiveTexture(GL_TEXTURE8);
 	glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetCurrentInfoTexture());
 
-	fogMaskBound = CCamera::GetActiveCamera()->GetCamType() == CCamera::CAMTYPE_PLAYER && SupComFogMask::Bind(9); // supcom
+	fogMaskBound = CCameraHandler::GetActiveCamera()->GetCamType() == CCamera::CAMTYPE_PLAYER && SupComFogMask::Bind(9); // supcom
 
 	glActiveTexture(GL_TEXTURE0);
 }
