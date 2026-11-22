@@ -9,6 +9,9 @@ struct lua_State;
 
 namespace SupComIntIndex {
 	void PushSyncedCtrl(lua_State* L);
+	/// C++ form of SupComIntSees for the unit pass: does a circle of any of these ally teams in this kind cover (x, z)
+	/// (the kind's own cell snap applies); a kind never initialised covers nothing
+	bool SeesAny(const char* kind, const int* allyTeams, int n, double x, double z);
 }
 
 #endif

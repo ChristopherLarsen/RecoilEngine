@@ -15,10 +15,6 @@
 #include "Sim/Units/UnitHandler.h"
 #include "System/TimeProfiler.h"
 
-namespace SupComUnitPass {
-	struct Facts { int frame; };
-}
-
 namespace {
 	struct Step {
 		std::string name;
@@ -37,7 +33,7 @@ namespace {
 		if (s.on < 0) {
 			const auto& mo = CGameSetup::GetModOptions();
 			const auto it = mo.find("unitpass_" + s.name);
-			s.on = (it != mo.end() && it->second == "1") ? 1 : 0;
+			s.on = (it != mo.end() && (it->second == "1" || (s.name == "intel" && it->second == "check"))) ? 1 : 0;   // intel: "check" runs it beside Lua
 		}
 		return s.on == 1;
 	}
@@ -57,7 +53,7 @@ void SupComUnitPass::Emit(int unitID, int kind, float a, float b)
 void SupComUnitPass::Update()
 {
 	static bool registered = false;
-	if (!registered) { registered = true; RegisterMoveStep(); }
+	if (!registered) { registered = true; RegisterMoveStep(); RegisterIntelStep(); }
 	const int f = gs->frameNum;
 	if (eventFrame != f) { events.clear(); eventFrame = f; }
 
@@ -107,4 +103,5 @@ void SupComUnitPass::PushSyncedRead(lua_State* L)
 {
 	LuaPushRawNamedCFunc(L, "SupComUnitPassEvents", PassEvents);
 	LuaPushRawNamedCFunc(L, "SupComUnitPassSetMoveSpeed", SetMoveSpeed);
+	PushIntel(L);
 }

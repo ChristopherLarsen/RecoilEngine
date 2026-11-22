@@ -230,6 +230,19 @@ namespace {
 	}
 }
 
+bool SupComIntIndex::SeesAny(const char* kind, const int* allyTeams, int n, double x, double z)
+{
+	const auto ki = kinds.find(kind);
+	if (ki == kinds.end()) return false;
+	static std::vector<const Team*> ts;
+	ts.clear();
+	for (int i = 0; i < n; ++i) {
+		const auto ti = ki->second.teams.find(allyTeams[i]);
+		if (ti != ki->second.teams.end()) ts.push_back(&ti->second);
+	}
+	return !ts.empty() && SeesOne(ki->second, ts, x, z);
+}
+
 void SupComIntIndex::PushSyncedCtrl(lua_State* L)
 {
 	LuaPushRawNamedCFunc(L, "SupComIntFacts", Facts);

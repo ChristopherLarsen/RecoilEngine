@@ -15,7 +15,7 @@ struct lua_State;
 class CUnit;
 
 namespace SupComUnitPass {
-	struct Facts;
+	struct Facts { int frame; };
 	using StepFn = void (*)(CUnit* u, const Facts& facts);
 	using FilterFn = bool (*)(const CUnit* u);
 
@@ -31,6 +31,8 @@ namespace SupComUnitPass {
 
 	// steps (registered explicitly at the first Update, so no translation unit can be dropped by the linker)
 	void RegisterMoveStep();
+	void RegisterIntelStep();
+	void PushIntel(lua_State* L);   // SupComIntRules/Defs/Group/UnitFlags, SupComIntState (SupComUnitPassIntel.cpp)
 	int SetMoveSpeed(lua_State* L);
 }
 
