@@ -129,6 +129,7 @@ public:
 	 * eg depend on the current position/angle.
 	 */
 	virtual bool GetUseDistToGroundForIcons();
+	virtual float GetSupComDist() const { return -1.0f; } // SupComZoomLevel: zoom distance, < 0 = use camera height
 	void SetUseDistToGroundForIcons(float value) { switchVal = value; }
 
 	/// should this mode appear when we toggle the camera controller?

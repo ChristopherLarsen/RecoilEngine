@@ -51,6 +51,9 @@ private:
 	float3 rot;
 
 	float curDist; // current zoom-out distance
+public:
+	float GetSupComDist() const override { return curDist; }
+private:
 	const float maxDist; // maximum zoom-out distance
 	float minDist; // minimum zoom-in distance
 	float oldDist;

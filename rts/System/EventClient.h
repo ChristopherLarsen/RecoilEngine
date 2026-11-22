@@ -341,6 +341,7 @@ class CEventClient
 		virtual void SunChanged();
 
 		virtual void ViewResize();
+		virtual void SupComZoomLevelChanged(int newLevel, int oldLevel);
 
 		virtual void DrawGenesis() {}
 		virtual void DrawWorld() {}
