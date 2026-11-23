@@ -341,7 +341,8 @@ private:
 			if (!cam->InView(p->pos, p->GetDrawRadius())) continue;
 			Emitter& e = live[p->id];
 			if (e.wd != wd->id || e.seen < f - 1) {          // new, or an id reused: start here
-				e = Emitter{}; e.wd = wd->id; e.px = p->pos.x; e.py = p->pos.y; e.pz = p->pos.z; e.pf = f;
+				const float3& sp = p->preFrameTra.t;
+				e = Emitter{}; e.wd = wd->id; e.px = sp.x; e.py = sp.y; e.pz = sp.z; e.pf = f;
 			}
 			e.seen = f;
 			const float3 d = p->pos - cp;
@@ -395,7 +396,9 @@ private:
 			bool draw = s.want;
 			if (draw && core.cull >= 0 && s.d2 > core.cull * core.cull) draw = false;   // the strip's own camera distance
 			e.drawing = draw;
-			const float3& pos = s.p->pos;
+			// the shot where the follower reads it: Lua's GameFrame(f) runs before the projectiles move, so its position is the one at the
+			// start of the frame (preFrameTra); this plan runs at the first draw after the frame, when pos is a frame further on.
+			const float3& pos = s.p->preFrameTra.t;
 			if (!draw) { e.px = pos.x; e.py = pos.y; e.pz = pos.z; e.pf = f; continue; }
 			stRibbons += 1;
 			const float v = s.p->speed.w * FPS;
@@ -459,9 +462,9 @@ private:
 			if (!e.drawing) continue;
 			const CProjectile* p = projectileHandler.GetProjectileBySyncedID(kv.first);
 			if (p == nullptr) continue;
-			// the shot now: its position this game frame carried along its velocity by the frame offset (as the follower: st.x + st.vx * off).
-			// Not GetDrawPos: that mixes from the previous frame's position, one frame behind the last point, so the head ran backwards.
-			const float3 to = p->pos + static_cast<float3>(p->speed) * globalRendering->timeOffset;
+			// the shot now, as the follower: st.x + st.vx * off, st.x the start-of-frame position its points use (preFrameTra), so
+			// mix(preFrameTra, pos, off) = GetDrawPos. Points and head in the same frame of reference (7bae97cf87 mixed them: a frame long).
+			const float3 to = p->GetDrawPos(globalRendering->timeOffset);
 			const WeaponRibbon& w = defs[e.wd];
 			for (int k = CORE; k <= THREAD; ++k) {
 				const StripDef& d = w.s[k];
