@@ -1,0 +1,59 @@
+/* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
+// KT1: the base class of a game rule moved from Lua into the engine (game-build docs/engine/rules/INDEX.md).
+//
+// Every KT1 rule is one folder rts/Game/KT1/Rules/<Name>/ with one .cpp file (and a header only if another KT1 file needs it).
+// Stock Recoil files never include a rule; they call the registry (KT1Registry.h) from one-line hooks marked "// KT1 hook: <rule>".
+//
+// A rule's life, in this order:
+//   1. Construct        the registry makes every rule once (KT1RuleList.cpp), before anything else is known.
+//   2. LoadConfig       on first use in a game: gamedata/kt1/<name>.lua (the game's archive; the table it returns), or an empty table.
+//                       Only for an enabled rule. Tuning lives there: no number that a designer may change is a C++ constant.
+//   3. Start            at the first sim frame: unit defs are loaded; read per-def data here (KT1UnitData.h).
+//   4. GameFrame(f)     every synced frame, before the Lua GameFrame, under the profiler timer "KT1::<Name>".
+//   5. PushLua          fills the table Spring.KT1.<Name> (in every Lua handle: check CLuaHandle::GetHandleSynced for writes).
+//
+// Determinism (synced rules): no thread-dependent state, no unordered iteration that reaches a result, no wall clock,
+// float maths in the same order on every machine. Results go to Lua through the rule's API (Spring.KT1.<Name>.*), at the rule's rate.
+
+#ifndef KT1_RULE_H
+#define KT1_RULE_H
+
+#include <string>
+
+class LuaTable;
+struct lua_State;
+
+namespace KT1 {
+	struct RuleInfo {
+		const char* name;        // "Census": the API table Spring.KT1.Census, the config gamedata/kt1/census.lua, the timer KT1::Census
+		int version;             // bump when the rule's behaviour changes (logged; listed by Spring.KT1.Rules)
+		bool synced;             // a synced rule runs in GameFrame and may change sim state; an unsynced one may not
+		const char* replaces;    // the Lua gadget it replaced ("LuaRules/Gadgets/kt1_census.lua"); that gadget stands down when this is on
+		bool defaultOn;          // the mod option's value when the game does not set it
+	};
+
+	class Rule {
+	public:
+		explicit Rule(const RuleInfo& i);
+		virtual ~Rule() = default;
+
+		const RuleInfo& Info() const { return info; }
+		const std::string& Key() const { return key; }             // "census": lower case of name
+		const std::string& OptionKey() const { return option; }    // "kt1_census": the mod option that switches it
+		const std::string& TimerName() const { return timer; }     // "KT1::Census"
+		bool Enabled() const { return enabled; }
+
+		virtual void LoadConfig(const LuaTable& cfg) {}
+		virtual void Start() {}
+		virtual void GameFrame(int frame) {}
+		virtual void PushLua(lua_State* L) {}
+
+	private:
+		friend class Registry;
+		RuleInfo info;
+		std::string key, option, timer;
+		bool enabled = false;
+	};
+}
+
+#endif
