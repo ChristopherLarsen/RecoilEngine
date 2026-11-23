@@ -38,7 +38,7 @@
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
-#include "Rendering/Models/3DModel.h"
+#include "Rendering/Models/3DModel.hpp"
 #include "Sim/Misc/QuadField.h"
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/Units/CommandAI/CommandAI.h"
