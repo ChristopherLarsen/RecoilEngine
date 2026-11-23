@@ -67,11 +67,11 @@ void Registry::EnsureInit() {
 
 		if (on) {
 			const std::string path = "gamedata/kt1/" + r->key + ".lua";
-			LuaParser p(path, SPRING_VFS_MOD_BASE, SPRING_VFS_ZIP, {r->info.synced}, {false});
+			LuaParser p(path, SPRING_VFS_MOD_BASE, SPRING_VFS_ZIP, {r->info.synced}, {true});   // setup: the parser needs its own Lua state (setup false leaves it invalid)
 			const bool ok = p.Execute();
 			r->LoadConfig(p.GetRoot());   // an invalid root reads every field as its default
-			LOG("[KT1] %s v%d %s, config %s%s", r->info.name, r->info.version, r->info.synced ? "synced" : "unsynced",
-			    path.c_str(), ok ? "" : " (none: defaults)");
+			LOG("[KT1] %s v%d %s, config %s%s%s", r->info.name, r->info.version, r->info.synced ? "synced" : "unsynced",
+			    path.c_str(), ok ? "" : " (none: defaults): ", ok ? "" : p.GetErrorLog().c_str());
 		} else {
 			LOG("[KT1] %s v%d off (Lua: %s)", r->info.name, r->info.version, r->info.replaces);
 		}
