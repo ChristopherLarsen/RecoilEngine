@@ -459,7 +459,9 @@ private:
 			if (!e.drawing) continue;
 			const CProjectile* p = projectileHandler.GetProjectileBySyncedID(kv.first);
 			if (p == nullptr) continue;
-			const float3 to = p->GetDrawPos(globalRendering->timeOffset);
+			// the shot now: its position this game frame carried along its velocity by the frame offset (as the follower: st.x + st.vx * off).
+			// Not GetDrawPos: that mixes from the previous frame's position, one frame behind the last point, so the head ran backwards.
+			const float3 to = p->pos + static_cast<float3>(p->speed) * globalRendering->timeOffset;
 			const WeaponRibbon& w = defs[e.wd];
 			for (int k = CORE; k <= THREAD; ++k) {
 				const StripDef& d = w.s[k];
