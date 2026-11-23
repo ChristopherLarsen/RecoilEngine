@@ -38,6 +38,7 @@
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
+#include "Rendering/Models/3DModel.h"
 #include "Sim/Misc/QuadField.h"
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/Units/CommandAI/CommandAI.h"
@@ -71,7 +72,8 @@ public:
 			ground[d] = 1;
 			mass[d] = ud->mass;
 			const float foot = std::sqrt(float(ud->xsize) * float(ud->xsize) + float(ud->zsize) * float(ud->zsize)) * 4.0f;
-			size[d] = std::max(ud->radius, foot);   // the engine collides by footprint as well as by radius
+			const S3DModel* model = ud->LoadModel();   // the Lua unit def radius is the model radius
+			size[d] = std::max(model != nullptr ? model->radius : 0.0f, foot);   // the engine collides by footprint as well as by radius
 		}
 	}
 
