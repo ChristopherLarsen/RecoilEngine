@@ -409,7 +409,7 @@ public:
 	/**
 	* @brief max view range in elmos
 	*/
-	static constexpr float MAX_VIEW_RANGE = 65536.0f;
+	static constexpr float MAX_VIEW_RANGE = 131072.0f; // supcom: the camera zooms out to 81,684 elmos (80 km maps); stock 65536
 
 	/**
 	* @brief near z-plane distance in elmos
