@@ -4,6 +4,7 @@
 
 #include "GroundMoveType.h"
 #include "MoveDefHandler.h"
+#include "SupComAvoidSnapshot.h"
 #include "Components/MoveTypesComponents.h"
 #include "ExternalAI/EngineOutHandler.h"
 #include "Game/Camera.h"
@@ -1958,7 +1959,8 @@ float3 CGroundMoveType::GetObstacleAvoidanceDir(const float3& desiredDir) {
 		const bool avoideeMobile  = (avoideeMD != nullptr);
 		const bool avoideeMovable = (avoideeUD != nullptr && !static_cast<const CUnit*>(avoidee)->moveType->IsPushResistant());
 
-		const float3 avoideeVector = (avoider->pos + avoider->speed) - (avoidee->pos + avoidee->speed);
+		const SupComAvoidSnapshot::View av = SupComAvoidSnapshot::Of(avoidee); // supcom: pre-pass state (SupComAvoidSnapshot.h)
+		const float3 avoideeVector = (avoider->pos + avoider->speed) - (av.pos + av.speed);
 
 		// use the avoidee's MoveDef footprint as radius if it is mobile
 		// use the avoidee's Unit (not UnitDef) footprint as radius otherwise
@@ -1974,7 +1976,7 @@ float3 CGroundMoveType::GetObstacleAvoidanceDir(const float3& desiredDir) {
 		// do not bother steering around idling MOBILE objects
 		// (since collision handling will just push them aside)
 		if (avoideeMobile && avoideeMovable) {
-			if (!avoiderMD->avoidMobilesOnPath || (!avoidee->IsMoving() && avoidee->allyteam == avoider->allyteam))
+			if (!avoiderMD->avoidMobilesOnPath || (!av.moving && avoidee->allyteam == avoider->allyteam))
 				continue;
 		}
 
@@ -2003,13 +2005,13 @@ float3 CGroundMoveType::GetObstacleAvoidanceDir(const float3& desiredDir) {
 			}
 		}
 
-		float avoiderTurnSign = -Sign(avoidee->pos.dot(avoider->rightdir) - avoider->pos.dot(avoider->rightdir));
-		float avoideeTurnSign = -Sign(avoider->pos.dot(avoidee->rightdir) - avoidee->pos.dot(avoidee->rightdir));
+		float avoiderTurnSign = -Sign(av.pos.dot(avoider->rightdir) - avoider->pos.dot(avoider->rightdir));
+		float avoideeTurnSign = -Sign(avoider->pos.dot(av.rightdir) - av.pos.dot(av.rightdir));
 
 		// for mobile units, avoidance-response is modulated by angle
 		// between avoidee's and avoider's frontdir such that maximal
 		// avoidance occurs when they are anti-parallel
-		const float avoidanceCosAngle = std::clamp(avoider->frontdir.dot(avoidee->frontdir), -1.0f, 1.0f);
+		const float avoidanceCosAngle = std::clamp(avoider->frontdir.dot(av.frontdir), -1.0f, 1.0f);
 		const float avoidanceResponse = (1.0f - avoidanceCosAngle * int(avoideeMobile)) + 0.1f;
 		const float avoidanceFallOff  = (1.0f - std::min(1.0f, avoideeDist / (5.0f * avoidanceRadiusSum)));
 

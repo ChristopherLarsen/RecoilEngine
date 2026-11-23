@@ -4,6 +4,7 @@
 
 #include "GroundMoveSystem.h"
 #include "Sim/MoveTypes/SupComHalfRate.h"
+#include "Sim/MoveTypes/SupComAvoidSnapshot.h"
 
 #include "Sim/Ecs/Registry.h"
 #include "Sim/Features/Feature.h"
@@ -35,6 +36,7 @@ void GroundMoveSystem::Update() {
     // needed. Though that will be a bigger change.
 	{
 		SCOPED_TIMER("Sim::Unit::MoveType::1::UpdateTraversalPlan");
+		SupComAvoidSnapshot::Take(); // supcom: avoidance reads the pre-pass state (SupComAvoidSnapshot.h)
         auto view = Sim::registry.view<GroundMoveType>();
         for_mt(0, view.size(), [&view](const int i){
             auto entity = (*view.storage<GroundMoveType>())[i];
