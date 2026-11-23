@@ -5,9 +5,11 @@
 #include "KT1Registry.h"
 
 namespace KT1 {
-	std::unique_ptr<Rule> MakeCensus();   // Rules/Census: the demo rule (framework proof)
+	std::unique_ptr<Rule> MakeCensus();
+	std::unique_ptr<Rule> MakeOwnPass();  // Rules/OwnPass: mov_own_pass walk and light-unit search   // Rules/Census: the demo rule (framework proof)
 
 	void AddAllRules(Registry& reg) {
 		reg.Add(MakeCensus());
+		reg.Add(MakeOwnPass());
 	}
 }
