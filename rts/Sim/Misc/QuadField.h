@@ -288,7 +288,7 @@ struct QuadFieldQuery {
 	std::vector<CProjectile*>* projectiles = nullptr;
 	std::vector<CSolidObject*>* solids = nullptr;
 	std::vector<int>* quads = nullptr;
-	int threadOwner = 0;
+	int threadOwner = ThreadPool::GetThreadNum(); // supcom: default to the calling thread own query slot (desync 11460)
 };
 
 
