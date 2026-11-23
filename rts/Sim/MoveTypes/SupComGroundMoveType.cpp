@@ -1521,6 +1521,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				const float3 next = owner->pos + moveRequest;
 				yieldLogSquares = true; FootprintBlocked(next); FootprintBlocked(owner->pos); yieldLogSquares = false;
 				QuadFieldQuery q;
+				q.threadOwner = ThreadPool::GetThreadNum(); // supcom: own per-thread query slot (desync 11460)
 				quadField.GetUnitsExact(q, next, HalfSize() + SQUARE_SIZE, false);
 				std::string near;
 				for (const CUnit* u: *q.units) { if (u != owner) near += " " + std::to_string(u->id) + "@(" + std::to_string(int(u->pos.x)) + "," + std::to_string(int(u->pos.z)) + ")"; }
@@ -1982,6 +1983,7 @@ void CSupComGroundMoveType::UpdateGapQueue()
 	// the unit ahead: the last one queued before this one at the same gap in the same direction; one stuck (neither
 	// held by the queue nor any further along the gap's axis for GAPQ_STALL_FRAMES) is passed over
 	QuadFieldQuery q;
+	q.threadOwner = ThreadPool::GetThreadNum(); // supcom: own per-thread query slot (desync 11460)
 	quadField.GetUnitsExact(q, gqPos, GAPQ_REACH * 3.0f + SQUARE_SIZE * 2.0f, false);
 
 	const CSupComGroundMoveType* ahead = nullptr;
@@ -2110,6 +2112,7 @@ void CSupComGroundMoveType::CheckYield()
 	const float searchRadius = HalfSize() * 2.0f + SQUARE_SIZE * 4.0f;
 
 	QuadFieldQuery qfQuery;
+	qfQuery.threadOwner = ThreadPool::GetThreadNum(); // supcom: own per-thread query slot (desync 11460)
 	quadField.GetUnitsExact(qfQuery, pos, searchRadius, false);
 
 	// the lowest id among the idle allied units in contact in front (deterministic)
@@ -2217,6 +2220,7 @@ bool CSupComGroundMoveType::MakeWay(const CSupComGroundMoveType* mover)
 			return false;
 
 		QuadFieldQuery qfQuery;
+		qfQuery.threadOwner = ThreadPool::GetThreadNum(); // supcom: own per-thread query slot (desync 11460)
 		quadField.GetUnitsExact(qfQuery, p, HalfSize() + SQUARE_SIZE * 0.5f, false);
 
 		for (const CUnit* u: *qfQuery.units) {

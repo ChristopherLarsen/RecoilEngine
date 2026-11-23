@@ -1738,6 +1738,7 @@ void CGroundMoveType::CheckCollisionSkid()
 
 	// copy on purpose, since the below can call Lua
 	QuadFieldQuery qfQuery;
+	qfQuery.threadOwner = ThreadPool::GetThreadNum(); // supcom: own per-thread query slot (desync 11460)
 	quadField.GetUnitsExact(qfQuery, pos, collider->radius);
 	quadField.GetFeaturesExact(qfQuery, pos, collider->radius);
 
