@@ -97,6 +97,17 @@ void Registry::GameFrame(int frame) {
 	}
 }
 
+void Registry::DrawWorld(bool drawAboveWater) {
+	if (!drawAboveWater) return;   // the below-water call of a water pass: the rules draw once, in the last (above-water) pass
+	Registry& reg = Get();
+	reg.EnsureStart();
+	for (auto& r : reg.rules) {
+		if (!r->enabled || r->info.synced) continue;
+		ScopedTimer t(hashString(r->timer.c_str()));
+		r->DrawWorld();
+	}
+}
+
 // Spring.KT1.Rules()
 static int LuaRules(lua_State* L) {
 	Registry& reg = Registry::Get();

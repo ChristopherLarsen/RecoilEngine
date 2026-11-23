@@ -10,6 +10,8 @@
 //                       Only for an enabled rule. Tuning lives there: no number that a designer may change is a C++ constant.
 //   3. Start            at the first sim frame: unit defs are loaded; read per-def data here (KT1UnitData.h).
 //   4. GameFrame(f)     every synced frame, before the Lua GameFrame, under the profiler timer "KT1::<Name>".
+//   4b. DrawWorld       unsynced rules that draw: once per drawn frame, in the world's alpha pass (after the engine's own particles),
+//                       under the timer "KT1::<Name>". Never changes sim state. Not called in a headless engine (no draw).
 //   5. PushLua          fills the table Spring.KT1.<Name> (in every Lua handle: check CLuaHandle::GetHandleSynced for writes).
 //
 // Determinism (synced rules): no thread-dependent state, no unordered iteration that reaches a result, no wall clock,
@@ -46,6 +48,7 @@ namespace KT1 {
 		virtual void LoadConfig(const LuaTable& cfg) {}
 		virtual void Start() {}
 		virtual void GameFrame(int frame) {}
+		virtual void DrawWorld() {}
 		virtual void PushLua(lua_State* L) {}
 
 	private:

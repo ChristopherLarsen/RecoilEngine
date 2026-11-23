@@ -17,6 +17,8 @@ namespace KT1 {
 
 		// KT1 hook: registry (Game.cpp, before eventHandler.GameFrame): every enabled synced rule's frame, timed.
 		static void GameFrame(int frame);
+		// KT1 hook: registry (WorldDrawer, after the alpha particles above water): every enabled unsynced rule's draw, timed.
+		static void DrawWorld(bool drawAboveWater);
 		// KT1 hook: registry (LuaSyncedRead::PushEntries): Spring.KT1 = { Rules, IsActive, <Name> = {...} }.
 		static void PushLua(lua_State* L);
 

@@ -6,8 +6,10 @@
 
 namespace KT1 {
 	std::unique_ptr<Rule> MakeCensus();   // Rules/Census: the demo rule (framework proof)
+	std::unique_ptr<Rule> MakeRibbons();  // UI/Ribbons: shot ribbons drawn by the engine (unsynced)
 
 	void AddAllRules(Registry& reg) {
 		reg.Add(MakeCensus());
+		reg.Add(MakeRibbons());
 	}
 }
