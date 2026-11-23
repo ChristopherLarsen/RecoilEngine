@@ -262,6 +262,7 @@ public:
 		LuaPushRawNamedCFunc(L, "Stats", LStats);
 		LuaPushRawNamedCFunc(L, "SetLimits", LSetLimits);
 		LuaPushRawNamedCFunc(L, "Config", LConfig);
+		LuaPushRawNamedCFunc(L, "Debug", LDebug);
 	}
 
 private:
@@ -642,6 +643,32 @@ private:
 		lua_getfield(L, 1, "setting"); if (lua_isnumber(L, -1)) { r->setting = std::clamp((int)lua_tointeger(L, -1), 0, 2); r->lockSetting = true; } lua_pop(L, 1);
 		lua_getfield(L, 1, "scale"); if (lua_isnumber(L, -1)) { r->scale = lua_tonumber(L, -1); r->lockScale = true; } lua_pop(L, 1);
 		return 0;
+	}
+	// Spring.KT1.Ribbons.Debug() -> one drawing emitter (the lowest id): its last point and time, the head end and the shot's positions,
+	// the frame and draw time, its life; for look checks (RIB-LOOK). Nil when none draws.
+	static int LDebug(lua_State* L) {
+		const Ribbons* r = Self();
+		if (r == nullptr || !r->Enabled()) return 0;
+		int best = -1;
+		for (const auto& kv : r->live) if (kv.second.drawing && (best < 0 || kv.first < best)) best = kv.first;
+		if (best < 0) return 0;
+		const Emitter& e = r->live.at(best);
+		const CProjectile* p = projectileHandler.GetProjectileBySyncedID(best);
+		lua_newtable(L);
+		LuaPushNamedNumber(L, "id", best);
+		LuaPushNamedNumber(L, "px", e.px); LuaPushNamedNumber(L, "pz", e.pz); LuaPushNamedNumber(L, "pf", e.pf);
+		LuaPushNamedNumber(L, "life", e.life); LuaPushNamedNumber(L, "u", e.u);
+		LuaPushNamedNumber(L, "frame", gs->frameNum); LuaPushNamedNumber(L, "off", globalRendering->timeOffset);
+		LuaPushNamedNumber(L, "planFrame", r->lastFrame);
+		if (p != nullptr) {
+			const float3 d = p->GetDrawPos(globalRendering->timeOffset);
+			LuaPushNamedNumber(L, "posx", p->pos.x); LuaPushNamedNumber(L, "posz", p->pos.z);
+			LuaPushNamedNumber(L, "prex", p->preFrameTra.t.x); LuaPushNamedNumber(L, "prez", p->preFrameTra.t.z);
+			LuaPushNamedNumber(L, "drawx", d.x); LuaPushNamedNumber(L, "drawz", d.z);
+			LuaPushNamedNumber(L, "dposx", p->drawPos.x); LuaPushNamedNumber(L, "dposz", p->drawPos.z);
+			LuaPushNamedNumber(L, "speed", p->speed.w);
+		}
+		return 1;
 	}
 	static int LConfig(lua_State* L) {
 		const Ribbons* r = Self();
