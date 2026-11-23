@@ -16,6 +16,7 @@
 // Any-hit answers do not depend on the order circles were stored in, so results equal the Lua index (VSees, height term 0).
 
 #include "SupComIntIndex.h"
+#include "SupComIntFacts.h"
 
 #include <cmath>
 #include <string>
@@ -71,41 +72,49 @@ namespace {
 		return 0;
 	}
 
-	int Put(lua_State* L) {
-		if (!Synced(L)) return 0;
-		Kind* k = GetKind(L, 1, true);
-		Team& t = k->teams[luaL_checkint(L, 2)];
-		const int id = luaL_checkint(L, 3);
+	void PutK(Kind* k, int a, int id, double x, double z, double r2, int stamp, double ce) {
+		Team& t = k->teams[a];
 		Circle c;
-		c.x = luaL_checknumber(L, 4); c.z = luaL_checknumber(L, 5); c.r2 = luaL_checknumber(L, 6);
-		c.stamp = luaL_checkint(L, 7);
-		c.ce = lua_isnumber(L, 8) ? lua_tonumber(L, 8) : 0.0;
+		c.x = x; c.z = z; c.r2 = r2; c.stamp = stamp; c.ce = ce;
 		const double r = std::sqrt(c.r2), S = k->S;
 		c.gx0 = (long long)std::floor((c.x - r) / S); c.gx1 = (long long)std::floor((c.x + r) / S);
 		c.gz0 = (long long)std::floor((c.z - r) / S); c.gz1 = (long long)std::floor((c.z + r) / S);
 		auto it = t.circles.find(id);
 		if (it != t.circles.end()) {
 			const Circle o = it->second;
-			if (o.gx0 == c.gx0 && o.gx1 == c.gx1 && o.gz0 == c.gz0 && o.gz1 == c.gz1) { it->second = c; return 0; }
+			if (o.gx0 == c.gx0 && o.gx1 == c.gx1 && o.gz0 == c.gz0 && o.gz1 == c.gz1) { it->second = c; return; }
 			Unhook(t, id, o);
 		}
 		t.circles[id] = c;
 		for (long long gx = c.gx0; gx <= c.gx1; ++gx)
 			for (long long gz = c.gz0; gz <= c.gz1; ++gz) t.buckets[Key(gx, gz)].push_back(id);
+	}
+
+	int Put(lua_State* L) {
+		if (!Synced(L)) return 0;
+		Kind* k = GetKind(L, 1, true);
+		const int a = luaL_checkint(L, 2), id = luaL_checkint(L, 3);
+		const double x = luaL_checknumber(L, 4), z = luaL_checknumber(L, 5), r2 = luaL_checknumber(L, 6);
+		const int stamp = luaL_checkint(L, 7);
+		const double ce = lua_isnumber(L, 8) ? lua_tonumber(L, 8) : 0.0;
+		PutK(k, a, id, x, z, r2, stamp, ce);
 		return 0;
+	}
+
+	void FreeK(Kind* k, int a, int id) {
+		auto ti = k->teams.find(a);
+		if (ti == k->teams.end()) return;
+		auto it = ti->second.circles.find(id);
+		if (it == ti->second.circles.end()) return;
+		Unhook(ti->second, id, it->second);
+		ti->second.circles.erase(it);
 	}
 
 	int Free(lua_State* L) {
 		if (!Synced(L)) return 0;
 		Kind* k = GetKind(L, 1, false);
 		if (k == nullptr) return 0;
-		auto ti = k->teams.find(luaL_checkint(L, 2));
-		if (ti == k->teams.end()) return 0;
-		const int id = luaL_checkint(L, 3);
-		auto it = ti->second.circles.find(id);
-		if (it == ti->second.circles.end()) return 0;
-		Unhook(ti->second, id, it->second);
-		ti->second.circles.erase(it);
+		FreeK(k, luaL_checkint(L, 2), luaL_checkint(L, 3));
 		return 0;
 	}
 
@@ -243,8 +252,20 @@ bool SupComIntIndex::SeesAny(const char* kind, const int* allyTeams, int n, doub
 	return !ts.empty() && SeesOne(ki->second, ts, x, z);
 }
 
+void SupComIntIndex::PutC(const char* kind, int a, int id, double x, double z, double r2, int stamp, double ce)
+{
+	PutK(&kinds[kind], a, id, x, z, r2, stamp, ce);   // a kind not yet initialised takes the defaults, as SupComIntPut
+}
+
+void SupComIntIndex::FreeC(const char* kind, int a, int id)
+{
+	const auto ki = kinds.find(kind);
+	if (ki != kinds.end()) FreeK(&ki->second, a, id);
+}
+
 void SupComIntIndex::PushSyncedCtrl(lua_State* L)
 {
+	SupComIntFacts::PushSyncedCtrl(L);   // SupComIntFacts*, SupComIntSource (SupComIntFacts.cpp)
 	LuaPushRawNamedCFunc(L, "SupComIntFacts", Facts);
 	LuaPushRawNamedCFunc(L, "SupComIntInit", Init);
 	LuaPushRawNamedCFunc(L, "SupComIntPut", Put);
