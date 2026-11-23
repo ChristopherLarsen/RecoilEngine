@@ -155,6 +155,9 @@ private:
 
 	/// PTH-002 R3 (mover side): an idle allied unit in contact in front for a few frames is asked to make way
 	void CheckYield();
+	/// SupComYieldReturn (serial update): an idle unit that made way goes back to its place once the mover has settled
+	void UpdateYieldReturn();
+	bool YieldSpotFree(const float3& p) const;
 	/// PTH-002 R3 (idle side): move to the nearest free spot off the mover's route; false if there is none
 	bool MakeWay(const CSupComGroundMoveType* mover);
 	/// whether an idle unit of this move type may be asked to make way
@@ -244,6 +247,12 @@ private:
 	int scYieldFrames = 0;       ///< consecutive frames in contact with the same idle unit in front
 	int scYieldUnit = -1;        ///< that unit's id
 	bool scYielding = false;     ///< moving out of the way (no order of its own)
+	// SupComYieldReturn (PTH-002 R3a, pending): where an idle unit stood before it first made way, the unit it made way for, and the return
+	float3 yieldHome;
+	int yieldMover = -1;         ///< the last mover this unit made way for (-1: none, no home)
+	int yieldSettleFrames = 0;   ///< frames the mover has been settled
+	bool yieldReturning = false; ///< driving back to its place
+	bool yieldInternal = false;  ///< a start from the yield code (not a new order)
 	bool headingFree = false;    ///< hover unit following its route without turning (MOV-005 R7, set from Lua)
 
 	// submarine (MOV-011): depth below the water surface, moving between depthFrom and depthTo along a smooth curve

@@ -83,6 +83,9 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scYieldFrames),
 	CR_MEMBER(scYieldUnit),
 	CR_MEMBER(scYielding),
+	CR_MEMBER(yieldHome),
+	CR_MEMBER(yieldMover),
+	CR_MEMBER(yieldReturning),
 	CR_MEMBER(contactLift),
 
 	CR_MEMBER(directGoal),
@@ -161,6 +164,10 @@ static constexpr int CROWD_MAX_FRAMES = GAME_SPEED * 5;
 
 CONFIG(bool, SupComGapQueue).defaultValue(true).description("supcom: at a gap their own width, SupComGroundMoveType units pass one at a time in the order they arrive: each keeps a footprint of room behind the unit queued before it instead of pushing in beside it (PTH-002 R2, case A; PTH-004-A); 0 crowds the gap as before.");
 static bool GapQueueOn() { static const bool on = configHandler->GetBool("SupComGapQueue"); return on; }
+
+CONFIG(bool, SupComYieldReturn).defaultValue(false).description("supcom: an idle SupComGroundMoveType unit that made way for a mover (PTH-002 R3) goes back to its place once the mover has settled (R3a, pending the reference capture); 0 stays where it stepped to, as before.");
+static bool YieldReturnOn() { static const bool on = configHandler->GetBool("SupComYieldReturn"); return on; }
+static constexpr int YIELD_RETURN_DELAY_FRAMES = 30;   // DESIGN: PTH-002 v2 traffic.return_delay_max default 30 ticks: the mover has been at rest this long
 CONFIG(bool, SupComTurnGo).defaultValue(true).description("supcom: SupComGroundMoveType units with customParams.supcom_reverse_dist reverse to a goal behind them within that distance (else drive forwards), and units with customParams.supcom_turn_go_angle turn on the spot from rest until their heading is within that angle of their way before they move off; 0 (or no keys) keeps the engine's own reverse choice and moves off while turning, as before.");
 static bool TurnGoOn() { static const bool on = configHandler->GetBool("SupComTurnGo"); return on; }
 // a unit joins the queue this far before the gap along its axis, elmos (PLACEHOLDER: SF-PTH-002 counts arrival 2 cells
@@ -358,6 +365,10 @@ void CSupComGroundMoveType::StartMoving(float3 moveGoalPos, float moveGoalRadius
 	CGroundMoveType::StartMoving(moveGoalPos, moveGoalRadius);
 	ExactGoalRadius();
 	ResetForNewOrder();
+	if (!yieldInternal) {
+		yieldMover = -1;
+		yieldReturning = false;
+	}
 }
 
 void CSupComGroundMoveType::StopMoving(bool callScript, bool hardStop, bool cancelRaw)
@@ -1859,6 +1870,10 @@ bool CSupComGroundMoveType::Update()
 	// arrived (or stopped) after making way: an ordinary idle unit again
 	if (scYielding && progressState != Active) {
 		scYielding = false;
+		if (yieldReturning) {
+			yieldReturning = false;
+			yieldMover = -1;
+		}
 		if (YieldLog())
 			LOG("[SupComYield] f=%d unit %d done making way at (%.0f, %.0f)", gs->frameNum, owner->id, owner->pos.x, owner->pos.z);
 	}
@@ -1871,6 +1886,8 @@ bool CSupComGroundMoveType::Update()
 		numIdlingSlowUpdates = 0;
 	}
 	CheckYield();
+	if (yieldMover >= 0)
+		UpdateYieldReturn();
 	return moved;
 }
 
@@ -2073,6 +2090,80 @@ float3 CSupComGroundMoveType::GapQueueTarget(const float3& cwp, const float3& op
 	return (gqPos - gqDir * ((s > w)? std::max(s - w * 0.5f, w): s));
 }
 
+bool CSupComGroundMoveType::YieldSpotFree(const float3& p) const
+{
+	if (FootprintBlocked(p))
+		return false;
+
+	QuadFieldQuery qfQuery;
+	quadField.GetUnitsExact(qfQuery, p, HalfSize() + SQUARE_SIZE * 0.5f, false);
+
+	for (const CUnit* u: *qfQuery.units) {
+		if (u != owner)
+			return false;
+	}
+	return true;
+}
+
+// SupComYieldReturn (PTH-002 R3a, pending the reference capture): once the unit it made way for has settled (is no longer moving, or is gone)
+// for the return delay, an idle unit goes back to where it stood before it first made way: to that spot when it is free, else the nearest free
+// spot to it (in half-footprint steps, three rings out) that is nearer to it than the unit is now. No spot nearer: it stays. A new order of its own
+// ends the memory (StartMoving). Deterministic: only positions, ids and frames.
+void CSupComGroundMoveType::UpdateYieldReturn()
+{
+	if (!YieldReturnOn() || scYielding || progressState == Active || owner->beingBuilt || owner->GetTransporter() != nullptr || !owner->commandAI->commandQue.empty()) {
+		if (progressState == Active && !scYielding && !yieldInternal)
+			yieldMover = -1;
+		return;
+	}
+
+	const CUnit* m = unitHandler.GetUnit(yieldMover);
+	const CSupComGroundMoveType* mt = (m != nullptr)? dynamic_cast<const CSupComGroundMoveType*>(m->moveType): nullptr;
+	const bool settled = (m == nullptr || mt == nullptr || (mt->progressState != Active && mt->scSpeed <= 0.0f));
+
+	if (!settled) {
+		yieldSettleFrames = 0;
+		return;
+	}
+	if (++yieldSettleFrames < YIELD_RETURN_DELAY_FRAMES)
+		return;
+
+	const float here = owner->pos.distance2D(yieldHome);
+	const float step = std::max(HalfSize(), float(SQUARE_SIZE));
+	float3 best = yieldHome;
+	bool found = (here <= SQUARE_SIZE * 0.5f)? false: YieldSpotFree(yieldHome);
+	float bestDist = found? 0.0f: here - step * 0.5f;
+
+	for (int ring = 1; ring <= 3 && !found; ring++) {
+		for (int k = 0; k < 8; k++) {
+			const float a = k * (6.2831853f / 8.0f);
+			const float3 p = yieldHome + float3(math::cos(a), 0.0f, math::sin(a)) * (ring * step);
+			const float d = p.distance2D(yieldHome);
+
+			if (d < bestDist && YieldSpotFree(p) && LineFits(owner->pos, p)) {
+				best = p;
+				bestDist = d;
+			}
+		}
+		if (bestDist < here - step * 0.5f)
+			found = true;
+	}
+
+	if (!found || (best.distance2D(owner->pos) < SQUARE_SIZE * 0.5f)) {
+		yieldMover = -1;
+		return;
+	}
+
+	if (YieldLog())
+		LOG("[SupComYield] f=%d unit %d returns towards its place (%.0f, %.0f) via (%.0f, %.0f), from (%.0f, %.0f)", gs->frameNum, owner->id, yieldHome.x, yieldHome.z, best.x, best.z, owner->pos.x, owner->pos.z);
+
+	yieldInternal = true;
+	StartMoving(best, SQUARE_SIZE * 0.5f);
+	yieldInternal = false;
+	scYielding = true;
+	yieldReturning = true;
+}
+
 bool CSupComGroundMoveType::CanYield() const
 {
 	if (progressState == Active || scYielding)
@@ -2246,7 +2337,16 @@ bool CSupComGroundMoveType::MakeWay(const CSupComGroundMoveType* mover)
 
 				if (YieldLog())
 					LOG("[SupComYield] f=%d unit %d makes way to (%.0f, %.0f): %d ahead, %d side, heading dot %.2f", gs->frameNum, owner->id, spot.x, spot.z, a, b, ((spot - pos) * XZVector).SafeNormalize2D().dot(flatFrontDir));
+				if (YieldReturnOn() && yieldMover < 0)
+					yieldHome = pos;
+				yieldInternal = true;
 				StartMoving(spot, SQUARE_SIZE * 0.5f);
+				yieldInternal = false;
+				if (YieldReturnOn()) {
+					yieldMover = mover->owner->id;
+					yieldSettleFrames = 0;
+					yieldReturning = false;
+				}
 				scYielding = true;
 				return true;
 			}
