@@ -1,5 +1,5 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 rule: FarView (version 1). Far above the map, the world pass draws only a low-resolution map mesh textured with a pre-baked
+// KT1 rule: FarView (version 2: the cartographic look of RND-005 R3/R5/R10, the player's toggle, auto switch by config). Far above the map, the world pass draws only a low-resolution map mesh textured with a pre-baked
 // map image; strategic icons, order lines, selection and Lua overlays are drawn as before (game-build docs/engine/FAR-VIEW-DESIGN.md).
 //
 // Why:        at the PERF-BENCH-4K FAR camera (37,683 elmos) the new pin's far plane (98,304) puts the whole map in view and the full
@@ -18,6 +18,7 @@
 //             Spring.KT1.FarView.SetZoom(d) the game camera's zoom distance this frame (unsynced callers only; nil clears it)
 //             Spring.KT1.FarView.SetFogTexture(tex, factor) the vision widget's R16F fog mask (signed elmos to the vision edge, + inside;
 //                                           shade = mix(factor, 1, clamp(r/2+0.5))); nil clears (unfogged)
+//             Spring.KT1.FarView.SetManual(b)  the player's cartographic toggle (RND-005 R1), at any zoom
 //             Spring.KT1.FarView.Force(b)   true: far view at any height; false: never; nil: by height (tests, A/B)
 // Determinism: draw only. Reads the unsynced heightmap and the camera; writes no sim state.
 
@@ -76,13 +77,30 @@ uniform sampler2D tex;
 uniform float waterLevel;
 uniform vec4 waterColor;   // rgb, a = blend weight below the water level
 uniform float brightness;
+uniform int carto;         // 1: cartographic look (RND-005 R3, R5): height ramp, contour lines, no water surface, no lighting
+uniform vec2 hRange;       // map min and max height
+uniform vec3 rampDark, rampLight;
+uniform float contourStep; // fraction of the height range per contour step
+uniform float edgeGain;
 uniform sampler2D fogTex;  // gfx_vision.lua mask: R = signed elmos from the nearest vision edge, + inside
 uniform float fogFactor;   // shade outside vision
 uniform int hasFog;
 out vec4 fragColor;
 void main() {
-	vec3 c = texture(tex, uv).rgb * brightness;
-	if (wy < waterLevel) c = mix(c, waterColor.rgb, waterColor.a);
+	vec3 c;
+	if (carto == 1) {
+		float h = clamp((wy - hRange.x) / max(hRange.y - hRange.x, 1.0), 0.0, 1.0);
+		c = mix(rampDark, rampLight, h);
+		// contour: the original filters the quantised height against its 8 neighbours with a gain; here the same line, found per
+		// pixel where the quantised height steps (DESIGN: one pass instead of a full-screen filter)
+		float q = h / contourStep;
+		float w = max(fwidth(q), 1e-4);
+		float line = 1.0 - smoothstep(0.0, w, fract(q));
+		c -= vec3(clamp(edgeGain * contourStep * line * 0.5, 0.0, 1.0)) * c;
+	} else {
+		c = texture(tex, uv).rgb * brightness;
+		if (wy < waterLevel) c = mix(c, waterColor.rgb, waterColor.a);
+	}
 	if (hasFog == 1) {
 		float lit = clamp(texture(fogTex, uv).r * 0.5 + 0.5, 0.0, 1.0);
 		c *= mix(fogFactor, 1.0, lit);
@@ -100,12 +118,19 @@ struct Cfg {
 	float waterColor[4] = {0.10f, 0.22f, 0.32f, 0.0f};   // PLACEHOLDER (pending): tint below water; a = 0 keeps the image's water
 	float brightness = 1.0f;        // PLACEHOLDER (pending): multiplier on the baked image
 	std::string texture;            // DESIGN: "" = the map's minimap image; else a game-archive image (a higher-resolution bake)
+	bool carto = true;              // REQ (RND-005 R10): the build's far view takes the cartographic look; false = the baked image
+	bool autoSwitch = true;         // DESIGN deviation (RND-005 R1, R10): switch by zoom; the default waits on the owner
+	float rampDark[3] = {0.45f, 0.38f, 0.41f};    // PARITY: G0-FARVIEW cartographic_terrain.builtin_ramp_dark_rgb
+	float rampLight[3] = {0.80f, 0.80f, 0.68f};   // PARITY: G0-FARVIEW cartographic_terrain.builtin_ramp_light_rgb
+	float contourStep = 0.10f;      // PARITY: G0-FARVIEW cartographic_terrain.builtin_contour_step_percent (10%)
+	float edgeGain = 16.0f;         // PARITY: G0-FARVIEW cartographic_terrain.contour_edge_gain
 };
 
 Cfg cfg;
 bool active = false;       // the rule is on (mod option)
 bool farNow = false;       // this frame is drawn far
-int force = -1;            // -1 by height, 0 never, 1 always
+int force = -1;            // -1 by height, 0 never, 1 always (tests)
+bool manual = false;       // the player's cartographic toggle (RND-005 R1: a key action and a map option)
 float luaZoom = -1.0f;     // the game camera's zoom, when Lua sets it
 int luaZoomAge = 1000;     // drawn frames since Lua last set it
 float lastHeight = 0.0f;
@@ -199,6 +224,8 @@ bool DecideFar() {
 	const float h = (luaZoomAge <= 30 && luaZoom >= 0.0f) ? luaZoom : camera->GetPos().y - readMap->GetCurrAvgHeight();
 	lastHeight = h;
 	if (force >= 0) return force == 1;
+	if (manual) return true;
+	if (!cfg.autoSwitch) return false;
 	const float on = cfg.switchHeight, off = cfg.switchHeight * (1.0f - cfg.hysteresis);
 	return farNow ? (h >= off) : (h >= on);
 }
@@ -216,6 +243,12 @@ void DrawMesh() {
 	shader->SetUniform("waterLevel", cfg.waterLevel);
 	shader->SetUniform("waterColor", cfg.waterColor[0], cfg.waterColor[1], cfg.waterColor[2], cfg.waterColor[3]);
 	shader->SetUniform("brightness", cfg.brightness);
+	shader->SetUniform("carto", cfg.carto ? 1 : 0);
+	shader->SetUniform("hRange", readMap->GetCurrMinHeight(), readMap->GetCurrMaxHeight());
+	shader->SetUniform("rampDark", cfg.rampDark[0], cfg.rampDark[1], cfg.rampDark[2]);
+	shader->SetUniform("rampLight", cfg.rampLight[0], cfg.rampLight[1], cfg.rampLight[2]);
+	shader->SetUniform("contourStep", cfg.contourStep);
+	shader->SetUniform("edgeGain", cfg.edgeGain);
 	const bool fog = fogTex != 0 && glIsTexture(fogTex);
 	shader->SetUniform("hasFog", fog ? 1 : 0);
 	shader->SetUniform("fogFactor", fogFactor);
@@ -232,7 +265,7 @@ void DrawMesh() {
 
 class FarViewRule : public Rule {
 public:
-	FarViewRule() : Rule({"FarView", 1, false, "(engine world pass at full detail)", false}) {}
+	FarViewRule() : Rule({"FarView", 2, false, "(engine world pass at full detail)", false}) {}
 
 	void LoadConfig(const LuaTable& t) override {
 		cfg.switchHeight = t.GetFloat("switch_height", cfg.switchHeight);
@@ -244,6 +277,12 @@ public:
 		for (int i = 0; i < 4; ++i) cfg.waterColor[i] = wc.GetFloat(i + 1, cfg.waterColor[i]);
 		cfg.brightness = t.GetFloat("brightness", cfg.brightness);
 		cfg.texture = t.GetString("texture", cfg.texture);
+		cfg.carto = t.GetBool("cartographic", cfg.carto);
+		cfg.autoSwitch = t.GetBool("auto_switch", cfg.autoSwitch);
+		const LuaTable rd = t.SubTable("ramp_dark"), rl = t.SubTable("ramp_light");
+		for (int i = 0; i < 3; ++i) { cfg.rampDark[i] = rd.GetFloat(i + 1, cfg.rampDark[i]); cfg.rampLight[i] = rl.GetFloat(i + 1, cfg.rampLight[i]); }
+		cfg.contourStep = std::max(0.001f, t.GetFloat("contour_step", cfg.contourStep));
+		cfg.edgeGain = t.GetFloat("contour_edge_gain", cfg.edgeGain);
 	}
 	void Start() override {
 		active = true;
@@ -253,6 +292,7 @@ public:
 		LuaPushRawNamedCFunc(L, "Stats", LStats);
 		LuaPushRawNamedCFunc(L, "SetZoom", LSetZoom);
 		LuaPushRawNamedCFunc(L, "Force", LForce);
+		LuaPushRawNamedCFunc(L, "SetManual", LSetManual);
 		LuaPushRawNamedCFunc(L, "SetFogTexture", LSetFogTexture);
 	}
 
@@ -261,6 +301,9 @@ private:
 		lua_newtable(L);
 		LuaPushNamedBool(L, "active", active);
 		LuaPushNamedBool(L, "far", farNow);
+		LuaPushNamedBool(L, "manual", manual);
+		LuaPushNamedBool(L, "autoSwitch", cfg.autoSwitch);
+		LuaPushNamedBool(L, "cartographic", cfg.carto);
 		LuaPushNamedNumber(L, "height", lastHeight);
 		LuaPushNamedNumber(L, "switchHeight", cfg.switchHeight);
 		LuaPushNamedNumber(L, "grid", cfg.grid);
@@ -279,6 +322,11 @@ private:
 		if (CLuaHandle::GetHandleSynced(L)) return 0;
 		fogTex = lua_isnumber(L, 1) ? (uint32_t)lua_tointeger(L, 1) : 0;
 		fogFactor = lua_isnumber(L, 2) ? (float)lua_tonumber(L, 2) : 1.0f;
+		return 0;
+	}
+	static int LSetManual(lua_State* L) {
+		if (CLuaHandle::GetHandleSynced(L)) return 0;
+		manual = lua_toboolean(L, 1);
 		return 0;
 	}
 	static int LForce(lua_State* L) {
