@@ -12,6 +12,7 @@ namespace KT1 {
 	std::unique_ptr<Rule> MakePlants();   // Rules/Plants: the contact search of mov_trees and map_plants (synced)
 	std::unique_ptr<Rule> MakeFuel();     // Rules/Fuel: the air staging fuel step (synced)
 	std::unique_ptr<Rule> MakeBuilders(); // Rules/Builders: the construction economy busy-builder read (synced)
+	std::unique_ptr<Rule> MakeIntel();    // Rules/Intel: the int_coverage detection loop (synced)
 	std::unique_ptr<Rule> MakeIconCull();  // UI/IconCull: engine icon passes skip icons that draw nothing (unsynced)
 
 	void AddAllRules(Registry& reg) {
@@ -22,6 +23,7 @@ namespace KT1 {
 		reg.Add(MakePlants());
 		reg.Add(MakeFuel());
 		reg.Add(MakeBuilders());
+		reg.Add(MakeIntel());
 		reg.Add(MakeIconCull());
 	}
 }
