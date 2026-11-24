@@ -2967,6 +2967,7 @@ void CGroundMoveType::HandleUnitCollisions(
 		pushCollidee = pushCollidee && (alliedCollision || allowPEU || !collidee->blockEnemyPushing);
 		pushCollider = pushCollider && (!collider->beingBuilt && !collider->UsingScriptMoveType() && !collider->moveType->IsPushResistant());
 		pushCollidee = pushCollidee && (!collidee->beingBuilt && !collidee->UsingScriptMoveType() && !collidee->moveType->IsPushResistant());
+		pushCollidee = pushCollidee && !collidee->moveType->HoldsAgainstPush();   // supcom: SupComGoRound (an idle unit is never displaced)
 
 		const bool isStatic = (!collideeMobile && !collideeUD->IsAirUnit()) || (!pushCollider && !pushCollidee);
 		if (isCollision && isStatic) {

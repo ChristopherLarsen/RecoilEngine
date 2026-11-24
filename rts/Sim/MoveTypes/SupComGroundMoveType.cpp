@@ -136,6 +136,8 @@ static bool yieldLogSquares = false;
 
 CONFIG(bool, SupComMakeWay).defaultValue(true).description("supcom: SupComGroundMoveType units line up with a gap their own width instead of stopping at its edge, and make way faster (PTH-002, PTH-004); 0 behaves as before.");
 static bool MakeWayOn() { static const bool on = configHandler->GetBool("SupComMakeWay"); return on; }
+CONFIG(bool, SupComGoRound).defaultValue(true).description("supcom: an idle unit is never displaced: a mover goes round it where there is a way and otherwise stops (no make-way, no push, no walk-back) (PTH-006 v8 R3, PTH-002 v5 R3a, owner decision 2026-11-24); 0 asks the idle unit to make way, as before.");
+static bool GoRoundOn() { static const bool on = configHandler->GetBool("SupComGoRound"); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
 static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
 // sideways search for a line that fits through a gap: up to this many elmos either side, in this step (PLACEHOLDER)
@@ -2096,8 +2098,23 @@ static float SegmentDist2D(const float3& p, const float3& a, const float3& b)
 	return (a + ab * t).distance2D(p);
 }
 
+bool CSupComGroundMoveType::HoldsAgainstPush() const
+{
+	// SupComGoRound: an idle unit (no order, not driving, not carried or being built) is a fixed obstacle to colliding units,
+	// so a mover slides round it or stops against it; its own blocking state is unchanged (unlike push resistance)
+	if (!GoRoundOn() || progressState == Active || owner->beingBuilt || owner->GetTransporter() != nullptr)
+		return false;
+	return owner->commandAI == nullptr || owner->commandAI->commandQue.empty();
+}
+
 void CSupComGroundMoveType::CheckYield()
 {
+	// SupComGoRound: no idle unit is asked to make way
+	if (GoRoundOn()) {
+		scYieldFrames = 0;
+		scYieldUnit = -1;
+		return;
+	}
 	// runs in the serial move type update, so it may start another unit moving
 	if (progressState != Active || scYielding || owner->beingBuilt || owner->GetTransporter() != nullptr) {
 		scYieldFrames = 0;
