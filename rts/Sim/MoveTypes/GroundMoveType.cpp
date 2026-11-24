@@ -1973,7 +1973,7 @@ float3 CGroundMoveType::GetObstacleAvoidanceDir(const float3& desiredDir) {
 		// do not bother steering around idling MOBILE objects
 		// (since collision handling will just push them aside)
 		if (avoideeMobile && avoideeMovable) {
-			if (!avoiderMD->avoidMobilesOnPath || (!avoidee->IsMoving() && avoidee->allyteam == avoider->allyteam))
+			if (!avoiderMD->avoidMobilesOnPath || (!avoidee->IsMoving() && avoidee->allyteam == avoider->allyteam && !avoidee->moveType->HoldsAgainstPush()))   // supcom: SupComGoRound steers round an idle unit
 				continue;
 		}
 
