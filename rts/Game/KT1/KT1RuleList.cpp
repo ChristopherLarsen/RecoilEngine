@@ -9,6 +9,8 @@ namespace KT1 {
 	std::unique_ptr<Rule> MakeOrders();   // Rules/Orders: the orders gadget's unit lists (TrackMoves walk, safety net)
 	std::unique_ptr<Rule> MakeRibbons();  // UI/Ribbons: shot ribbons drawn by the engine (unsynced)
 	std::unique_ptr<Rule> MakeOwnPass();  // Rules/OwnPass: mov_own_pass walk and light-unit search (synced)
+	std::unique_ptr<Rule> MakePlants();   // Rules/Plants: the contact search of mov_trees and map_plants (synced)
+	std::unique_ptr<Rule> MakeFuel();     // Rules/Fuel: the air staging fuel step (synced)
 	std::unique_ptr<Rule> MakeIconCull();  // UI/IconCull: engine icon passes skip icons that draw nothing (unsynced)
 
 	void AddAllRules(Registry& reg) {
@@ -16,6 +18,8 @@ namespace KT1 {
 		reg.Add(MakeOrders());
 		reg.Add(MakeRibbons());
 		reg.Add(MakeOwnPass());
+		reg.Add(MakePlants());
+		reg.Add(MakeFuel());
 		reg.Add(MakeIconCull());
 	}
 }

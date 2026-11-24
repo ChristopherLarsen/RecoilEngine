@@ -52,6 +52,8 @@ make_global_var(sources_engine_Game
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Census/KT1Census.cpp" # KT1 hook: Census
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/OwnPass/KT1OwnPass.cpp" # KT1 hook: OwnPass
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Orders/KT1Orders.cpp" # KT1 hook: Orders
+		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Plants/KT1Plants.cpp" # KT1 hook: Plants
+		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Fuel/KT1Fuel.cpp" # KT1 hook: Fuel
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/UI/Ribbons/KT1Ribbons.cpp" # KT1 hook: Ribbons
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/UI/IconCull/KT1IconCull.cpp" # KT1 hook: IconCull
 		"${CMAKE_CURRENT_SOURCE_DIR}/SelectedUnitsAI.cpp"
