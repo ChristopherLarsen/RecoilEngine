@@ -161,6 +161,9 @@ static constexpr int CROWD_MAX_FRAMES = GAME_SPEED * 5;
 
 CONFIG(bool, SupComGapQueue).defaultValue(true).description("supcom: at a gap their own width, SupComGroundMoveType units pass one at a time in the order they arrive: each keeps a footprint of room behind the unit queued before it instead of pushing in beside it (PTH-002 R2, case A; PTH-004-A); 0 crowds the gap as before.");
 static bool GapQueueOn() { static const bool on = configHandler->GetBool("SupComGapQueue"); return on; }
+
+CONFIG(bool, SupComYieldFine).defaultValue(true).description("supcom: a SupComGroundMoveType unit asked to make way looks for its spot in half-footprint steps and goes to the nearest free one off the mover's route, instead of whole-footprint steps that took a large unit 80 to 100 elmos from the goal it had arrived at (path audit 2026-11-23, t4_land_mega_x group); 0 steps by whole footprints as before.");
+static bool YieldFineOn() { static const bool on = configHandler->GetBool("SupComYieldFine"); return on; }
 CONFIG(bool, SupComTurnGo).defaultValue(true).description("supcom: SupComGroundMoveType units with customParams.supcom_reverse_dist reverse to a goal behind them within that distance (else drive forwards), and units with customParams.supcom_turn_go_angle turn on the spot from rest until their heading is within that angle of their way before they move off; 0 (or no keys) keeps the engine's own reverse choice and moves off while turning, as before.");
 static bool TurnGoOn() { static const bool on = configHandler->GetBool("SupComTurnGo"); return on; }
 // a unit joins the queue this far before the gap along its axis, elmos (PLACEHOLDER: SF-PTH-002 counts arrival 2 cells
@@ -2206,7 +2209,8 @@ bool CSupComGroundMoveType::MakeWay(const CSupComGroundMoveType* mover)
 	// the mover's route near here: to its current and next waypoints, then its goal
 	const float3 route[4] = {mpos, mover->currWayPoint, mover->nextWayPoint, mover->goalPos};
 	const float clearance = HalfSize() + mover->HalfSize() + SQUARE_SIZE * 0.5f;
-	const float step = std::max(HalfSize() * 2.0f, float(SQUARE_SIZE));
+	const int fine = YieldFineOn()? 2: 1;
+	const float step = std::max(HalfSize() * 2.0f / float(fine), float(SQUARE_SIZE));
 
 	const auto OffRoute = [&](const float3& p) {
 		for (int i = 0; i < 3; i++) {
@@ -2231,11 +2235,11 @@ bool CSupComGroundMoveType::MakeWay(const CSupComGroundMoveType* mover)
 	};
 
 	// nearest first: a footprints ahead (through a gap), then b to the side; reached in two straight legs
-	for (int n = 1; n <= YIELD_STEPS_AHEAD + YIELD_STEPS_SIDE; n++) {
-		for (int a = 0; a <= std::min(n, YIELD_STEPS_AHEAD); a++) {
+	for (int n = 1; n <= (YIELD_STEPS_AHEAD + YIELD_STEPS_SIDE) * fine; n++) {
+		for (int a = 0; a <= std::min(n, YIELD_STEPS_AHEAD * fine); a++) {
 			const int b = n - a;
 
-			if (b > YIELD_STEPS_SIDE)
+			if (b > YIELD_STEPS_SIDE * fine)
 				continue;
 
 			const float3 mid = pos + ahead * (a * step);
