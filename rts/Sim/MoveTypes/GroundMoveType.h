@@ -226,6 +226,9 @@ private:
 	virtual void KeepInsideMap();
 	bool UpdateDirectControl();
 	void UpdateOwnerAccelAndHeading();
+public:
+	void SupComPlanPart(int part); // supcom: 2 avoidance, 3 speed and heading (AvoidPlanSplit)
+private:
 	void UpdatePos(const CUnit* unit, const float3&, float3& resultantMove, int thread) const;
 	void UpdateOwnerPos(const float3&, const float3&);
 	bool UpdateOwnerSpeed(float oldSpeedAbs, float newSpeedAbs, float newSpeedRaw);

@@ -52,6 +52,16 @@ void GroundMoveSystem::Update() {
 
 			moveType->UpdateTraversalPlan();
 		});
+		// supcom: AvoidPlanSplit, every unit's avoidance, then every unit's speed and heading (SupComAvoidSnapshot.h)
+		if (SupComAvoidSnapshot::PlanSplit()) {
+			for (int part = 2; part <= 3; ++part) {
+				for_mt(0, view.size(), [&view, part](const int i) {
+					auto entity = (*view.storage<GroundMoveType>())[i];
+					CUnit* unit = unitHandler.GetUnit(view.get<GroundMoveType>(entity).value);
+					static_cast<CGroundMoveType*>(unit->moveType)->SupComPlanPart(part);
+				});
+			}
+		}
 	}
 	{
 		SCOPED_TIMER("Sim::Unit::MoveType::2::UpdatePreCollisions");

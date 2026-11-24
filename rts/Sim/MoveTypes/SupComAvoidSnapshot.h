@@ -25,6 +25,7 @@ namespace SupComAvoidSnapshot {
 
 	/// one-line hook in GroundMoveSystem::Update, before the UpdateTraversalPlan pass (main thread)
 	void Take();
+	bool PlanSplit(); // springsetting AvoidPlanSplit
 	/// the avoidee's state for GetObstacleAvoidanceDir: the copy from Take() for a unit, the live object otherwise
 	View Of(const CSolidObject* o);
 }

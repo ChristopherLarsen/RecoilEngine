@@ -37,7 +37,17 @@ namespace {
 	}
 }
 
+CONFIG(bool, AvoidPlanSplit).defaultValue(true).description("supcom: the parallel traversal pass runs as three passes (waypoints, then every unit's avoidance, then every unit's speed and heading), so no avoidance reads a neighbour while that neighbour's speed and heading step runs (1, the same result on any machine and load; desync 11460); 0 runs all three per unit in one pass (stock).");
+
 namespace SupComAvoidSnapshot {
+	bool PlanSplit()
+	{
+		static int split = -1;
+		if (split < 0)
+			split = (configHandler == nullptr || configHandler->GetBool("AvoidPlanSplit")) ? 1 : 0;
+		return (split != 0);
+	}
+
 	void Take()
 	{
 		if (!On())

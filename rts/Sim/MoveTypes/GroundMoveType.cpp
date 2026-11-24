@@ -1114,12 +1114,18 @@ void CGroundMoveType::UpdateTraversalPlan() {
 		}
 	}
 
+	if (SupComAvoidSnapshot::PlanSplit()) return; // supcom: avoidance and heading run as their own passes (SupComAvoidSnapshot.h)
 	if (owner->GetTransporter() != nullptr) return;
 	if (owner->IsSkidding()) return;
 	if (owner->IsFalling()) return;
 
 	UpdateObstacleAvoidance();
 	UpdateOwnerAccelAndHeading();
+}
+
+void CGroundMoveType::SupComPlanPart(int part) {
+	if (owner->GetTransporter() != nullptr || owner->IsSkidding() || owner->IsFalling()) return;
+	if (part == 2) UpdateObstacleAvoidance(); else UpdateOwnerAccelAndHeading();
 }
 
 void CGroundMoveType::UpdateObstacleAvoidance() {
