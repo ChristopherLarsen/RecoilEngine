@@ -18,6 +18,7 @@
 //             Spring.KT1.FarView.SetZoom(d) the game camera's zoom distance this frame (unsynced callers only; nil clears it)
 //             Spring.KT1.FarView.SetFogTexture(tex, factor) the vision widget's R16F fog mask (signed elmos to the vision edge, + inside;
 //                                           shade = mix(factor, 1, clamp(r/2+0.5))); nil clears (unfogged)
+//             Spring.KT1.FarView.IsFar()       -> this drawn frame is the far (cartographic) view (no table)
 //             Spring.KT1.FarView.SetManual(b)  the player's cartographic toggle (RND-005 R1), at any zoom
 //             Spring.KT1.FarView.Force(b)   true: far view at any height; false: never; nil: by height (tests, A/B)
 // Determinism: draw only. Reads the unsynced heightmap and the camera; writes no sim state.
@@ -139,8 +140,12 @@ float fogFactor = 1.0f;
 
 Shader::IProgramObject* shader = nullptr;
 bool glTried = false;
-VBO vbo, ibo;
-VAO vao;
+// Made in InitGL, never at static init: VBO's constructor asks the GL for buffer support, and before a context exists that
+// answer (cached by the engine) is "no", which broke UniformConstants and the window setup (L10646, L10664). Never freed: the
+// process exit has no GL context to free them in.
+VBO* vboP = nullptr;
+VBO* iboP = nullptr;
+VAO* vaoP = nullptr;
 GLsizei indexCount = 0;
 uint32_t ownTex = 0;
 int sinceRefresh = 1 << 20;
@@ -168,6 +173,8 @@ bool InitGL() {
 		}
 	}
 
+	vboP = new VBO(); iboP = new VBO(); vaoP = new VAO();
+	VBO& vbo = *vboP; VBO& ibo = *iboP; VAO& vao = *vaoP;
 	const int n = cfg.grid;
 	std::vector<uint32_t> idx;
 	idx.reserve((size_t)n * n * 6);
@@ -212,9 +219,9 @@ void RefreshMesh() {
 			v.push_back((float)(hz * SQUARE_SIZE));
 		}
 	}
-	vbo.Bind(GL_ARRAY_BUFFER);
-	vbo.SetBufferSubData(0, sizeof(float) * v.size(), v.data());
-	vbo.Unbind();
+	vboP->Bind(GL_ARRAY_BUFFER);
+	vboP->SetBufferSubData(0, sizeof(float) * v.size(), v.data());
+	vboP->Unbind();
 	sinceRefresh = 0;
 	stRefreshes += 1;
 }
@@ -255,9 +262,9 @@ void DrawMesh() {
 	if (fog) { glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, fogTex); }
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex);
-	vao.Bind();
+	vaoP->Bind();
 	glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
-	vao.Unbind();
+	vaoP->Unbind();
 	glBindTexture(GL_TEXTURE_2D, 0);
 	if (fog) { glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, 0); glActiveTexture(GL_TEXTURE0); }
 	shader->Disable();
@@ -293,6 +300,7 @@ public:
 		LuaPushRawNamedCFunc(L, "SetZoom", LSetZoom);
 		LuaPushRawNamedCFunc(L, "Force", LForce);
 		LuaPushRawNamedCFunc(L, "SetManual", LSetManual);
+		LuaPushRawNamedCFunc(L, "IsFar", LIsFar);
 		LuaPushRawNamedCFunc(L, "SetFogTexture", LSetFogTexture);
 	}
 
@@ -324,6 +332,7 @@ private:
 		fogFactor = lua_isnumber(L, 2) ? (float)lua_tonumber(L, 2) : 1.0f;
 		return 0;
 	}
+	static int LIsFar(lua_State* L) { lua_pushboolean(L, farNow); return 1; }
 	static int LSetManual(lua_State* L) {
 		if (CLuaHandle::GetHandleSynced(L)) return 0;
 		manual = lua_toboolean(L, 1);
