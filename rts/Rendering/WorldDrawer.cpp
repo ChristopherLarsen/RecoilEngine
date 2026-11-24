@@ -3,6 +3,7 @@
 #include "Rendering/GL/myGL.h"
 
 #include "WorldDrawer.h"
+#include "Game/KT1/KT1Registry.h" // KT1 hook: registry
 #include "Sim/Units/UnitDefHandler.h"
 #include "Sim/Features/FeatureDefHandler.h"
 #include "Sim/Weapons/WeaponDefHandler.h"
@@ -422,6 +423,7 @@ void CWorldDrawer::DrawAlphaObjects() const
 		SCOPED_GL_DEBUGGROUP("Draw::World::Particles");
 		projectileDrawer->DrawAlpha(!hasWaterRendering, true, false, false);
 		NanoParticles::Draw(!hasWaterRendering, true, false, false);
+		KT1::Registry::DrawWorld(!hasWaterRendering); // KT1 hook: registry (unsynced rules draw: Ribbons)
 
 		if (hasWaterRendering)
 			glDisable(GL_CLIP_PLANE3);
@@ -462,6 +464,7 @@ void CWorldDrawer::DrawAlphaObjects() const
 		SCOPED_GL_DEBUGGROUP("Draw::World::Particles");
 		projectileDrawer->DrawAlpha(true, false, false, false);
 		NanoParticles::Draw(true, false, false, false);
+		KT1::Registry::DrawWorld(true); // KT1 hook: registry (unsynced rules draw: Ribbons)
 
 		glDisable(GL_CLIP_PLANE3);
 	}

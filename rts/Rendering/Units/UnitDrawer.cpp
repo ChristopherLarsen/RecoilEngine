@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "UnitDrawer.h"
+#include "Game/KT1/UI/IconCull/KT1IconCull.h" // KT1 hook: IconCull
 
 #include <algorithm>
 #include <cassert>
@@ -618,6 +619,7 @@ void CUnitDrawerGLSL::DrawUnitMiniMapIcons(const MiniMapIconDrawParams& params) 
 			assert(iconIndex != icon::INVALID_ICON_INDEX);
 			if (iconIndex == icon::INVALID_ICON_INDEX)
 				continue;
+			if (KT1::IconCull::Skip(iconIndex)) continue; // KT1 hook: IconCull
 
 			const auto& iconData = icon::iconHandler.GetIconData(iconIndex);
 			const float iconScale = iconData.GetSize();
@@ -750,6 +752,7 @@ void CUnitDrawerGLSL::DrawUnitIcons() const
 	for (auto* unit : modelDrawerData->GetUnsortedObjects()) {
 		if (unit->currentIconIndex == icon::INVALID_ICON_INDEX)
 			continue;
+		if (KT1::IconCull::Skip(unit->currentIconIndex)) continue; // KT1 hook: IconCull (an icon that draws nothing)
 
 		if (!unit->GetIsIcon())
 			continue;
@@ -898,6 +901,7 @@ void CUnitDrawerGLSL::DrawUnitIconsScreen() const
 	for (auto* unit : modelDrawerData->GetUnsortedObjects()) {
 		if (unit->currentIconIndex == icon::INVALID_ICON_INDEX)
 			continue;
+		if (KT1::IconCull::Skip(unit->currentIconIndex)) continue; // KT1 hook: IconCull (an icon that draws nothing)
 
 		if (!unit->drawIcon)
 			continue;
@@ -956,6 +960,7 @@ void CUnitDrawerGLSL::DrawUnitIconsScreen() const
 			assert(iconIndex != icon::INVALID_ICON_INDEX);
 			if (iconIndex == icon::INVALID_ICON_INDEX)
 				continue;
+			if (KT1::IconCull::Skip(iconIndex)) continue; // KT1 hook: IconCull
 
 			currentColor = teamHandler.Team(ghost->team)->color;
 			currentColor.r *= ghostIconDimming;

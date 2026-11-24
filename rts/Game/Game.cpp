@@ -5,6 +5,7 @@
 #include <Rml/Backends/RmlUi_Backend.h>
 #include <RmlUi/Core.h>
 #include "Game.h"
+#include "Game/KT1/KT1Registry.h" // KT1 hook: registry
 #include "Lua/SupComUnitQuery.h"
 #include "Camera.h"
 #include "CameraHandler.h"
@@ -1782,6 +1783,7 @@ void CGame::SimFrame() {
 
 			SupComUnitQuery::OnUnitsUpdated(); // supcom: change lists for Spring.GetUnitChanges
 			SupComTargeting::Update(gs->frameNum); // supcom: CMB-004 target choice (unitpass_target), before the Lua GameFrame
+			KT1::Registry::GameFrame(gs->frameNum); // KT1 hook: registry (engine rules, before the Lua GameFrame)
 			eventHandler.GameFrame(gs->frameNum);
 		}
 

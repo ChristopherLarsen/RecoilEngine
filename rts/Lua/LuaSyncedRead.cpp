@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaSyncedRead.h"
+#include "Game/KT1/KT1Registry.h" // KT1 hook: registry
 #include "Rendering/Units/SupComGhosts.h"
 #include "Lua/SupComUnitQuery.h"
 #include "Sim/MoveTypes/SupComHalfRate.h"
@@ -426,6 +427,8 @@ bool LuaSyncedRead::PushEntries(lua_State* L)
 
 	if (!LuaPathFinder::PushEntries(L))
 		return false;
+
+	KT1::Registry::PushLua(L); // KT1 hook: registry (Spring.KT1)
 
 	return true;
 }
