@@ -16,6 +16,8 @@
 // Timer:      KT1::FarView (the far draw: mesh refresh and draw).
 // Lua:        Spring.KT1.FarView.Stats()   -> { active, far, height, switchHeight, grid, refreshes, drawMs, frames }
 //             Spring.KT1.FarView.SetZoom(d) the game camera's zoom distance this frame (unsynced callers only; nil clears it)
+//             Spring.KT1.FarView.SetFogTexture(tex, factor) the vision widget's R16F fog mask (signed elmos to the vision edge, + inside;
+//                                           shade = mix(factor, 1, clamp(r/2+0.5))); nil clears (unfogged)
 //             Spring.KT1.FarView.Force(b)   true: far view at any height; false: never; nil: by height (tests, A/B)
 // Determinism: draw only. Reads the unsynced heightmap and the camera; writes no sim state.
 
@@ -74,10 +76,17 @@ uniform sampler2D tex;
 uniform float waterLevel;
 uniform vec4 waterColor;   // rgb, a = blend weight below the water level
 uniform float brightness;
+uniform sampler2D fogTex;  // gfx_vision.lua mask: R = signed elmos from the nearest vision edge, + inside
+uniform float fogFactor;   // shade outside vision
+uniform int hasFog;
 out vec4 fragColor;
 void main() {
 	vec3 c = texture(tex, uv).rgb * brightness;
 	if (wy < waterLevel) c = mix(c, waterColor.rgb, waterColor.a);
+	if (hasFog == 1) {
+		float lit = clamp(texture(fogTex, uv).r * 0.5 + 0.5, 0.0, 1.0);
+		c *= mix(fogFactor, 1.0, lit);
+	}
 	fragColor = vec4(c, 1.0);
 }
 )";
@@ -100,6 +109,8 @@ int force = -1;            // -1 by height, 0 never, 1 always
 float luaZoom = -1.0f;     // the game camera's zoom, when Lua sets it
 int luaZoomAge = 1000;     // drawn frames since Lua last set it
 float lastHeight = 0.0f;
+uint32_t fogTex = 0;       // the vision widget's fog mask (SetFogTexture); 0 = unfogged
+float fogFactor = 1.0f;
 
 Shader::IProgramObject* shader = nullptr;
 bool glTried = false;
@@ -119,7 +130,7 @@ bool InitGL() {
 	shader->AttachShaderObject(shaderHandler->CreateShaderObject(FS, "", GL_FRAGMENT_SHADER));
 	shader->Link();
 	if (!shader->IsValid()) { LOG_L(L_WARNING, "[KT1] FarView shader: %s; far view off", shader->GetLog().c_str()); shader = nullptr; return false; }
-	shader->Enable(); shader->SetUniform("tex", 0); shader->Disable();
+	shader->Enable(); shader->SetUniform("tex", 0); shader->SetUniform("fogTex", 1); shader->Disable();
 
 	if (!cfg.texture.empty()) {
 		CBitmap bmp;
@@ -205,12 +216,17 @@ void DrawMesh() {
 	shader->SetUniform("waterLevel", cfg.waterLevel);
 	shader->SetUniform("waterColor", cfg.waterColor[0], cfg.waterColor[1], cfg.waterColor[2], cfg.waterColor[3]);
 	shader->SetUniform("brightness", cfg.brightness);
+	const bool fog = fogTex != 0 && glIsTexture(fogTex);
+	shader->SetUniform("hasFog", fog ? 1 : 0);
+	shader->SetUniform("fogFactor", fogFactor);
+	if (fog) { glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, fogTex); }
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex);
 	vao.Bind();
 	glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
 	vao.Unbind();
 	glBindTexture(GL_TEXTURE_2D, 0);
+	if (fog) { glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, 0); glActiveTexture(GL_TEXTURE0); }
 	shader->Disable();
 }
 
@@ -237,6 +253,7 @@ public:
 		LuaPushRawNamedCFunc(L, "Stats", LStats);
 		LuaPushRawNamedCFunc(L, "SetZoom", LSetZoom);
 		LuaPushRawNamedCFunc(L, "Force", LForce);
+		LuaPushRawNamedCFunc(L, "SetFogTexture", LSetFogTexture);
 	}
 
 private:
@@ -256,6 +273,12 @@ private:
 		if (CLuaHandle::GetHandleSynced(L)) return 0;
 		if (lua_isnumber(L, 1)) { luaZoom = (float)lua_tonumber(L, 1); luaZoomAge = 0; }
 		else { luaZoom = -1.0f; }
+		return 0;
+	}
+	static int LSetFogTexture(lua_State* L) {
+		if (CLuaHandle::GetHandleSynced(L)) return 0;
+		fogTex = lua_isnumber(L, 1) ? (uint32_t)lua_tointeger(L, 1) : 0;
+		fogFactor = lua_isnumber(L, 2) ? (float)lua_tonumber(L, 2) : 1.0f;
 		return 0;
 	}
 	static int LForce(lua_State* L) {
