@@ -4,6 +4,7 @@
 
 #include "WorldDrawer.h"
 #include "Game/KT1/KT1Registry.h" // KT1 hook: registry
+#include "Game/KT1/UI/FarView/KT1FarView.h" // KT1 hook: FarView
 #include "Sim/Units/UnitDefHandler.h"
 #include "Sim/Features/FeatureDefHandler.h"
 #include "Sim/Weapons/WeaponDefHandler.h"
@@ -316,8 +317,7 @@ void CWorldDrawer::Draw() const
 
 	camera->Update();
 
-	DrawOpaqueObjects();
-	DrawAlphaObjects();
+	if (!KT1::FarView::Draw()) { DrawOpaqueObjects(); DrawAlphaObjects(); } // KT1 hook: FarView (far above the map: a baked map mesh only)
 	{
 		SCOPED_TIMER("Draw::World::DrawWorld");
 		SCOPED_GL_DEBUGGROUP("Draw::World::DrawWorld");
