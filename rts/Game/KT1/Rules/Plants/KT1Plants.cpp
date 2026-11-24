@@ -14,8 +14,8 @@
 //               plants_min_speed  horizontal speed above which a unit touches plants               (DESIGN 0.05)
 // Unit data:  none: footprint, speed and kind from the unit def, as in the Lua
 // Timer:      KT1::Plants
-// Lua:        Spring.KT1.Plants.Events() -> { kind, unitID, featureID, ... }  contacts since the last pull (kind 1: tree probe,
-//                                         2: plant probe), then cleared (synced only)
+// Lua:        Spring.KT1.Plants.Events(kind) -> { unitID, featureID, ... }  the contacts of one probe since its last pull (kind 1:
+//                                         the tree probe, mov_trees; 2: the plant probe, map_plants), then cleared (synced only)
 //             Spring.KT1.Plants.Config() -> the numbers in use
 // Rule, each frame f, over unit ids in ascending order:
 //   trees:  a unit whose def is not a flyer and has speed > 0, id % trees_every == f % trees_every, speed above trees_min_speed,
@@ -107,7 +107,7 @@ public:
 	}
 
 private:
-	static constexpr size_t MAX_EVENTS = 3 * 8192;   // DESIGN: contacts held between pulls; more wait for the unit's next check
+	static constexpr size_t MAX_EVENTS = 2 * 8192;   // DESIGN: contacts held between pulls; more wait for the unit's next check
 
 	void Probe(const CUnit* u, float r, int kind) {
 		QuadFieldQuery q;
@@ -119,11 +119,11 @@ private:
 			if (fd > 0 && fd < (int)knock.size() && knock[fd]) hits.push_back(f->id);
 		}
 		std::sort(hits.begin(), hits.end());
+		std::vector<int>& ev = events[kind - 1];
 		for (int fid : hits) {
-			if (events.size() + 3 > MAX_EVENTS) return;
-			events.push_back(kind);
-			events.push_back(u->id);
-			events.push_back(fid);
+			if (ev.size() + 2 > MAX_EVENTS) return;
+			ev.push_back(u->id);
+			ev.push_back(fid);
 		}
 	}
 
@@ -131,10 +131,12 @@ private:
 
 	static int LEvents(lua_State* L) {
 		Plants* r = Self();
-		if (r == nullptr || !r->Enabled() || !CLuaHandle::GetHandleSynced(L)) return 0;
-		lua_createtable(L, (int)r->events.size(), 0);
-		for (size_t i = 0; i < r->events.size(); ++i) { lua_pushnumber(L, r->events[i]); lua_rawseti(L, -2, (int)i + 1); }
-		r->events.clear();
+		const int kind = luaL_checkint(L, 1);
+		if (r == nullptr || !r->Enabled() || !CLuaHandle::GetHandleSynced(L) || kind < 1 || kind > 2) return 0;
+		std::vector<int>& ev = r->events[kind - 1];
+		lua_createtable(L, (int)ev.size(), 0);
+		for (size_t i = 0; i < ev.size(); ++i) { lua_pushnumber(L, ev[i]); lua_rawseti(L, -2, (int)i + 1); }
+		ev.clear();
 		return 1;
 	}
 	static int LConfig(lua_State* L) {
@@ -155,7 +157,7 @@ private:
 	std::vector<char> knock;              // per feature def id
 	std::vector<float> treeR, plantR;     // per unit def id: probe radius, -1 = not probed
 	std::vector<int> hits;                // scratch
-	std::vector<int> events;              // (kind, unit, feature) triples since the last pull
+	std::vector<int> events[2];           // per probe: (unit, feature) pairs since the last pull
 };
 
 } // namespace
