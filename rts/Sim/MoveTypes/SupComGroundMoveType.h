@@ -162,6 +162,7 @@ private:
 	bool MakeWay(const CSupComGroundMoveType* mover);
 	/// whether an idle unit of this move type may be asked to make way
 	bool CanYield() const;
+	bool HoldsAgainstPush() const override;
 	float HalfSize() const { return 0.5f * std::max(footprintX, footprintZ); }
 
 	/// a step rounded to the float grid around position p
