@@ -22,7 +22,7 @@
 //                                                         recharge x mult per second; nil: not docked
 //             Spring.KT1.Fuel.SetLowDefault(fraction)    synced only
 //             Spring.KT1.Fuel.Config()
-// Rule, each frame, over unit ids in ascending order; an aircraft is seen first with a full tank (as the gadget's UnitCreated):
+// Rule, each frame, over the live fuel users in ascending unit id; an aircraft is seen first with a full tank (as the gadget's UnitCreated):
 //   docked (mult set): fuel = min(cap, fuel + recharge x mult / 30)
 //   carried by a transport: unchanged
 //   else above the ground by more than climb_above: fuel = max(0, fuel - 1 / 30); else fuel = min(cap, fuel + ground / 30)
@@ -89,15 +89,19 @@ public:
 	}
 
 	void GameFrame(int frame) override {
-		const unsigned int maxU = unitHandler.MaxUnits();
 		Grow();
 		const float step = 1.0f / GAME_SPEED;
 		const int lowSlot = frame % lowEvery;
-		for (unsigned int id = 0; id < maxU; ++id) {
-			const CUnit* u = unitHandler.GetUnit(id);
-			if (u == nullptr) { owner[id] = nullptr; continue; }
+		// the live units that use fuel, in ascending id (the active list is in synced order, not id order)
+		ids.clear();
+		for (const CUnit* u : unitHandler.GetActiveUnits()) {
 			const int d = u->unitDef->id;
-			if (d < 0 || d >= (int)cap.size() || !(cap[d] > 0.0f)) { owner[id] = nullptr; continue; }
+			if (d >= 0 && d < (int)cap.size() && cap[d] > 0.0f) ids.push_back(u->id);
+		}
+		std::sort(ids.begin(), ids.end());
+		for (const int id : ids) {
+			const CUnit* u = unitHandler.GetUnit(id);
+			const int d = u->unitDef->id;
 			const float c = cap[d];
 			if (owner[id] != u) { Begin(id, u, c); continue; }
 			float v = fuel[id];
@@ -225,6 +229,7 @@ private:
 	std::vector<float> fuel, sent, mult;             // per unit id
 	std::vector<char> empty;                         // per unit id
 	std::vector<float> events;                       // (kind, unit, value) triples since the last pull
+	std::vector<int> ids;                            // scratch: this frame's fuel users
 };
 
 } // namespace

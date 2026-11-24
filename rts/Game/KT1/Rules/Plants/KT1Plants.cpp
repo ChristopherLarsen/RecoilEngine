@@ -84,15 +84,19 @@ public:
 	}
 
 	void GameFrame(int frame) override {
-		const unsigned int maxU = unitHandler.MaxUnits();
 		const int ts = frame % treesEvery, ps = frame % plantsEvery;
-		for (unsigned int id = 0; id < maxU; ++id) {
-			const bool tSlot = (int)(id % (unsigned)treesEvery) == ts, pSlot = (int)(id % (unsigned)plantsEvery) == ps;
-			if (!tSlot && !pSlot) continue;
+		// this frame's slot of the live probed units, in ascending id (the active list is in synced order, not id order)
+		ids.clear();
+		for (const CUnit* u : unitHandler.GetActiveUnits()) {
+			const int d = u->unitDef->id, id = u->id;
+			if (d < 0 || d >= (int)treeR.size() || (treeR[d] < 0.0f && plantR[d] < 0.0f)) continue;
+			if (id % treesEvery == ts || id % plantsEvery == ps) ids.push_back(id);
+		}
+		std::sort(ids.begin(), ids.end());
+		for (const int id : ids) {
+			const bool tSlot = id % treesEvery == ts, pSlot = id % plantsEvery == ps;
 			const CUnit* u = unitHandler.GetUnit(id);
-			if (u == nullptr) continue;
 			const int d = u->unitDef->id;
-			if (d < 0 || d >= (int)treeR.size()) continue;
 			if (tSlot && treeR[d] >= 0.0f && u->speed.w > treesMin && u->buildProgress >= 1.0f
 				&& u->pos.y >= CGround::GetHeightReal(u->pos.x, u->pos.z, true) - 1.0f)
 				Probe(u, treeR[d], 1);
@@ -156,7 +160,7 @@ private:
 	float treesReach = 0.6f, treesMin = 0.01f, plantsMargin = 4.0f, plantsMin = 0.05f;
 	std::vector<char> knock;              // per feature def id
 	std::vector<float> treeR, plantR;     // per unit def id: probe radius, -1 = not probed
-	std::vector<int> hits;                // scratch
+	std::vector<int> hits, ids;           // scratch
 	std::vector<int> events[2];           // per probe: (unit, feature) pairs since the last pull
 };
 

@@ -18,6 +18,7 @@
 // Determinism: ids ascending; reads synced state only; no thread, clock or hash order.
 // Doc:        game-build docs/engine/rules/builders.md
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -59,12 +60,9 @@ private:
 		Builders* r = SyncedSelf(L);
 		if (r == nullptr) return 0;
 		ScopedTimer t(hashString("KT1::Builders"));
-		const unsigned int maxU = unitHandler.MaxUnits();
-		lua_createtable(L, 256, 0);
-		int n = 0;
-		for (unsigned int id = 0; id < maxU; ++id) {
-			const CUnit* u = unitHandler.GetUnit(id);
-			if (u == nullptr) continue;
+		std::vector<int>& ids = r->ids;
+		ids.clear();
+		for (const CUnit* u : unitHandler.GetActiveUnits()) {
 			const CBuilder* b = dynamic_cast<const CBuilder*>(u);
 			const CFactory* f = (b == nullptr) ? dynamic_cast<const CFactory*>(u) : nullptr;
 			if (b == nullptr && f == nullptr) continue;
@@ -72,10 +70,11 @@ private:
 			bool busy = (b != nullptr && b->curBuild != nullptr) || (f != nullptr && f->curBuild != nullptr);
 			if (!busy && d >= 0 && d < (int)r->factoryDef.size() && r->factoryDef[d]) busy = true;
 			if (!busy && u->commandAI != nullptr && !u->commandAI->commandQue.empty()) busy = true;
-			if (!busy) continue;
-			lua_pushnumber(L, id);
-			lua_rawseti(L, -2, ++n);
+			if (busy) ids.push_back(u->id);
 		}
+		std::sort(ids.begin(), ids.end());   // the active list is in synced order, not id order
+		lua_createtable(L, (int)ids.size(), 0);
+		for (size_t i = 0; i < ids.size(); ++i) { lua_pushnumber(L, ids[i]); lua_rawseti(L, -2, (int)i + 1); }
 		return 1;
 	}
 
@@ -95,6 +94,7 @@ private:
 	}
 
 	std::vector<char> factoryDef;   // per def id: the gadget's isFactoryDef
+	std::vector<int> ids;           // scratch
 };
 
 } // namespace
