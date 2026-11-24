@@ -90,13 +90,7 @@ public:
 
 	void GameFrame(int frame) override {
 		const unsigned int maxU = unitHandler.MaxUnits();
-		if (owner.size() < maxU) {
-			owner.resize(maxU, nullptr);
-			fuel.resize(maxU, 0.0f);
-			sent.resize(maxU, -1.0f);
-			mult.resize(maxU, -1.0f);
-			empty.resize(maxU, 0);
-		}
+		Grow();
 		const float step = 1.0f / GAME_SPEED;
 		const int lowSlot = frame % lowEvery;
 		for (unsigned int id = 0; id < maxU; ++id) {
@@ -105,7 +99,7 @@ public:
 			const int d = u->unitDef->id;
 			if (d < 0 || d >= (int)cap.size() || !(cap[d] > 0.0f)) { owner[id] = nullptr; continue; }
 			const float c = cap[d];
-			if (owner[id] != u) { owner[id] = u; fuel[id] = c; sent[id] = -1.0f; mult[id] = -1.0f; empty[id] = 0; continue; }
+			if (owner[id] != u) { Begin(id, u, c); continue; }
 			float v = fuel[id];
 			if (mult[id] >= 0.0f) {
 				v = std::min(c, v + recharge[d] * mult[id] * step);
@@ -154,7 +148,29 @@ private:
 		Fuel* r = Self();
 		return (r != nullptr && r->Enabled() && CLuaHandle::GetHandleSynced(L)) ? r : nullptr;
 	}
-	bool Tracked(int id) const { return id >= 0 && id < (int)owner.size() && owner[id] != nullptr && owner[id] == unitHandler.GetUnit(id); }
+	void Grow() {
+		const unsigned int maxU = unitHandler.MaxUnits();
+		if (owner.size() >= maxU) return;
+		owner.resize(maxU, nullptr);
+		fuel.resize(maxU, 0.0f);
+		sent.resize(maxU, -1.0f);
+		mult.resize(maxU, -1.0f);
+		empty.resize(maxU, 0);
+	}
+	void Begin(int id, const CUnit* u, float c) { owner[id] = u; fuel[id] = c; sent[id] = -1.0f; mult[id] = -1.0f; empty[id] = 0; }
+	// A unit that uses fuel is tracked from the first time anyone asks for it (a gadget may set the fuel of an aircraft in the frame
+	// it is created, before the rule's next frame sees it): starts full, as the gadget's UnitCreated did.
+	bool Tracked(int id) {
+		if (id < 0 || cap.empty()) return false;
+		const CUnit* u = unitHandler.GetUnit(id);
+		if (u == nullptr) return false;
+		const int d = u->unitDef->id;
+		if (d < 0 || d >= (int)cap.size() || !(cap[d] > 0.0f)) return false;
+		Grow();
+		if (id >= (int)owner.size()) return false;
+		if (owner[id] != u) Begin(id, u, cap[d]);
+		return true;
+	}
 
 	static int LEvents(lua_State* L) {
 		Fuel* r = SyncedSelf(L);
