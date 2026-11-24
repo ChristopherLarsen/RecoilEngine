@@ -288,7 +288,7 @@ CGlobalRendering::CGlobalRendering()
 
 	// sane defaults
 	, minViewRange(MIN_ZNEAR_DIST * 8.0f)
-	, maxViewRange(MAX_VIEW_RANGE * 0.5f)
+	, maxViewRange(MAX_VIEW_RANGE * 0.75f) // supcom: 98,304 elmos, past the 81,684 zoom limit; stock 0.5 (32,768)
 	, aspectRatio(1.0f)
 
 	, forceDisableGL4(configHandler->GetInt("ForceDisableGL4"))
