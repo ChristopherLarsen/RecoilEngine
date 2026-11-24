@@ -7,11 +7,13 @@
 namespace KT1 {
 	std::unique_ptr<Rule> MakeCensus();   // Rules/Census: the demo rule (framework proof)
 	std::unique_ptr<Rule> MakeRibbons();  // UI/Ribbons: shot ribbons drawn by the engine (unsynced)
+	std::unique_ptr<Rule> MakeOwnPass();  // Rules/OwnPass: mov_own_pass walk and light-unit search (synced)
 	std::unique_ptr<Rule> MakeIconCull();  // UI/IconCull: engine icon passes skip icons that draw nothing (unsynced)
 
 	void AddAllRules(Registry& reg) {
 		reg.Add(MakeCensus());
 		reg.Add(MakeRibbons());
+		reg.Add(MakeOwnPass());
 		reg.Add(MakeIconCull());
 	}
 }
