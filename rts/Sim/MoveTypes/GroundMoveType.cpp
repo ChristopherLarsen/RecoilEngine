@@ -1982,7 +1982,7 @@ float3 CGroundMoveType::GetObstacleAvoidanceDir(const float3& desiredDir) {
 		// do not bother steering around idling MOBILE objects
 		// (since collision handling will just push them aside)
 		if (avoideeMobile && avoideeMovable) {
-			if (!avoiderMD->avoidMobilesOnPath || (!av.moving && avoidee->allyteam == avoider->allyteam && !static_cast<const CUnit*>(avoidee)->moveType->HoldsAgainstPush()))   // supcom: AvoidSnapshot moving flag; SupComGoRound steers round an idle unit
+			if (!avoiderMD->avoidMobilesOnPath || (!av.moving && avoidee->allyteam == avoider->allyteam && !av.holds))   // supcom: AvoidSnapshot moving and hold flags (state before the parallel pass); SupComGoRound steers round an idle unit
 				continue;
 		}
 

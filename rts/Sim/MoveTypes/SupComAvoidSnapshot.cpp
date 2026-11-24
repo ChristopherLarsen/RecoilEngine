@@ -6,6 +6,7 @@
 #include "Sim/Objects/SolidObject.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitHandler.h"
+#include "Sim/MoveTypes/MoveType.h"
 #include "System/Config/ConfigHandler.h"
 
 #include <vector>
@@ -33,7 +34,9 @@ namespace {
 
 	SupComAvoidSnapshot::View Live(const CSolidObject* o)
 	{
-		return {o->pos, o->speed, o->rightdir, o->frontdir, o->IsMoving()};
+		const CUnit* u = dynamic_cast<const CUnit*>(o);
+		const bool holds = (u != nullptr && u->moveType != nullptr && u->moveType->HoldsAgainstPush());
+		return {o->pos, o->speed, o->rightdir, o->frontdir, o->IsMoving(), holds};
 	}
 }
 

@@ -21,6 +21,7 @@ namespace SupComAvoidSnapshot {
 		float3 rightdir;
 		float3 frontdir;
 		bool moving;
+		bool holds; // the avoidee holds against push (SupComGoRound idle unit), as before the pass
 	};
 
 	/// one-line hook in GroundMoveSystem::Update, before the UpdateTraversalPlan pass (main thread)
