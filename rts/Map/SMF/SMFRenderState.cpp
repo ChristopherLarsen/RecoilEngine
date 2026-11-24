@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "Game/CameraHandler.h"
 #include "SMFRenderState.h"
 #include "SupComLuaMapShadows.h"
 #include "SMFGroundDrawer.h"
@@ -18,12 +19,14 @@
 #include "Rendering/Map/InfoTexture/IInfoTextureHandler.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 #include "Rendering/Shaders/Shader.h"
+#include "Rendering/SupComFogMask.h"
 #include "Sim/Misc/GlobalSynced.h"
 #include "System/Config/ConfigHandler.h"
 #include "System/StringUtil.h"
 
 #include "System/Misc/TracyDefs.h"
 
+static bool fogMaskBound = false; // supcom
 static constexpr float SMF_TEXSQUARE_SIZE = 1024.0f;
 
 
@@ -157,6 +160,7 @@ void SMFRenderStateGLSL::Update(
 			glslShaders[n]->SetUniform("heightMapTex",           1);
 			glslShaders[n]->SetUniform("detailTex",              2);
 			glslShaders[n]->SetUniform("infoTex",               14);
+			glslShaders[n]->SetUniform("fogMaskTex",            20); // supcom
 			if (isAdv) {
 				glslShaders[n]->SetUniform("shadowTex", 4);
 				glslShaders[n]->SetUniform("normalsTex", 5);
@@ -291,6 +295,8 @@ void SMFRenderStateGLSL::Enable(const CSMFGroundDrawer* smfGroundDrawer, const D
 	currShader->Enable();
 	currShader->SetUniform("mapHeights", readMap->GetCurrMinHeight(), readMap->GetCurrMaxHeight());
 	currShader->SetUniform("infoTexIntensityMul", float(infoTextureHandler->InMetalMode()) + 1.0f);
+	fogMaskBound = CCameraHandler::GetActiveCamera()->GetCamType() == CCamera::CAMTYPE_PLAYER && SupComFogMask::Bind(20); // supcom: not in the water reflection or refraction
+	SupComFogMask::SetUniforms(currShader, fogMaskBound);
 
 	if (isAdv) {
 		currShader->SetUniform3v("cameraPos", &camera->GetPos()[0]);
@@ -325,6 +331,7 @@ void SMFRenderStateGLSL::Disable(const CSMFGroundDrawer* smfGroundDrawer, const 
 	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, 0);
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, 0);
 	glActiveTexture(GL_TEXTURE14); glBindTexture(GL_TEXTURE_2D, 0);
+	if (fogMaskBound) { SupComFogMask::Unbind(20); fogMaskBound = false; } // supcom
 
 	if (isAdv) {
 		glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, 0);

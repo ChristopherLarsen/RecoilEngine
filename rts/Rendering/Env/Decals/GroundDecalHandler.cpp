@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 
+#include "Game/CameraHandler.h"
 #include "GroundDecal.h"
 #include "GroundDecalHandler.h"
 #include "Game/Camera.h"
@@ -29,6 +30,7 @@
 #include "Rendering/GL/glHelpers.h"
 #include "Rendering/Map/InfoTexture/IInfoTextureHandler.h"
 #include "Rendering/Shaders/ShaderHandler.h"
+#include "Rendering/SupComFogMask.h"
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Textures/ColorMap.h"
 #include "Rendering/Textures/TextureAtlas.h"
@@ -464,6 +466,7 @@ bool CGroundDecalHandler::ReloadDecalShaders() {
 	decalShader->SetUniform("shadowTex"      , 6);
 	decalShader->SetUniform("shadowColorTex" , 7);
 	decalShader->SetUniform("infoTex"        , 8);
+	decalShader->SetUniform("fogMaskTex"     , 9); // supcom
 
 	decalShader->SetUniform("waterMinColor"   , 0.0f, 0.0f, 0.0f);
 	decalShader->SetUniform("waterBaseColor"  , 0.0f, 0.0f, 0.0f);
@@ -483,6 +486,8 @@ bool CGroundDecalHandler::ReloadDecalShaders() {
 
 	return decalShader->Validate();
 }
+
+static bool fogMaskBound = false; // supcom
 
 void CGroundDecalHandler::BindTextures()
 {
@@ -515,12 +520,16 @@ void CGroundDecalHandler::BindTextures()
 	glActiveTexture(GL_TEXTURE8);
 	glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetCurrentInfoTexture());
 
+	fogMaskBound = CCameraHandler::GetActiveCamera()->GetCamType() == CCamera::CAMTYPE_PLAYER && SupComFogMask::Bind(9); // supcom
+
 	glActiveTexture(GL_TEXTURE0);
 }
 
 void CGroundDecalHandler::UnbindTextures()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (fogMaskBound) { SupComFogMask::Unbind(9); fogMaskBound = false; } // supcom
+
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(atlasTex->GetTexTarget(), 0);
 
@@ -815,6 +824,7 @@ void CGroundDecalHandler::Draw()
 	decalShader->SetFlag("HAVE_INFOTEX", infoTextureHandler->IsEnabled());
 	decalShader->SetFlag("SMF_WATER_ABSORPTION", visWater);
 	decalShader->Enable();
+	SupComFogMask::SetUniforms(decalShader, fogMaskBound); // supcom
 
 	if (visWater) {
 		decalShader->SetUniform("waterMinColor", waterRendering->minColor.x, waterRendering->minColor.y, waterRendering->minColor.z);

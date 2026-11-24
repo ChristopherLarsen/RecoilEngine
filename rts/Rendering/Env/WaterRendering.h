@@ -32,6 +32,7 @@ public:
 	float  specularFactor;
 	float  specularPower;
 	float  fresnelMin;
+	float  reflectionStrength = 1.0f; // supcom: 0 skips the reflection pass (draw-only, not reset by map water params)
 	float  fresnelMax;
 	float  fresnelPower;
 	float  reflDistortion;

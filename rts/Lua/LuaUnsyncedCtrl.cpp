@@ -3,6 +3,7 @@
 #include "LuaUnsyncedCtrl.h"
 #include "Game/UI/SupComBuildPreview.h"
 #include "Game/UI/SupComMiniMapZoom.h"
+#include "Rendering/SupComFogMask.h"
 
 #include "Game/Camera/DollyController.h"
 #include "LuaConfig.h"
@@ -348,6 +349,7 @@ bool LuaUnsyncedCtrl::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(SetWindowMaximized);
 	REGISTER_LUA_CFUNC(SetMiniMapRotation);
 	SupComMiniMapZoom::PushUnsyncedCtrl(L); // supcom: SetMiniMapZoom
+	SupComFogMask::PushUnsyncedCtrl(L); // supcom: SupComSetFogMask
 
 	REGISTER_LUA_CFUNC(RequestStartPosition);
 
@@ -4778,6 +4780,9 @@ int LuaUnsyncedCtrl::SetWaterParams(lua_State* L)
 						waterRendering->specularPower = value;
 					} break;
 
+					case hashString("reflectionStrength"): {
+						waterRendering->reflectionStrength = std::clamp(value, 0.0f, 1.0f);
+					} break;
 					case hashString("fresnelMin"): {
 						waterRendering->fresnelMin = value;
 					} break;

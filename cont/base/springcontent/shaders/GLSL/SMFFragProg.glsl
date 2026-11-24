@@ -261,6 +261,18 @@ vec4 GetSplatDetailTextureNormal(vec2 uv, out vec2 splatDetailStrength) {
 
 #line 10257
 
+
+// supcom: fog of war as a map-space mask (Spring.SupComSetFogMask): signed distance in elmos to the vision edge, factor outside
+uniform sampler2D fogMaskTex;
+uniform vec4 fogMaskRect;   // x0, z0, 1/(x1-x0), 1/(z1-z0)
+uniform float fogMaskFactor; // 1: off
+float SupComFogMul(vec2 xz) {
+	if (fogMaskFactor >= 1.0) return 1.0;
+	float v = texture2D(fogMaskTex, (xz - fogMaskRect.xy) * fogMaskRect.zw).r;
+	float px = max(length(dFdx(xz)), length(dFdy(xz)));
+	return mix(fogMaskFactor, 1.0, clamp(0.5 + v / max(px, 0.02), 0.0, 1.0));
+}
+
 void main() {
 	vec2 diffTexCoords = diffuseTexCoords;
 	vec2 specTexCoords = vertexWorldPos.xz * specularTexGen;
@@ -445,6 +457,7 @@ void main() {
 #endif
 #ifndef DEFERRED_MODE
 	fragColor.rgb = mix(gl_Fog.color.rgb, fragColor.rgb, fogFactor);
+	fragColor.rgb *= SupComFogMul(vertexWorldPos.xz); // supcom
 #endif
 }
 

@@ -251,6 +251,18 @@ vec3 GetReflection(float angle, vec3 normal, inout float fresnel)
 //////////////////////////////////////////////////
 // MAIN()
 
+
+// supcom: fog of war as a map-space mask (Spring.SupComSetFogMask): signed distance in elmos to the vision edge, factor outside
+uniform sampler2D fogMaskTex;
+uniform vec4 fogMaskRect;   // x0, z0, 1/(x1-x0), 1/(z1-z0)
+uniform float fogMaskFactor; // 1: off
+float SupComFogMul(vec2 xz) {
+	if (fogMaskFactor >= 1.0) return 1.0;
+	float v = texture2D(fogMaskTex, (xz - fogMaskRect.xy) * fogMaskRect.zw).r;
+	float px = max(length(dFdx(xz)), length(dFdy(xz)));
+	return mix(fogMaskFactor, 1.0, clamp(0.5 + v / max(px, 0.02), 0.0, 1.0));
+}
+
 void main()
 {
    gl_FragColor.a = 1.0; //note: only rendered with blending iff !opt_refraction
@@ -352,4 +364,5 @@ void main()
   // FOG
     float fog = clamp( (gl_Fog.end - abs(gl_FogFragCoord)) * gl_Fog.scale ,0.0,1.0);
     gl_FragColor.rgb = mix(gl_Fog.color.rgb, gl_FragColor.rgb, fog );
+    gl_FragColor.rgb *= SupComFogMul(worldPos.xz); // supcom
 }

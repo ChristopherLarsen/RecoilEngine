@@ -18,6 +18,7 @@
 #include "Rendering/GlobalRendering.h"
 #include "Rendering/ShadowHandler.h"
 #include "Rendering/Map/InfoTexture/IInfoTextureHandler.h"
+#include "Rendering/SupComFogMask.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Textures/Bitmap.h"
@@ -496,6 +497,7 @@ void CBumpWater::InitResources(bool loadShader)
 		waterShader->SetUniform("waverand"      , 8 );
 		waterShader->SetUniform("shadowmap"     , 9 );
 		waterShader->SetUniform("infotex"       , 10);
+		waterShader->SetUniform("fogMaskTex"    , 12); // supcom
 		waterShader->SetUniform("shadowColorTex", 11);
 		waterShader->SetUniform("windVector"    , 15.0f, 15.0f);
 
@@ -566,7 +568,7 @@ void CBumpWater::UpdateWater(const CGame* game)
 
 	glPushAttrib(GL_FOG_BIT);
 	if (refraction > 1) DrawRefraction(game);
-	if (reflection > 0) DrawReflection(game);
+	if (reflection > 0 && waterRendering->reflectionStrength > 0.0f) DrawReflection(game);
 	if (reflection || refraction) {
 		FBO::Unbind();
 		globalRendering->LoadViewport();
@@ -952,12 +954,15 @@ void CBumpWater::Draw()
 	glActiveTexture(GL_TEXTURE10); glBindTexture(GL_TEXTURE_2D, infoTextureHandler->GetCurrentInfoTexture());
 	//glActiveTexture(GL_TEXTURE11); see above
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, normalTexture);
+	const bool fogMask = SupComFogMask::Bind(12); // supcom
+	SupComFogMask::SetUniforms(waterShader, fogMask);
 
 	glPolygonMode(GL_FRONT_AND_BACK, wireFrameMode ? GL_LINE : GL_FILL);
 	rb.DrawArrays(endlessOcean ? GL_TRIANGLE_STRIP : GL_TRIANGLES);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 	waterShader->Disable();
+	if (fogMask) SupComFogMask::Unbind(12); // supcom
 
 #if 1
 	glDisable(GL_POLYGON_OFFSET_FILL);
