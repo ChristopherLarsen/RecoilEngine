@@ -11,7 +11,8 @@
 //   Spring.SupComIntUnitFlags(u, cloak, fake)                              fake units are skipped (Lua decides them)
 // Read: Spring.SupComIntState(u, a) -> now, also, lastChangeFrame (nil when never set).
 // Fields are looked up for the target's OWNER ally team (stealth_radar, stealth_sonar, jam_field, cloak_field). Vision and its
-// leaving lag (vision_leave, asked only when the previous state was seen, the unit is not cloaked and vision missed) use the
+// leaving lag (vision_leave, asked only when the previous state was seen, the unit is not cloaked and vision missed; radar_leave
+// likewise for radar, when the previous state was a contact and radar and sonar missed) use the
 // unit position, which the vision kinds snap to their cell themselves; radar, sonar, omni and water vision use the position.
 // Rate: a unit is visited when id % rate == frame % rate, or out of its slice when it is new or changed owner since its last visit.
 // When: Lua calls Spring.SupComIntRun() in F.Step, after it has placed this frame's sensor circles (the unit pass runs before
@@ -96,9 +97,11 @@ namespace {
 			const int gn = int(g.size());
 			bool seen = SupComIntIndex::SeesAny("omni", gl, gn, x, z)
 				|| (sub && !r.cloak && rules.waterSeesSub && SupComIntIndex::SeesAny("water_vision", gl, gn, x, z));
-			const bool contact = (rok && SupComIntIndex::SeesAny("radar", gl, gn, x, z))
+			bool contact = (rok && SupComIntIndex::SeesAny("radar", gl, gn, x, z))
 				|| (sok && SupComIntIndex::SeesAny("sonar", gl, gn, x, z));
 			State& s = states[SKey(u->id, a)];
+			if (!contact && rok && rules.cell > 0.0 && s.set && (s.now == 1 || s.also))
+				contact = SupComIntIndex::SeesAny("radar_leave", gl, gn, x, z);
 			if (!seen && vok)
 				seen = SupComIntIndex::SeesAny("vision", gl, gn, x, z);
 			if (!seen && vok && rules.cell > 0.0 && s.set && s.now == 2)
