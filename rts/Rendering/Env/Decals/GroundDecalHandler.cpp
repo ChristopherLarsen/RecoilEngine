@@ -31,6 +31,7 @@
 #include "Rendering/Map/InfoTexture/IInfoTextureHandler.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 #include "Rendering/SupComFogMask.h"
+#include "Rendering/Env/Decals/SupComDecalCut.h"
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Textures/ColorMap.h"
 #include "Rendering/Textures/TextureAtlas.h"
@@ -825,6 +826,7 @@ void CGroundDecalHandler::Draw()
 	decalShader->SetFlag("SMF_WATER_ABSORPTION", visWater);
 	decalShader->Enable();
 	SupComFogMask::SetUniforms(decalShader, fogMaskBound); // supcom
+	decalShader->SetUniform("cutFade", SupComDecalCut::fade); // supcom: RND-005 R13 decal cut-off fade fraction
 
 	if (visWater) {
 		decalShader->SetUniform("waterMinColor", waterRendering->minColor.x, waterRendering->minColor.y, waterRendering->minColor.z);

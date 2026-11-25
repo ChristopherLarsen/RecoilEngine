@@ -14,6 +14,9 @@ namespace KT1 {
 	std::unique_ptr<Rule> MakeBuilders(); // Rules/Builders: the construction economy busy-builder read (synced)
 	std::unique_ptr<Rule> MakeIntel();    // Rules/Intel: the int_coverage detection loop (synced)
 	std::unique_ptr<Rule> MakeIconCull();  // UI/IconCull: engine icon passes skip icons that draw nothing (unsynced)
+	std::unique_ptr<Rule> MakeTerrain();   // UI/Rnd005: RND-005 R11 terrain form read (unsynced)
+	std::unique_ptr<Rule> MakeDraw();      // UI/Rnd005: RND-005 R12 draw cut-offs (unsynced)
+	std::unique_ptr<Rule> MakeDecals();    // UI/Rnd005: RND-005 R13 decal fade (unsynced)
 	std::unique_ptr<Rule> MakeFarView();   // UI/FarView: far above the map, a baked map mesh instead of the full world pass (unsynced)
 
 	void AddAllRules(Registry& reg) {
@@ -26,6 +29,9 @@ namespace KT1 {
 		reg.Add(MakeBuilders());
 		reg.Add(MakeIntel());
 		reg.Add(MakeIconCull());
+		reg.Add(MakeTerrain());
+		reg.Add(MakeDraw());
+		reg.Add(MakeDecals());
 		reg.Add(MakeFarView());
 	}
 }

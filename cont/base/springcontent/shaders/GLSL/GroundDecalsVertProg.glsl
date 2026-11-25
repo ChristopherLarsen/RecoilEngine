@@ -19,6 +19,7 @@ uniform sampler2D heightTex;
 uniform sampler2D groundNormalTex;
 uniform vec4 mapDims; //mapxy; 1.0 / mapxy
 uniform float curAdjustedFrame;
+uniform float cutFade; // supcom (RND-005 R13): a decal with a cut-off starts fading at cutFade x its cut-off
 uniform vec4 distanceFade; // supcom: near, far (camera distance, elmos), tracks (1 = fade track decals too), unused
 
 flat out vec4 vTranformedPos[5]; // midpos + 4 transformed vertices around midpos
@@ -237,7 +238,7 @@ void main() {
 	if (decalType == 4u && userDefined0.y > 0.0) {
 		vec2 cutMid = (posTL + posTR + posBL + posBR) * 0.25;
 		vec3 cutCam = (gl_ModelViewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-		float cut = 1.0 - smoothstep(userDefined0.y * 0.9, userDefined0.y, distance(cutCam, vec3(cutMid.x, HeightAtWorldPos(cutMid), cutMid.y)));
+		float cut = 1.0 - smoothstep(userDefined0.y * cutFade, userDefined0.y, distance(cutCam, vec3(cutMid.x, HeightAtWorldPos(cutMid), cutMid.y)));
 		alphaMax *= cut;
 		vAlpha   *= cut;
 	}
