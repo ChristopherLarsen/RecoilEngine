@@ -641,6 +641,20 @@ bool SupComTargeting::OwnsAutoTarget(const CWeapon* w)
 	return false;
 }
 
+bool SupComTargeting::GunIdle(const CWeapon* w)
+{
+	if (mode != 1 || w == nullptr || w->owner == nullptr)
+		return false;
+	const int u = w->owner->id;
+	if (u < 0 || u >= (int)guns.size())
+		return false;
+	for (const Gun& g: guns[u]) {
+		if (g.n == w->weaponNum)
+			return (g.target < 0);
+	}
+	return false;
+}
+
 // Spring.SupComTgtProf(begin): the A/B section timer for the Lua side (synced Lua has no clock): true starts, false adds the
 // elapsed time to the "Lua::SupComTargeting" profiler timer. Timing only, never read by the sim.
 static spring_time profStart;
