@@ -255,7 +255,9 @@ unsigned int CSupComGroundMoveType::RouteSearch(std::vector<float3>& pts)
 		return id;
 	}
 
-	id = pathManager->RequestPath(owner, owner->moveDef, pos, goalPos, goalRadius + extraRadius, true);
+	// answered in the tick it is asked (immediateResult): a synced request is otherwise only queued and has no points yet (perf
+	// review F); the follower searches only when no aim point is usable, so these are rare
+	id = pathManager->RequestPath(owner, owner->moveDef, pos, goalPos, goalRadius + extraRadius, true, true);
 	if (id == 0)
 		return 0;
 
@@ -505,6 +507,7 @@ void CSupComGroundMoveType::RouteFollowUpdate()
 		rfStillPos = pos;
 		rfStillFrame = frame;
 		rfRecheckFrame = frame + RecheckFrames() - (owner->id % RecheckFrames());
+		rfPathID = 0;
 		if (rfScriptPos < int(rfScript.size())) {
 			// test hook: the order's first search is the script's (an empty one ends the order before the unit moves: R7, PTH-002 R10)
 			RouteRequest(true);
@@ -526,9 +529,14 @@ void CSupComGroundMoveType::RouteFollowUpdate()
 			return;
 	}
 
-	// the engine switched to another path of its own (it re-plans a route under a new id only on terrain changes)
-	if (pathID != 0 && pathID != rfPathID && rfScriptPos == 0)
+	// the engine switched to another path of its own (it re-plans a route under a new id only on terrain changes), or the order's
+	// first path (StartMoving queues it) has no points yet: read it again each frame until it has; until then the engine's own
+	// waypoint steers and nothing is searched (a first search that comes back empty fails the order in the engine: R7)
+	if (pathID != 0 && (pathID != rfPathID || rfPts.empty()) && rfScriptPos == 0) {
 		RouteLoad(pathID);
+		if (rfPts.empty())
+			return;
+	}
 
 	if (pos.SqDistance2D(rfStillPos) > Square(STILL_EPS)) {
 		rfStillPos = pos;
