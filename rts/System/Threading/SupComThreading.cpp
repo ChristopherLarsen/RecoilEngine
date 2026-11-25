@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "SupComThreading.h"
+#include "System/SupComSimSwitch.h"
 
 #include "System/Config/ConfigHandler.h"
 
@@ -15,7 +16,7 @@ namespace SupComThreading {
 		if (on < 0) {
 			if (configHandler == nullptr)
 				return true;
-			on = configHandler->GetBool("PathRequestsSerial") ? 1 : 0;
+			on = SupComSimSwitch::Get("PathRequestsSerial", true) ? 1 : 0;
 		}
 		return (on != 0);
 	}
@@ -26,7 +27,7 @@ namespace SupComThreading {
 		if (pathCacheMainThreadOnly.load(std::memory_order_relaxed) < 0) {
 			if (configHandler == nullptr)
 				return true;
-			pathCacheMainThreadOnly.store(configHandler->GetBool("PathCacheMainThreadOnly")? 1: 0, std::memory_order_relaxed);
+			pathCacheMainThreadOnly.store(SupComSimSwitch::Get("PathCacheMainThreadOnly", true)? 1: 0, std::memory_order_relaxed);
 		}
 		return PathCacheMainThreadOnlyCached();
 	}

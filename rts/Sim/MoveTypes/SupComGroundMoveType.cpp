@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "SupComGroundMoveType.h"
+#include "System/SupComSimSwitch.h"
 #include "Sim/Units/UnitHandler.h"
 #include "Lua/LuaUtils.h"
 
@@ -138,9 +139,9 @@ CONFIG(bool, SupComYieldLog).defaultValue(false).description("supcom: log each m
 static bool yieldLogSquares = false;
 
 CONFIG(bool, SupComMakeWay).defaultValue(true).description("supcom: SupComGroundMoveType units line up with a gap their own width instead of stopping at its edge, and make way faster (PTH-002, PTH-004); 0 behaves as before.");
-static bool MakeWayOn() { static const bool on = configHandler->GetBool("SupComMakeWay"); return on; }
+static bool MakeWayOn() { static const bool on = SupComSimSwitch::Get("SupComMakeWay", true); return on; }
 CONFIG(bool, SupComGoRound).defaultValue(true).description("supcom: an idle unit is never displaced: a mover goes round it where there is a way and otherwise stops (no make-way, no push, no walk-back) (PTH-006 v8 R3, PTH-002 v5 R3a, owner decision 2026-11-24); 0 asks the idle unit to make way, as before.");
-static bool GoRoundOn() { static const bool on = configHandler->GetBool("SupComGoRound"); return on; }
+static bool GoRoundOn() { static const bool on = SupComSimSwitch::Get("SupComGoRound", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
 static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
 // sideways search for a line that fits through a gap: up to this many elmos either side, in this step (PLACEHOLDER)
@@ -168,9 +169,9 @@ CONFIG(bool, SupComGapQueue).defaultValue(true).description("supcom: at a gap th
 static bool GapQueueOn() { static const bool on = configHandler->GetBool("SupComGapQueue"); return on; }
 
 CONFIG(bool, SupComYieldFine).defaultValue(true).description("supcom: a SupComGroundMoveType unit asked to make way looks for its spot in half-footprint steps and goes to the nearest free one off the mover's route, instead of whole-footprint steps that took a large unit 80 to 100 elmos from the goal it had arrived at (path audit 2026-11-23, t4_land_mega_x group); 0 steps by whole footprints as before.");
-static bool YieldFineOn() { static const bool on = configHandler->GetBool("SupComYieldFine"); return on; }
+static bool YieldFineOn() { static const bool on = SupComSimSwitch::Get("SupComYieldFine", true); return on; }
 CONFIG(bool, SupComYieldReturn).defaultValue(false).description("supcom: an idle SupComGroundMoveType unit that made way for a mover (PTH-002 R3) goes back to its place once the mover has settled (R3a, pending the reference capture); 0 stays where it stepped to, as before.");
-static bool YieldReturnOn() { static const bool on = configHandler->GetBool("SupComYieldReturn"); return on; }
+static bool YieldReturnOn() { static const bool on = SupComSimSwitch::Get("SupComYieldReturn", false); return on; }
 static constexpr int YIELD_RETURN_DELAY_FRAMES = 30;   // DESIGN: PTH-002 v2 traffic.return_delay_max default 30 ticks: the mover has been at rest this long
 CONFIG(bool, SupComTurnGo).defaultValue(true).description("supcom: SupComGroundMoveType units with customParams.supcom_reverse_dist reverse to a goal behind them within that distance (else drive forwards), and units with customParams.supcom_turn_go_angle turn on the spot from rest until their heading is within that angle of their way before they move off; 0 (or no keys) keeps the engine's own reverse choice and moves off while turning, as before.");
 static bool TurnGoOn() { static const bool on = configHandler->GetBool("SupComTurnGo"); return on; }

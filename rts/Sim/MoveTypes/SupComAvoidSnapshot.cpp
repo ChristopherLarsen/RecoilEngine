@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "SupComAvoidSnapshot.h"
+#include "System/SupComSimSwitch.h"
 
 #include "Sim/Misc/GlobalSynced.h"
 #include "Sim/Objects/SolidObject.h"
@@ -27,7 +28,7 @@ namespace {
 		if (on < 0) {
 			if (configHandler == nullptr)
 				return true;
-			on = configHandler->GetBool("AvoidSnapshot") ? 1 : 0;
+			on = SupComSimSwitch::Get("AvoidSnapshot", true) ? 1 : 0;
 		}
 		return (on != 0);
 	}
@@ -47,7 +48,7 @@ namespace SupComAvoidSnapshot {
 	{
 		static int split = -1;
 		if (split < 0)
-			split = (configHandler == nullptr || configHandler->GetBool("AvoidPlanSplit")) ? 1 : 0;
+			split = (configHandler == nullptr || SupComSimSwitch::Get("AvoidPlanSplit", true)) ? 1 : 0;
 		return (split != 0);
 	}
 
