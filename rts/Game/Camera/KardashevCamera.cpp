@@ -196,7 +196,7 @@ void CKardashevCamera::Refit()
 	}
 
 	lim.dMin = feel.minDist;
-	lim.dMax = std::max(hi, feel.minDist * 1.5f);
+	lim.dMax = std::max((dMaxOverride > 0.0f)? dMaxOverride: hi, feel.minDist * 1.5f);   // Lua's R5 limit wins over the fit while set
 }
 
 
@@ -719,11 +719,14 @@ bool CKardashevCamera::SetState(const StateMap& sm)
 		const auto SetF = [&](const char* k, float& v) { if (Has(k)) { v = sm[k]; refit = true; } };
 		SetF("playX0", playRect.x); SetF("playZ0", playRect.y); SetF("playX1", playRect.z); SetF("playZ1", playRect.w);
 		SetF("clearL", clearIns.x); SetF("clearR", clearIns.y); SetF("clearT", clearIns.z); SetF("clearB", clearIns.w);
+		if (Has("dMax") && !(dMaxOverride <= 0.0f && sm["dMax"] == lim.dMax))   // CAM-001 R5 from Lua; 0 returns to the fit. GetState gives the
+			SetF("dMax", dMaxOverride);                                        // current dMax back: a SetState(GetState()) round trip pins nothing
 		if (refit) {
 			playRect.x = std::clamp(playRect.x, 0.0f, mapDims.mapx * SQUARE_SIZE * 1.0f);
 			playRect.z = std::clamp(playRect.z, playRect.x + SQUARE_SIZE, mapDims.mapx * SQUARE_SIZE * 1.0f);
 			playRect.y = std::clamp(playRect.y, 0.0f, mapDims.mapy * SQUARE_SIZE * 1.0f);
 			playRect.w = std::clamp(playRect.w, playRect.y + SQUARE_SIZE, mapDims.mapy * SQUARE_SIZE * 1.0f);
+			dMaxOverride = std::max(0.0f, dMaxOverride);
 			for (float* v: {&clearIns.x, &clearIns.y, &clearIns.z, &clearIns.w})
 				*v = std::clamp(*v, 0.0f, 0.45f);
 			Refit();

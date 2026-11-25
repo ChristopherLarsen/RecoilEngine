@@ -124,6 +124,7 @@ private:
 	float4 playRect;              // x0, z0, x1, z1 in elmos
 	float4 clearIns;              // screen insets the furthest view keeps the map clear of (left, right, top, bottom; 0..1)
 	bool refitNeeded = true;
+	float dMaxOverride = 0.0f;   // CAM-001 R5 from Lua (SetState "dMax"): > 0 replaces Refit's fit; 0 clears it
 
 	// wheel in: dive at the ground under the pointer while the glide runs
 	bool diveOn = false;
