@@ -472,6 +472,13 @@ void CSupComGroundMoveType::StopMoving(bool callScript, bool hardStop, bool canc
 
 bool CSupComGroundMoveType::HoldLastLeg()
 {
+	// SupComRouteFollow: an engine path that ends (it may end at the old route's next point) is no failure while the follower holds
+	// a route; the follower steers and ends the order by its own rules
+	if (RouteFollowOn() && rfActive && !rfPts.empty() && progressState == Active) {
+		earlyNextWayPoint = earlyCurrWayPoint;
+		return true;
+	}
+
 	// the path manager has no waypoint after the last one; with the current waypoint at the goal (the last leg, open ground)
 	// the unit drives on to the goal and brakes there instead of failing the order 3 to 5 squares short (base-cross L4705:
 	// commander 27.6, tank 20.8 elmos short)
