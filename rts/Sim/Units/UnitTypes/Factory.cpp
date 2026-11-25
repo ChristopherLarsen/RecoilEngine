@@ -264,7 +264,8 @@ void CFactory::UpdateBuild(CUnit* buildee) {
 
 	// rotate unit nanoframe with platform
 	buildee->Move(buildeePos, false);
-	buildee->SetHeading((-buildPieceHeading + buildFaceHeading) & (SPRING_CIRCLE_DIVS - 1), false, false, 0.0f);
+	// supcom: FAC-002 v6 R11, the unit stands on the build point turned by its exit point's angle (SupComFactoryPad::BuildSpin)
+	buildee->SetHeading((-buildPieceHeading + buildFaceHeading + SupComFactoryPad::BuildSpin(this)) & (SPRING_CIRCLE_DIVS - 1), false, false, 0.0f);
 
 	const CCommandQueue& queue = commandAI->commandQue;
 

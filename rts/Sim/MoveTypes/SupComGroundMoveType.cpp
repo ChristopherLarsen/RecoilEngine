@@ -30,6 +30,8 @@
 #include "System/Threading/ThreadPool.h"
 #include "System/Config/ConfigHandler.h"
 #include "System/Log/ILog.h"
+#include "SupComPushCap.h"
+#include "Sim/Misc/GroundBlockingObjectMap.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -80,6 +82,8 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scBlockedFrames),
 	CR_MEMBER(scStructFrames),
 	CR_MEMBER(scHandoverFrames),
+	CR_MEMBER(scPushLen),
+	CR_MEMBER(scPushBack),
 	CR_MEMBER(scHandoverFrom),
 	CR_MEMBER(scYieldFrames),
 	CR_MEMBER(scYieldUnit),
@@ -140,6 +144,8 @@ static bool yieldLogSquares = false;
 
 CONFIG(bool, SupComMakeWay).defaultValue(true).description("supcom: SupComGroundMoveType units line up with a gap their own width instead of stopping at its edge, and make way faster (PTH-002, PTH-004); 0 behaves as before.");
 static bool MakeWayOn() { static const bool on = SupComSimSwitch::Get("SupComMakeWay", true); return on; }
+// pathing fix 2026-11-25 (game docs/engine/PATHING-ROOT-CAUSE.md cause 5): a structure step the engine's footprint refuses is refused
+static bool OneFootprintOn() { static const bool on = SupComSimSwitch::Get("SupComOneFootprint", true); return on; }
 CONFIG(bool, SupComGoRound).defaultValue(true).description("supcom: an idle unit is never displaced: a mover goes round it where there is a way and otherwise stops (no make-way, no push, no walk-back) (PTH-006 v8 R3, PTH-002 v5 R3a, owner decision 2026-11-24); 0 asks the idle unit to make way, as before.");
 static bool GoRoundOn() { static const bool on = SupComSimSwitch::Get("SupComGoRound", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
@@ -1100,6 +1106,55 @@ bool CSupComGroundMoveType::IsAtGoal() const
 	return atGoal;
 }
 
+// MOV-021 v1 R2 with R1 (pathing fix 2026-11-25): a unit that starts in blocked space (a product on its factory's build point; the
+// engine's positionStuck) may move out of it, but not into another obstacle: a step is refused when the move def's footprint at the
+// new position covers a square blocked by an immobile object that does not already block a square under the footprint now.
+// The objects are compared by pointer only for equality (no ordering), so the result is the same on every client.
+static bool EntersNewObstacle(const CUnit* owner, const float3& from, const float3& to)
+{
+	const MoveDef* md = owner->moveDef;
+	if (md == nullptr)
+		return false;
+
+	const auto Squares = [&](const float3& p, auto&& visit) {
+		const int sx0 = std::clamp(int(p.x / SQUARE_SIZE) - md->xsizeh, 0, mapDims.mapxm1);
+		const int sz0 = std::clamp(int(p.z / SQUARE_SIZE) - md->zsizeh, 0, mapDims.mapym1);
+		const int sx1 = std::clamp(int(p.x / SQUARE_SIZE) + md->xsizeHi, 0, mapDims.mapxm1);
+		const int sz1 = std::clamp(int(p.z / SQUARE_SIZE) + md->zsizeHi, 0, mapDims.mapym1);
+		for (int sz = sz0; sz <= sz1; sz++) {
+			for (int sx = sx0; sx <= sx1; sx++) {
+				if (visit(groundBlockingObjectMap.GroundBlocked(sx, sz)))
+					return true;
+			}
+		}
+		return false;
+	};
+
+	const CSolidObject* here[8] = {};
+	int n = 0;
+	Squares(from, [&](const CSolidObject* o) {
+		if (o == nullptr || o == owner || !o->immobile)
+			return false;
+		for (int i = 0; i < n; i++) {
+			if (here[i] == o)
+				return false;
+		}
+		if (n < 8)
+			here[n++] = o;
+		return false;
+	});
+
+	return Squares(to, [&](const CSolidObject* o) {
+		if (o == nullptr || o == owner || !o->immobile)
+			return false;
+		for (int i = 0; i < n; i++) {
+			if (here[i] == o)
+				return false;
+		}
+		return true;
+	});
+}
+
 void CSupComGroundMoveType::UpdateUnitPosition()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -1116,11 +1171,24 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		return;
 	}
 
+	// MOV-021 v1 R4 (pathing fix): a unit pushed harder than push_clear_speed_fraction of its top speed last frame does not follow its route
+	// this frame (no step of its own); an idle unit is never pushed (SupComGoRound), so this only holds movers being separated
+	const bool pushedState = (SupComPushCap::On() && progressState == Active && scPushLen > SupComPushCap::PushClearFrac() * maxSpeed);
+	if (pushedState) {
+		scSpeed = 0.0f;
+		scPhase = PHASE_DRIVE;
+		owner->SetVelocityAndSpeed(ZeroVector);
+		resultantForces = ZeroVector;
+		UpdateTurnRate();
+		return;
+	}
+
 	// refused by a structure for half a second while following a path: the planner, with the move class's
 	// square-offset footprint, cut the corner of a structure that the engine's own position test then refuses (a mex
 	// beside a factory exit, Q100), and this move type's exact steps cannot get round it. The engine's own ground
 	// movement slides along the structure, as stock units do, until the unit has moved two squares or two seconds pass.
-	if (scHandoverFrames == 0 && scStructFrames >= STRUCT_HANDOVER_FRAMES && progressState == Active) {
+	// MOV-021 v1 R1 (pathing fix): no part of a blocked step is kept along the obstacle, so with SupComNoSlide the handover is not started
+	if (!SupComPushCap::NoSlide() && scHandoverFrames == 0 && scStructFrames >= STRUCT_HANDOVER_FRAMES && progressState == Active) {
 		scHandoverFrames = STRUCT_HANDOVER_TIME;
 		scHandoverFrom = owner->pos;
 		scStructFrames = 0;
@@ -1134,8 +1202,10 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			// PTH-004-E (L5987): the engine's slide (its own square footprint) took a unit held at a block in a one-cell gap
 			// up to 6 elmos sideways into the wall cells; a slide that puts this move type's footprint onto impassable
 			// squares it was not on is undone
-			if (FootprintBlocked(owner->pos) && !FootprintBlocked(before)) {
-				owner->Move(before, false);
+			// pathing fix: the stock step only sets resultantForces (UpdateOwnerPos; applied in UpdatePreCollisions), so the
+			// slide is tested where it would take the unit; the earlier test compared the unmoved position and never fired
+			if (FootprintBlocked(before + resultantForces) && !FootprintBlocked(before)) {
+				resultantForces = ZeroVector;
 				owner->SetVelocityAndSpeed(ZeroVector);
 			}
 
@@ -1449,6 +1519,12 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		bool blocked = false;
 		bool byStructure = false;
 
+		// MOV-021 R2 (pathing fix): out of the blocked space the unit started in, never into another obstacle
+		if (positionStuck && SupComPushCap::On() && EntersNewObstacle(owner, owner->pos, owner->pos + moveRequest)) {
+			blocked = true;
+			byStructure = true;
+		}
+
 		if (!positionStuck) {
 			blocked = (FootprintBlocked(owner->pos + moveRequest) && !FootprintBlocked(owner->pos));
 			// PTH-004-E (L6040): a unit already overlapping impassable squares (0.6 elmos, held at a block in a one-cell gap)
@@ -1524,7 +1600,10 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 					// courses L5866 lane 12 (MOV-020): a tank 4 elmos clear of a structure was refused by the engine's square
 					// footprint (the move def's size) while its own footprint (supcom_footprint_x/z) touched no structure square;
 					// this move type's footprint decides, so the step is taken
-					if (byStructure && !FootprintBlocked(next) && !FootprintOnStructure(next)) {
+					// pathing fix (PATHING-ROOT-CAUSE cause 5): with SupComOneFootprint (mod option, default 1) the engine's footprint,
+					// the one the collision response and the planner use, decides structure contact too, so no step is taken that the
+					// collision pass then pushes back; 0: this move type's smaller footprint decides, as before
+					if (!OneFootprintOn() && byStructure && !FootprintBlocked(next) && !FootprintOnStructure(next)) {
 						byStructure = false;
 						blocked = false;
 					}
@@ -1542,6 +1621,16 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				std::string near;
 				for (const CUnit* u: *q.units) { if (u != owner) near += " " + std::to_string(u->id) + "@(" + std::to_string(int(u->pos.x)) + "," + std::to_string(int(u->pos.z)) + ")"; }
 				LOG("[SupComYield] f=%d unit %d wanted step (%.2f, %.2f) to (%.1f, %.1f); our footprint %s; units near:%s", gs->frameNum, owner->id, moveRequest.x, moveRequest.z, next.x, next.z, FootprintBlocked(next)? "blocked": "fits", near.c_str());
+			}
+			// MOV-021 v1 R1 (pathing fix): a small push back along the line the unit tried to move, unless it is being pushed; it
+			// changes position by less than one step at top speed and never into blocked squares
+			if (SupComPushCap::On() && !stop && scPushLen <= 0.0f) {
+				const float len = std::sqrt(moveRequest.x * moveRequest.x + moveRequest.z * moveRequest.z);
+				if (len > 0.0f) {
+					const float3 back = float3(-moveRequest.x / len, 0.0f, -moveRequest.z / len) * (SupComPushCap::PushBackFrac() * maxSpeed);
+					if (!FootprintBlocked(owner->pos + back))
+						scPushBack = back;
+				}
 			}
 			// the step is not taken and the speed is lost
 			moveRequest = ZeroVector;
@@ -1577,7 +1666,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	// reported velocity is the step's displacement
 	owner->SetVelocityAndSpeed(moveRequest);
-	resultantForces = moveRequest;
+	resultantForces = moveRequest + scPushBack;
+	scPushBack = ZeroVector;
 
 	UpdateTurnRate();
 }
@@ -1840,6 +1930,11 @@ bool CSupComGroundMoveType::Update()
 	const float3 updStart = owner->pos;
 	if (YieldLog() && FootprintBlocked(owner->pos) && updStart.SqDistance2D(dbgEndPos) > 1e-4f)
 		LOG("[SupComYield] f=%d unit %d on impassable squares: moved between updates (%.2f, %.2f) to (%.1f, %.1f)", gs->frameNum, owner->id, updStart.x - dbgEndPos.x, updStart.z - dbgEndPos.z, updStart.x, updStart.z);
+
+	// pathing fix (game PATHING-ROOT-CAUSE causes 3, 4): this frame's collision push (resultantForces, computed after the step was
+	// applied) is capped so the step and the push together stay within a fraction of top speed (SupComPushCap; values PLACEHOLDER)
+	SupComPushCap::Clamp(resultantForces, owner->speed, maxSpeed);
+	scPushLen = std::sqrt(resultantForces.x * resultantForces.x + resultantForces.z * resultantForces.z);
 
 	const bool moved = CGroundMoveType::Update();
 

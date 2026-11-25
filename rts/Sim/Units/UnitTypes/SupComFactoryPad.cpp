@@ -10,6 +10,10 @@
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
 #include "Sim/Units/UnitDefHandler.h"
+#include "System/SpringMath.h"
+
+#include <cmath>
+#include <variant>
 
 static float PadClear(const UnitDef* ud)
 {
@@ -49,4 +53,16 @@ bool SupComFactoryPad::Blocked(const CFactory* factory, const float3& buildPos)
 			return true;
 	}
 	return false;
+}
+
+int SupComFactoryPad::BuildSpin(const CFactory* factory)
+{
+	const auto it = factory->modParams.find("supcom_build_spin");
+	if (it == factory->modParams.end())
+		return 0;
+	const float* deg = std::get_if<float>(&it->second.value);
+	if (deg == nullptr || !std::isfinite(*deg))
+		return 0;
+	// degrees to heading units (SPRING_CIRCLE_DIVS per turn), rounded; the rules param is synced, so every client turns alike
+	return int(std::lround(double(*deg) * (SPRING_CIRCLE_DIVS / 360.0)));
 }
