@@ -56,6 +56,7 @@ make_global_var(sources_engine_Game
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Fuel/KT1Fuel.cpp" # KT1 hook: Fuel
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Builders/KT1Builders.cpp" # KT1 hook: Builders
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Intel/KT1Intel.cpp" # KT1 hook: Intel
+		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Tiers/KT1Tiers.cpp" # KT1 hook: Tiers
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/UI/Ribbons/KT1Ribbons.cpp" # KT1 hook: Ribbons
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/UI/IconCull/KT1IconCull.cpp" # KT1 hook: IconCull
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/UI/FarView/KT1FarView.cpp" # KT1 hook: FarView

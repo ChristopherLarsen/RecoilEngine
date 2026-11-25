@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "Game/KT1/Rules/Tiers/KT1Tiers.h" // KT1 hook: Tiers
 #include "System/RangesCompat.h"
 #include "UnitDef.h"
 #include "Unit.h"
@@ -733,6 +734,7 @@ void CUnit::UpdateWeapons()
 			return;
 
 	for (CWeapon* w: weapons) {
+		if (KT1::Tiers::Asleep(this)) break; // KT1 hook: Tiers
 		w->Update();
 	}
 }
@@ -1079,7 +1081,7 @@ void CUnit::SlowUpdate()
 	}
 
 	// should not be run while being built
-	commandAI->SlowUpdate();
+	if (!KT1::Tiers::Asleep(this)) commandAI->SlowUpdate(); // KT1 hook: Tiers
 
 	moveType->SlowUpdate();
 

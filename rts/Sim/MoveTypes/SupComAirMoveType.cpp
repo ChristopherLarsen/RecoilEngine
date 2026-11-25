@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "Game/KT1/Rules/Tiers/KT1Tiers.h" // KT1 hook: Tiers
 #include "SupComAirMoveType.h"
 #include "SupComAirRest.h" // supcom
 #include "SupComHalfRate.h"
@@ -254,6 +255,7 @@ bool CSupComAirMoveType::Update()
 			// idle half rate (PRF-002 v1, SupComHalfRate.h): an aircraft at rest on the ground (no speed, standing at the ground
 			// height) re-settles on every other tick (tick + id even); the settle at rest moves it by zero and recomputes the same
 			// direction vectors (two Move calls and UpdateDirVectors per aircraft per tick)
+			if (KT1::Tiers::Asleep(owner)) return false; // KT1 hook: Tiers
 			if (SupComHalfRate::LandedRest(owner))
 				return false;
 			// the settle step at a fixed point changes nothing (SupComAirRest.h; SIM-CUTS-RANKED #6)
