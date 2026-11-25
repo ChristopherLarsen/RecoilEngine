@@ -9,6 +9,7 @@
 #include "MapDamage.h"
 #include "MapInfo.h"
 #include "MetalMap.h"
+#include "Sim/MoveTypes/SupComAirRest.h" // supcom
 #include "Rendering/Env/MapRendering.h"
 #include "SMF/SMFReadMap.h"
 #include "Game/LoadScreen.h"
@@ -536,6 +537,7 @@ void CReadMap::UpdateHeightMapSynced(const SRectangle& hgtMapRect)
 	UpdateMipHeightmaps(centerRect, initialize);
 	UpdateFaceNormals(centerRect, initialize);
 	UpdateSlopemap(centerRect, initialize); // must happen after UpdateFaceNormals()!
+	SupComAirRest::TerrainChanged(hgtMapRect); // supcom: landed aircraft in the region settle again (SupComAirRest.h)
 
 	// push the unsynced update; initial one without LOS check
 	if (initialize) {

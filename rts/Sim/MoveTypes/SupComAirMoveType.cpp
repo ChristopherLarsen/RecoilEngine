@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "SupComAirMoveType.h"
+#include "SupComAirRest.h" // supcom
 #include "SupComHalfRate.h"
 
 #include <algorithm>
@@ -255,7 +256,11 @@ bool CSupComAirMoveType::Update()
 			// direction vectors (two Move calls and UpdateDirVectors per aircraft per tick)
 			if (SupComHalfRate::LandedRest(owner))
 				return false;
+			// the settle step at a fixed point changes nothing (SupComAirRest.h; SIM-CUTS-RANKED #6)
+			if (SupComAirRest::Skip(owner))
+				return false;
 			UpdateLanded();
+			SupComAirRest::Record(owner);
 			return false;
 		}
 		case AIRCRAFT_CRASHING: {
