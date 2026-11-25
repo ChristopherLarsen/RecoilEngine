@@ -41,6 +41,7 @@
 #include "System/Log/ILog.h"
 #include "System/StringUtil.h"
 #include "System/SupComSimSwitch.h"
+#include "System/Threading/ThreadPool.h"
 
 #include <algorithm>
 #include <limits>
@@ -167,22 +168,37 @@ bool CSupComGroundMoveType::RouteCellOccupied(const float3& p) const
 	return false;
 }
 
+// whether idle units block the straight-line test: only while choosing an aim point for a unit that has not moved for stuck_time
+// (R3/R10: such a unit with no point to steer at ends its order). Otherwise idle units are left to the steering round them
+// (SupComGoRound), as before the follower: counted always, a mover beside one idle unit searched for routes that ran through it
+// and never got round (L11088, PTH-002-C/D/G/I). Set and read only in the single-threaded follower update.
+static bool routeUnitsBlock = false;
+
 bool CSupComGroundMoveType::RouteLineClear(const float3& a, const float3& b) const
 {
 	const MoveDef* md = owner->moveDef;
 	if (md == nullptr)
 		return true;
 
-	// objects the footprint overlaps at the start do not block (a unit in a crowd or touching a wall can still leave)
+	const int thread = ThreadPool::GetThreadNum();
+	const MoveTypes::CheckCollisionQuery query(owner);
+	const auto StructureAt = [&](const float3& p) {
+		int sx0, sz0, sx1, sz1;
+		FootprintSquares(md, p, sx0, sz0, sx1, sz1);
+		// the structure blocking the path finder uses (yardmaps included); one object pointer per square missed yard squares (007-C)
+		return ((CMoveMath::RangeIsBlocked(sx0, sx1, sz0, sz1, &query, thread) & CMoveMath::BLOCK_STRUCTURE) != 0);
+	};
+
+	// idle units the footprint overlaps at the start do not block (a unit in a crowd can still leave)
 	const CSolidObject* here[16] = {};
 	int n = 0;
-	{
+	if (routeUnitsBlock) {
 		int sx0, sz0, sx1, sz1;
 		FootprintSquares(md, a, sx0, sz0, sx1, sz1);
 		for (int sz = sz0; sz <= sz1; sz++) {
 			for (int sx = sx0; sx <= sx1; sx++) {
 				const CSolidObject* o = groundBlockingObjectMap.GroundBlocked(sx, sz);
-				if (!Blocks(o, owner))
+				if (o == nullptr || o->moveDef == nullptr || !Blocks(o, owner))
 					continue;
 				if (std::find(here, here + n, o) == here + n && n < 16)
 					here[n++] = o;
@@ -190,22 +206,31 @@ bool CSupComGroundMoveType::RouteLineClear(const float3& a, const float3& b) con
 		}
 	}
 
+	// a unit touching a structure or impassable ground can still leave: those count once the footprint is a footprint away
 	const bool startBlocked = FootprintBlocked(a);
+	const bool startStructure = StructureAt(a);
+	const float away = (md->xsize + md->zsize) * SQUARE_SIZE * 0.5f;
 	const float3 d = (b - a) * XZVector;
 	const int steps = std::max(1, int(math::ceil(d.Length2D() / (SQUARE_SIZE * 0.5f))));
 
 	for (int k = 1; k <= steps; k++) {
 		const float3 p = a + d * (float(k) / steps);
+		const bool far = (p.SqDistance2D(a) > Square(away));
 
-		if (!startBlocked && FootprintBlocked(p))
+		if ((!startBlocked || far) && FootprintBlocked(p))
 			return false;
+		if ((!startStructure || far) && StructureAt(p))
+			return false;
+
+		if (!routeUnitsBlock)
+			continue;
 
 		int sx0, sz0, sx1, sz1;
 		FootprintSquares(md, p, sx0, sz0, sx1, sz1);
 		for (int sz = sz0; sz <= sz1; sz++) {
 			for (int sx = sx0; sx <= sx1; sx++) {
 				const CSolidObject* o = groundBlockingObjectMap.GroundBlocked(sx, sz);
-				if (Blocks(o, owner) && std::find(here, here + n, o) == here + n)
+				if (o != nullptr && o->moveDef != nullptr && Blocks(o, owner) && std::find(here, here + n, o) == here + n)
 					return false;
 			}
 		}
@@ -427,6 +452,9 @@ void CSupComGroundMoveType::RouteRequest(bool fresh)
 
 bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 {
+	routeUnitsBlock = stuck;
+	struct Restore { ~Restore() { routeUnitsBlock = false; } } restore;
+
 	if (rfPathID == pathID && pathID != 0) {
 		// the engine refines a route under the same id: read it again, keep the place by the nearest point to the old next point
 		const float3 oldNext = (rfNext < int(rfPts.size()))? rfPts[rfNext]: owner->pos;
