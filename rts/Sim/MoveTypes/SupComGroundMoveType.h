@@ -185,7 +185,7 @@ public:
 	int GetRouteWaitUntil() const { return rfWaitUntil; }
 	const float3& GetRouteAim() const { return rfAim; }
 	/// SupComRouteFollow test hook: the next n route searches of this unit return what the script says (0 empty, k > 0: a
-	/// straight route of k points towards the goal, -k: k points that do not reach the old route; kept until cleared)
+	/// route of k points ending at the search's target (fresh: the goal; replacement: the old route's next point, so it rejoins), -k: k points sideways that do not; kept until cleared)
 	void ScriptRouteResults(const std::vector<int>& results) { rfScript = results; rfScriptPos = 0; }
 private:
 	void RouteFollowUpdate();
@@ -197,7 +197,7 @@ private:
 	void RouteEnd(const char* why);
 	bool RouteLineClear(const float3& a, const float3& b) const;
 	bool RouteCellOccupied(const float3& p) const;
-	unsigned int RouteSearch(std::vector<float3>& pts);
+	unsigned int RouteSearch(std::vector<float3>& pts, bool fresh, const float3& target);
 
 private:
 	// per-unit values, engine units (elmos, frames, heading units)

@@ -227,27 +227,30 @@ void CSupComGroundMoveType::RouteLoad(unsigned int id)
 		rfPts.back() = goalPos;
 }
 
-unsigned int CSupComGroundMoveType::RouteSearch(std::vector<float3>& pts)
+unsigned int CSupComGroundMoveType::RouteSearch(std::vector<float3>& pts, bool fresh, const float3& target)
 {
+	// a fresh search (the order's first, or one opening a round) goes to the order's goal; a replacement search goes to the old
+	// route's next point (PTH-002 v7: a replacement route rejoins when it ends at that point)
 	rfRequests++;
 	pts.clear();
 
 	const float3 pos = owner->pos;
+	const float radius = fresh? (goalRadius + extraRadius): float(SQUARE_SIZE);
 	unsigned int id = 0;
 
 	if (rfScriptPos < int(rfScript.size())) {
-		// test hook: a scripted result (PTH-002 fixture SF-PTH-002-K, PTH-007 fixture SF-PTH-007)
+		// test hook: a scripted result (PTH-002 fixture SF-PTH-002-K, PTH-007 fixture SF-PTH-007): k > 0 points ending at the
+		// search's target (the goal, or the old route's next point: it rejoins), -k points sideways that end nowhere on the old route
 		const int k = rfScript[rfScriptPos++];
 		if (k == 0)
 			return 0;
 
-		id = pathManager->RequestPath(owner, owner->moveDef, pos, goalPos, goalRadius + extraRadius, true);
-		const float3 dir = ((goalPos - pos) * XZVector).SafeNormalize2D();
+		id = pathManager->RequestPath(owner, owner->moveDef, pos, target, radius, true);
+		const float3 dir = ((target - pos) * XZVector).SafeNormalize2D();
 		if (k > 0) {
 			for (int i = 1; i <= k; i++)
-				pts.push_back(pos + (goalPos - pos) * XZVector * (float(i) / k));
+				pts.push_back(pos + (target - pos) * XZVector * (float(i) / k));
 		} else {
-			// sideways, one square apart: it reaches no point of the old route
 			const float3 side(-dir.z, 0.0f, dir.x);
 			for (int i = 1; i <= -k; i++)
 				pts.push_back(pos + side * (SQUARE_SIZE * 2.0f * i));
@@ -257,7 +260,7 @@ unsigned int CSupComGroundMoveType::RouteSearch(std::vector<float3>& pts)
 
 	// answered in the tick it is asked (immediateResult): a synced request is otherwise only queued and has no points yet (perf
 	// review F); the follower searches only when no aim point is usable, so these are rare
-	id = pathManager->RequestPath(owner, owner->moveDef, pos, goalPos, goalRadius + extraRadius, true, true);
+	id = pathManager->RequestPath(owner, owner->moveDef, pos, target, radius, true, true);
 	if (id == 0)
 		return 0;
 
@@ -327,40 +330,33 @@ void CSupComGroundMoveType::RouteEnd(const char* why)
 
 void CSupComGroundMoveType::RouteRequest(bool fresh)
 {
-	// the old route's next point (R6/R10: short routes are judged against it). On a detour (a short route followed, its points
-	// then the old route's remaining ones from rfShortFor) the next point is still the old route's one, rfShortFor, until the unit
-	// has passed it: a second short route while on the detour is for the same point
+	// the old route's next point and its index (R6/R10: short routes are judged against it). On a detour (a short route followed,
+	// then the old route's points from rfShortFor) the next point is still the old route's one, rfShortFor, until the unit passes it
 	const bool hadNext = (rfNext >= 0 && rfNext < int(rfPts.size()));
-	float3 nextPt = hadNext? rfPts[rfNext]: goalPos;
+	int nextIdx = hadNext? rfNext: -1;
 	if (hadNext && rfShortSeen) {
 		for (int i = rfNext; i < int(rfPts.size()); i++) {
 			if (rfPts[i].same(rfShortFor)) {
-				nextPt = rfShortFor;
+				nextIdx = i;
 				break;
 			}
 		}
 	}
+	const float3 nextPt = (nextIdx >= 0)? rfPts[nextIdx]: goalPos;
+	const bool asFresh = (fresh || !hadNext);
 
 	std::vector<float3> pts;
-	const unsigned int id = RouteSearch(pts);
+	const unsigned int id = RouteSearch(pts, asFresh, asFresh? goalPos: nextPt);
 	const bool empty = pts.empty();
 
-	// rejoins: a point of the new route within a square of a remaining point of the old one
-	bool rejoins = false;
-	if (!empty && hadNext) {
-		for (const float3& p: pts) {
-			for (int i = rfNext; i < int(rfPts.size()) && !rejoins; i++)
-				rejoins = (p.SqDistance2D(rfPts[i]) <= Square(SQUARE_SIZE));
-			if (rejoins)
-				break;
-		}
-	}
-	const bool isShort = (!empty && !fresh && !rejoins && int(pts.size()) < ShortRoute());
+	// PTH-002 v7: a replacement route rejoins when it ends at the old route's next point
+	const bool rejoins = (!empty && !asFresh && pts.back().SqDistance2D(nextPt) <= Square(SQUARE_SIZE));
+	const bool isShort = (!empty && !asFresh && !rejoins && int(pts.size()) < ShortRoute());
 
 	if (RouteLog())
-		LOG("[SupComRoute] f=%d u=%d %s search: %s, %d points, rejoins %d, short %d (waits %d, rounds %d)", gs->frameNum, owner->id, fresh? "fresh": "replacement", empty? "no route": "route", int(pts.size()), int(rejoins), int(isShort), rfWaits, rfRounds);
+		LOG("[SupComRoute] f=%d u=%d %s search: %s, %d points, rejoins %d, short %d (waits %d, rounds %d)", gs->frameNum, owner->id, asFresh? "fresh": "replacement", empty? "no route": "route", int(pts.size()), int(rejoins), int(isShort), rfWaits, rfRounds);
 
-	if (fresh) {
+	if (asFresh) {
 		// R5/R7, PTH-002 R9/R10: an empty fresh search ends the order at once; a route opens the round
 		if (empty) {
 			RouteEnd("fresh search empty");
@@ -372,7 +368,15 @@ void CSupComGroundMoveType::RouteRequest(bool fresh)
 		return;
 	}
 
-	const bool nextFree = hadNext && !RouteCellOccupied(nextPt);
+	// a replacement route is followed, then the old route on from its next point (after it, when the route rejoins there)
+	const auto Spliced = [&](int from) {
+		std::vector<float3> r = pts;
+		for (int i = from; i < int(rfPts.size()); i++)
+			r.push_back(rfPts[i]);
+		return r;
+	};
+
+	const bool nextFree = !RouteCellOccupied(nextPt);
 
 	if (isShort && nextFree) {
 		// R6, PTH-002 R10: the first short route for this next point is followed; a second one for the same point ends the order
@@ -384,13 +388,7 @@ void CSupComGroundMoveType::RouteRequest(bool fresh)
 		}
 		rfShortSeen = true;
 		rfShortFor = nextPt;
-		// a short route is a detour to the old route's next point: after it the unit heads for that point again
-		std::vector<float3> detour = pts;
-		const int oldNext = rfNext;
-		const std::vector<float3> oldPts = rfPts;
-		for (int i = oldNext; i < int(oldPts.size()); i++)
-			detour.push_back(oldPts[i]);
-		RouteAdopt(id, detour);
+		RouteAdopt(id, Spliced(nextIdx));
 		return;
 	}
 
@@ -420,8 +418,10 @@ void CSupComGroundMoveType::RouteRequest(bool fresh)
 	if (rejoins) {
 		rfWaits = 0;
 		rfShortSeen = false;
+		RouteAdopt(id, Spliced(nextIdx + 1));
+		return;
 	}
-	RouteAdopt(id, pts);
+	RouteAdopt(id, Spliced(nextIdx));
 }
 
 bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
@@ -501,6 +501,11 @@ void CSupComGroundMoveType::RouteFollowUpdate()
 	const int frame = gs->frameNum;
 	const float3 pos = owner->pos;
 
+	// while the follower holds a route, the engine's own end-of-path failure (stock SetNextWayPoint / lastWaypoint: its path may end at
+	// the old route's next point) does not end the order: the follower's rules do
+	if (rfActive && !rfPts.empty() && pathingFailed)
+		pathingFailed = false;
+
 	if (!rfActive) {
 		// a new order: StartMoving made the first search (an empty one failed the order there: R7, PTH-002 R10/R13)
 		rfActive = true;
@@ -511,7 +516,8 @@ void CSupComGroundMoveType::RouteFollowUpdate()
 		if (rfScriptPos < int(rfScript.size())) {
 			// test hook: the order's first search is the script's (an empty one ends the order before the unit moves: R7, PTH-002 R10)
 			RouteRequest(true);
-			if (progressState != Active)
+			// ended (and possibly the next order started, which resets the follower): nothing more for this order this frame
+			if (!rfActive || progressState != Active)
 				return;
 		} else {
 			// StartMoving made the first search (an empty one failed the order there)
@@ -525,7 +531,7 @@ void CSupComGroundMoveType::RouteFollowUpdate()
 		// no route held while moving (an engine path lost): a fresh search, as at the start of a round
 		if (rfWaitUntil < 0)
 			RouteRequest(true);
-		if (progressState != Active)
+		if (!rfActive || progressState != Active || pathID == 0)
 			return;
 	}
 
