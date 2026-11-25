@@ -134,6 +134,8 @@ public:
 			Tiers::asleep[id] = sleep;
 			nAsleep += sleep;
 		}
+		if (frame % 300 == 0)
+			LOG("[KT1TIERS] f=%d asleep %d idle-near %d of %d", frame, nAsleep, nIdleNear, nTotal);
 	}
 
 	void PushLua(lua_State* L) override {
