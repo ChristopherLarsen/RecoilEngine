@@ -8,11 +8,14 @@
 #include <vector>
 
 #include "Game/GameSetup.h"
+#include "Sim/MoveTypes/AAirMoveType.h"
 #include "Map/ReadMap.h"
 #include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
 #include "System/Rectangle.h"
+
+extern AAirMoveType::GetGroundHeightFunc amtGetGroundHeightFuncs[6];   // AAirMoveType.cpp
 
 namespace {
 	constexpr int CELL = 32;          // heightmap squares per stamp cell side (DESIGN: coarse; a change wakes a 256-elmo region)
@@ -22,6 +25,7 @@ namespace {
 		const UnitDef* def = nullptr;
 		int creationFrame = -1;
 		unsigned stamp = 0;           // the change counter when recorded
+		float ground = 0.0f;          // the ground height UpdateLanded settles to, at pos
 		float pos[3];
 		float speed[4];
 		float front[3], right[3], up[3];
@@ -59,6 +63,8 @@ namespace {
 		return cells[sz * cellsX + sx];
 	}
 
+	float Ground(const CUnit* u) { return amtGetGroundHeightFuncs[u->unitDef->canSubmerge](u->pos.x, u->pos.z); }   // as UpdateLanded
+
 	template<typename T> bool Same(const T* a, const void* b, size_t n) { return std::memcmp(a, b, n * sizeof(T)) == 0; }
 }
 
@@ -92,7 +98,10 @@ bool SupComAirRest::Skip(const CUnit* u)
 		return false;
 	if (!Same(s.front, &u->frontdir.x, 3) || !Same(s.right, &u->rightdir.x, 3) || !Same(s.up, &u->updir.x, 3))
 		return false;
-	return CellAt(u->pos) <= s.stamp;
+	if (CellAt(u->pos) > s.stamp)
+		return false;
+	const float g = Ground(u);
+	return Same(&s.ground, &g, 1);
 }
 
 void SupComAirRest::Record(const CUnit* u)
@@ -110,6 +119,7 @@ void SupComAirRest::Record(const CUnit* u)
 	s.def = u->unitDef;
 	s.creationFrame = u->creationFrame;
 	s.stamp = counter;
+	s.ground = Ground(u);
 	s.heading = static_cast<short>(u->heading);
 	std::memcpy(s.pos, &u->pos.x, sizeof(s.pos));
 	std::memcpy(s.speed, &u->speed.x, sizeof(s.speed));
