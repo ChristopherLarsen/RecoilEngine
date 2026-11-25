@@ -15,6 +15,11 @@ namespace SupComTargeting {
 	void Update(int frame);
 	// true when the engine step owns this weapon's automatic choice (mode 1 only)
 	bool OwnsAutoTarget(const CWeapon* w);
+	// true when the engine step owns this weapon (mode 1) and its gun holds no target: the game's AllowWeaponTarget
+	// (cmb_targeting.lua AllowBody) then refuses every automatic target for it, so the idle command AI's own search
+	// (MobileCAI::GenerateAttackCmd, AirCAI::AirAutoGenerateTarget) cannot produce an order and is skipped (SIM-RATE-001 R2:
+	// a weapon looks for targets only on its own interval; SIM-CUTS-RANKED R-E, 2026-11-24)
+	bool GunIdle(const CWeapon* w);
 }
 
 #endif

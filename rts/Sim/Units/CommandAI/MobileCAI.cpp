@@ -2,6 +2,7 @@
 
 
 #include "MobileCAI.h"
+#include "Lua/SupComTargeting.h" // supcom
 #include "ExternalAI/EngineOutHandler.h"
 #include "Game/GameHelper.h"
 #include "Game/GlobalUnsynced.h"
@@ -1260,7 +1261,9 @@ bool CMobileCAI::GenerateAttackCmd()
 			}
 
 			// get target from wherever
-			if (newAttackTargetId < 0) {
+			// supcom: not for a weapon whose target the engine step owns while its gun holds none: the game refuses every result
+			// then (SupComTargeting::GunIdle), so the search could not give an order (SIM-CUTS-RANKED R-E)
+			if (newAttackTargetId < 0 && !SupComTargeting::GunIdle(wpn)) {
 				tgt = CGameHelper::GetClosestValidTarget(owner->pos, searchRadius, owner->allyteam, this);
 
 				if (tgt != nullptr && eventHandler.AllowWeaponTarget(owner->id, tgt->id, wpn->weaponNum, wpn->weaponDef->id, nullptr))

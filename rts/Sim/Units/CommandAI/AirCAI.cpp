@@ -2,6 +2,7 @@
 
 
 #include "AirCAI.h"
+#include "Lua/SupComTargeting.h" // supcom
 #include "Game/GameHelper.h"
 #include "Game/GlobalUnsynced.h"
 #include "Game/SelectedUnitsHandler.h"
@@ -239,6 +240,11 @@ bool CAirCAI::AirAutoGenerateTarget(AAirMoveType* myPlane) {
 
 	const CUnit* tgt = nullptr;
 	const CWeapon* wpn = owner->weapons[0];
+
+	// supcom: the game refuses every automatic target while the engine step owns this weapon and its gun holds none, so the
+	// search could not give an order (SupComTargeting::GunIdle; SIM-CUTS-RANKED R-E)
+	if (SupComTargeting::GunIdle(wpn))
+		return false;
 
 	if (ownerDef->IsFighterAirUnit()) {
 		tgt = CGameHelper::GetClosestEnemyAircraft(nullptr, owner->pos + owner->speed * 10.0f, searchRadius, owner->allyteam);
