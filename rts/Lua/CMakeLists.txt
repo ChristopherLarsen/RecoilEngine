@@ -45,6 +45,7 @@ set(sources_engine_Lua
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaSyncedMoveCtrl.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/LuaSyncedRead.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComUnitQuery.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/SupComCallinBatch.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComIntIndex.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComIntFacts.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComTargeting.cpp"
