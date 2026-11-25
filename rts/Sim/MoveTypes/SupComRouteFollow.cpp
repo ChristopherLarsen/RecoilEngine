@@ -325,9 +325,19 @@ void CSupComGroundMoveType::RouteEnd(const char* why)
 
 void CSupComGroundMoveType::RouteRequest(bool fresh)
 {
-	// the old route's next point (R6/R10: short routes are judged against it)
+	// the old route's next point (R6/R10: short routes are judged against it). On a detour (a short route followed, its points
+	// then the old route's remaining ones from rfShortFor) the next point is still the old route's one, rfShortFor, until the unit
+	// has passed it: a second short route while on the detour is for the same point
 	const bool hadNext = (rfNext >= 0 && rfNext < int(rfPts.size()));
-	const float3 nextPt = hadNext? rfPts[rfNext]: goalPos;
+	float3 nextPt = hadNext? rfPts[rfNext]: goalPos;
+	if (hadNext && rfShortSeen) {
+		for (int i = rfNext; i < int(rfPts.size()); i++) {
+			if (rfPts[i].same(rfShortFor)) {
+				nextPt = rfShortFor;
+				break;
+			}
+		}
+	}
 
 	std::vector<float3> pts;
 	const unsigned int id = RouteSearch(pts);
