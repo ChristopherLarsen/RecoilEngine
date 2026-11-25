@@ -1,5 +1,5 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 rule: Intel (version 1). The detection loop of int_coverage.lua: for each live unit u and each army a (ally team, not Gaia)
+// KT1 rule: Intel (version 2). The detection loop of int_coverage.lua: for each live unit u and each army a (ally team, not Gaia)
 // that does not own u, whether a sees u, has it as a contact, or neither, and whether a seen unit is also a contact (IEV-05).
 // The engine sends only the changes; Lua does what a change does (int_coverage.lua F.OnState).
 //
@@ -19,6 +19,9 @@
 //   Spring.KT1.Intel.Group(a, {ally teams of a's group, a included})
 //   Spring.KT1.Intel.UnitFlags(u, cloak, fake)                              a fake unit is skipped (Lua decides it)
 //   Spring.KT1.Intel.Forget(u)                                              a unit died: its states start over
+//   Spring.KT1.Intel.Turn(a)                                                army turns on: until the next call only army a (-1: none) decides
+//                                                                           the units visited this frame (a new or given unit: every army);
+//                                                                           Turn() or Turn(nil): off, every army decides every visit
 //   Spring.KT1.Intel.Run() -> { u, a, code, ... }   the changes this frame; code = now (0 none, 1 contact, 2 seen) + 4 * also
 //   Spring.KT1.Intel.State(u, a) -> now, also, frame of the last change (nil when never set)
 // Rule, for each target u (ascending id) visited this frame, each pushed army a (ascending), a not Gaia, a not u's ally team:
@@ -31,6 +34,8 @@
 //   contact before, radar_leave: radar's leaving lag, INT-005 v8). Every coverage is "any circle of a's group" in the int_cpp
 //   index (Lua/SupComIntIndex), as Lua asks it.
 //   Visited: id % rate == frame % rate, or out of its slice when it is new or changed owner since its last visit (Lua's fresh).
+//   Army turns (INT-005 v8 R3c, owner 2026-11-25): int_coverage sets rate to the frames of one reference tick and calls Turn
+//   before each Run with the ally team whose turn the tick is, so each army's states change on its own turn only.
 // Determinism: units ascending id, armies ascending; bool answers of the circle index (order free); no thread, clock or hash order.
 // Events:     returned by Run(), which int_coverage calls once a frame after it placed the frame's circles.
 // Doc:        game-build docs/engine/rules/intel.md
@@ -61,11 +66,12 @@ namespace {
 
 class Intel : public Rule {
 public:
-	Intel() : Rule({"Intel", 1, true, "LuaRules/Gadgets/int_coverage.lua (detection loop)", false}) {}
+	Intel() : Rule({"Intel", 2, true, "LuaRules/Gadgets/int_coverage.lua (detection loop)", false}) {}
 
 	void Start() override {
 		const int n = int(unitHandler.MaxUnits());
 		recs.assign(n, UnitRec{});
+		turns = false; turn = -1;
 		for (auto& p : armies) p.second.st.assign(n, St{});
 	}
 
@@ -75,6 +81,7 @@ public:
 		LuaPushRawNamedCFunc(L, "Group", LGroup);
 		LuaPushRawNamedCFunc(L, "UnitFlags", LUnitFlags);
 		LuaPushRawNamedCFunc(L, "Forget", LForget);
+		LuaPushRawNamedCFunc(L, "Turn", LTurn);
 		LuaPushRawNamedCFunc(L, "Run", LRun);
 		LuaPushRawNamedCFunc(L, "State", LState);
 	}
@@ -111,7 +118,7 @@ private:
 		return ar.st[id];
 	}
 
-	void Decide(const CUnit* u, const UnitRec& r, int f) {
+	void Decide(const CUnit* u, const UnitRec& r, int f, bool fresh) {
 		using SupComIntIndex::SeesAny;
 		const int owner = u->allyteam;
 		const int d = u->unitDef->id;
@@ -122,6 +129,7 @@ private:
 		for (auto& p : armies) {
 			const int a = p.first;
 			if (a == gaia || a == owner) continue;                 // Lua's loop: not Gaia's army, not the army's own units
+			if (turns && !fresh && a != turn) continue;            // army turns: the others wait for theirs
 			Army& ar = p.second;
 			const std::vector<int>& g = ar.group;
 			unsigned char now;
@@ -182,10 +190,11 @@ private:
 		for (const int id : ids) {
 			const CUnit* u = unitHandler.GetUnit(id);
 			UnitRec& r = Rec(id);
+			const bool fresh = !r.seen || r.ally != u->allyteam;
 			r.seen = true;
 			r.ally = u->allyteam;
 			if (r.fake) continue;
-			Decide(u, r, f);
+			Decide(u, r, f, fresh);
 		}
 	}
 
@@ -261,6 +270,14 @@ private:
 		return 0;
 	}
 
+	static int LTurn(lua_State* L) {
+		Intel* r = SyncedSelf(L);
+		if (r == nullptr) return 0;
+		r->turns = !lua_isnoneornil(L, 1);
+		r->turn = r->turns ? luaL_checkint(L, 1) : -1;
+		return 0;
+	}
+
 	static int LRun(lua_State* L) {
 		Intel* r = SyncedSelf(L);
 		if (r == nullptr) return 0;
@@ -289,6 +306,8 @@ private:
 
 	RulesT rules;
 	int gaia = -1;
+	bool turns = false;                 // army turns (Turn); turn: the ally team deciding this frame
+	int turn = -1;
 	std::vector<Def> defs;              // per def id
 	std::map<int, Army> armies;         // ascending a: the event order over armies
 	std::vector<UnitRec> recs;          // per unit id
