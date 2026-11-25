@@ -27,8 +27,9 @@
 //   Not a sub, or a ship: vision ok = not cloak; radar ok = not in stealth radar and (u jams or not in a jam field).
 //   A sub, or a ship with sonar_ships: sonar ok = not in stealth sonar.
 //   seen = omni, or (a sub, not self-cloaked, water_sees_sub) water vision; or (vision ok) vision; or (vision ok, cell rule, seen
-//   before) vision_leave (the leaving lag). contact = (radar ok and radar) or (sonar ok and sonar). Every coverage is "any circle
-//   of a's group" in the int_cpp index (Lua/SupComIntIndex), as Lua asks it.
+//   before) vision_leave (the leaving lag). contact = (radar ok and radar) or (sonar ok and sonar) or (radar ok, cell rule, a
+//   contact before, radar_leave: radar's leaving lag, INT-005 v8). Every coverage is "any circle of a's group" in the int_cpp
+//   index (Lua/SupComIntIndex), as Lua asks it.
 //   Visited: id % rate == frame % rate, or out of its slice when it is new or changed owner since its last visit (Lua's fresh).
 // Determinism: units ascending id, armies ascending; bool answers of the circle index (order free); no thread, clock or hash order.
 // Events:     returned by Run(), which int_coverage calls once a frame after it placed the frame's circles.
@@ -148,7 +149,9 @@ private:
 				const int gn = int(g.size());
 				bool seen = SeesAny("omni", gl, gn, x, z)
 					|| (sub && !r.cloak && rules.waterSeesSub && SeesAny("water_vision", gl, gn, x, z));
-				const bool contact = (rok && SeesAny("radar", gl, gn, x, z)) || (sok && SeesAny("sonar", gl, gn, x, z));
+				bool contact = (rok && SeesAny("radar", gl, gn, x, z)) || (sok && SeesAny("sonar", gl, gn, x, z));
+				if (!contact && rok && rules.cell > 0.0 && s.set && (s.now == 1 || s.also))
+					contact = SeesAny("radar_leave", gl, gn, x, z);      // radar's leaving lag
 				if (!seen && vok)
 					seen = SeesAny("vision", gl, gn, x, z);
 				if (!seen && vok && rules.cell > 0.0 && s.set && s.now == 2)
