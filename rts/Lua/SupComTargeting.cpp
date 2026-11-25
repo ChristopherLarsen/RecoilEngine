@@ -163,11 +163,12 @@ bool Acceptable(const CUnit* u, const WDef& w, int tid, bool noLine, bool& faile
 		return false;
 	if (Arriving(t))
 		return false;
-	failed = true;
 	// CMB-027 v1: a candidate (and a held target) needs contact for the shooter allyteam: raw LOS status bits & 7
-	// (1 in sight, 2 radar or sonar/omni via int_coverage, 4 seen before: structures only); the 0xF0 mask bits do not count
+	// (1 in sight, 2 radar or sonar/omni via int_coverage, 4 seen before: structures only); the 0xF0 mask bits do not count.
+	// No contact is like a gone target (not a failed check): no skip memory, so it is taken as soon as it is detected (CMB-027-G)
 	if ((t->losStatus[u->allyteam] & 7) == 0)
 		return false;
+	failed = true;
 	if (!LayerOK(w, t))
 		return false;
 	if (noLine || !w.direct || LineClear(u, t)) {
