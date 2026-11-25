@@ -458,9 +458,13 @@ void CUnitHandler::UpdatePreFrame()
 	SCOPED_TIMER("Sim::Unit::UpdatePreFrame");
 	inUpdateCall = true;
 
-	for (CUnit* unit : activeUnits) {
+	// supcom (SIM-CUTS-RANKED #2, 2026-11-24): in parallel. Each task writes only its own unit's render-only fields
+	// (supcomSavedMat, preFrameTra, its pieces' prevModelSpaceTra, and lazily refreshed piece matrices that hold the
+	// same values a serial pass computes); nothing synced reads them. Same chunking as UpdateUnitWeaponVectors.
+	for_mt_chunk(0, activeUnits.size(), [this](const int idx) {
+		CUnit* unit = activeUnits[idx];
 		if (!SupComUnitUnchanged(unit)) unit->UpdatePrevFrameTransform(); // supcom: SupComUnitStatic.h
-	}
+	}, 1, 64);
 
 	inUpdateCall = false;
 }
