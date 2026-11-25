@@ -1011,6 +1011,30 @@ bool CQuadField::NoSolidsExact(
 }
 
 
+// supcom (SIM-CUTS-RANKED #4, 2026-11-24): the projectile query's distance test without reading the object's
+// direction vectors when they cannot change the answer. Returns exactly what
+//   pos.SqDistance(colvol->GetWorldSpacePos(o)) >= totRad * totRad
+// returns (the original test), so the candidate list is bit-identical:
+// - offsets all exactly zero: GetWorldSpacePos is midPos + (frontdir*0 + rightdir*0 + updir*0) == midPos (adding a
+//   signed zero changes no value a squared distance can see), so midPos is used directly;
+// - otherwise |GetWorldSpacePos - midPos| <= |x|+|y|+|z| of the offsets (unit direction vectors), so an object farther
+//   from midPos than totRad plus that bound (with a 1e-3 relative and 1-elmo margin for rounding) fails the original
+//   test for certain; anything closer runs the original test.
+static inline bool SupComColVolFar(const float3& pos, const CSolidObject* o, const CollisionVolume* colvol, float totRad)
+{
+	const float3& offs = colvol->GetOffsets();
+
+	if (offs.x == 0.0f && offs.y == 0.0f && offs.z == 0.0f)
+		return (pos.SqDistance(o->midPos) >= (totRad * totRad));
+
+	const float bound = totRad + (std::fabs(offs.x) + std::fabs(offs.y) + std::fabs(offs.z)) * 1.001f + 1.0f;
+
+	if (pos.SqDistance(o->midPos) >= (bound * bound))
+		return true;
+
+	return (pos.SqDistance(colvol->GetWorldSpacePos(o)) >= (totRad * totRad));
+}
+
 // optimization specifically for projectile collisions
 void CQuadField::GetUnitsAndFeaturesColVol(
 	const float3& pos,
@@ -1039,7 +1063,7 @@ void CQuadField::GetUnitsAndFeaturesColVol(
 			const auto* colvol = &u->collisionVolume;
 			const float totRad = radius + colvol->GetBoundingRadius();
 
-			if (pos.SqDistance(colvol->GetWorldSpacePos(u)) >= (totRad * totRad))
+			if (SupComColVolFar(pos, u, colvol, totRad)) // supcom: same answer, cheaper (above)
 				continue;
 
 			units.push_back(u);
@@ -1055,7 +1079,7 @@ void CQuadField::GetUnitsAndFeaturesColVol(
 			const auto* colvol = &f->collisionVolume;
 			const float totRad = radius + colvol->GetBoundingRadius();
 
-			if (pos.SqDistance(colvol->GetWorldSpacePos(f)) >= (totRad * totRad))
+			if (SupComColVolFar(pos, f, colvol, totRad)) // supcom: same answer, cheaper (above)
 				continue;
 
 			features.push_back(f);
