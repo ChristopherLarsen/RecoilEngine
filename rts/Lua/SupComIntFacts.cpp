@@ -21,6 +21,14 @@
 //       drop: (slot, unit) pairs gone without a destroy event (F.Drop); ev: (unit, code, value) triples, code 1 int_landed, 2 under water.
 //       shadow: compute only (state of this file evolves; no index writes, writes go to W only).
 //   Spring.SupComIntFactsCircle(u) -> a, x, z, r2, ce, trail, lx, lz, dr, calm, stamps   (check mode and cases; nil when no circle)
+//
+// Sensor kinds (SIM-CUTS-RANKED #7 second half, 2026-11-24; game mod option unitpass_intel_sensors, cfg.sensors 0 off, 1 on, 2 shadow):
+// radar, sonar, omni and water vision done here as int_coverage's F.SrcLua does them (live rule, power-field scale, landed share,
+// VI.Stamp / VI.Shot / VI.Reach with the kind's cell, VI.PutK into the kind's index, VI.SweepK on all0). Lua keeps cloak, jammers and the
+// counter-intel fields. Lua-only answers come in only when they change:
+//   Spring.SupComIntSource(u, vr, wr, nv, sensors)  sensors = { radar = r, sonar = r, omni = r, water_vision = r } (map units)
+//   Spring.SupComIntUnitAnswers(u, upkeepOff, scale)  upkeepOff: GG.Eco.UpkeepOn(u) == false; scale: GG.Eco.FieldScale(u)
+//   Spring.SupComIntSensorCircle(u, kind) -> a, x, z, r2, ce, dr, stamps   (check mode; nil when none)
 
 #pragma GCC optimize("fp-contract=off")
 
@@ -50,8 +58,28 @@ namespace {
 		float fe = 0, ce = 0, fnx = 0, fnz = 0, cnx = 0, cnz = 0, FB = 16, CB = 4, VS = 128, SS = 1024, MU = 8;
 		float cell = 0, rf = 0, ri = 0, lagE = 0, lagL = 0, reF = 1, hk = 0, hclamp = 0, landedH = 0, landedV = 1;
 		bool rc = false, unfinished = false, ok = false;
+		int sensors = 0;                          // 0 off (Lua does the sensor kinds), 1 on, 2 shadow (computed, nothing written)
+		bool waterSeesSub = false;
+		float sensCell[4] = {0, 0, 0, 0};         // I.cell per kind (map cells x MU)
 	} cfg;
-	std::vector<uint8_t> defAir, defLua, defCloak;   // per def: aircraft; Lua finishes the unit (may cloak, jammer); may cloak
+	std::vector<uint8_t> defAir, defLua, defCloak, defOnOff;   // per def: aircraft; Lua finishes the unit (may cloak, jammer); may cloak; on/off-able
+
+	// the sensor kinds, in a fixed order; SWITCHED and POWER_FIELD as int_coverage.lua's tables
+	constexpr int NSENS = 4;
+	const char* const SENS_NAME[NSENS] = { "radar", "sonar", "omni", "water_vision" };
+	constexpr bool SENS_SWITCHED[NSENS] = { true, true, true, false };
+	constexpr bool SENS_POWER[NSENS] = { true, true, false, false };
+	constexpr int WATER_VISION = 3;
+
+	struct Sens {                             // one sensor kind's source (int_coverage: sources[u][kind])
+		bool has = false; float r = 0;
+		bool hasDr = false; float dr = 0;
+		bool hasSt = false; float stx = 0, stz = 0, stf = 0, str = 0; int stfresh = -1; int stamps = 0;
+		std::vector<float> hf, hx, hz;
+		bool hasShc = false; float shc = 0, shg = 0, scx = 0, scz = 0, lcx = 0, lcz = 0;
+		int sda = INT_MIN; int mark = 0;      // the ally team its circle is placed for, its stamp
+		float px = 0, pz = 0, pr2 = -1, pce = 0;   // the circle last put (VI.PutK's "same")
+	};
 
 	struct Src {
 		bool hasV = false, hasW = false, nv = false;
@@ -66,6 +94,9 @@ namespace {
 		bool trail = false;                   // a leaving point is placed (VI.TrailSet)
 		float tlx = 0, tlz = 0;
 		bool calm = false;
+		Sens sens[NSENS];
+		bool anySens = false;
+		bool upOff = false; float scale = 1.0f;   // Lua answers (upkeep unpaid; FieldScale), sent on change
 	};
 	std::map<int, Src> srcs;                  // ordered: the sweep frees in id order
 	std::unordered_set<int> builtC;           // F.built
@@ -118,9 +149,21 @@ namespace {
 		DefFlags(L, 1, "air", defAir);
 		DefFlags(L, 1, "lua", defLua);
 		DefFlags(L, 1, "cloak", defCloak);
+		DefFlags(L, 1, "onoff", defOnOff);
+		cfg.sensors = (int)NumField(L, 1, "sensors", 0);
+		cfg.waterSeesSub = BoolField(L, 1, "waterSeesSub");
+		for (int k = 0; k < NSENS; ++k) cfg.sensCell[k] = NumField(L, 1, (std::string("cell_") + SENS_NAME[k]).c_str(), 0);
 		cfg.ok = cfg.fe > 0 && cfg.ce > 0 && cfg.cell > 0;
+		if (cfg.sensors != 0) for (int k = 0; k < NSENS; ++k) if (!(cfg.sensCell[k] > 0)) cfg.ok = false;
 		return 0;
 	}
+
+	void FreeSens(Sens& c, int k, int u, bool shadow) {   // VI.FreeU(I, a, u)
+		if (c.sda == NONE) return;
+		if (!shadow) SupComIntIndex::FreeC(SENS_NAME[k], c.sda, u);
+		c.sda = NONE; c.pr2 = -1;
+	}
+	void FreeAllSens(Src& s, int u, bool shadow) { for (int k = 0; k < NSENS; ++k) FreeSens(s.sens[k], k, u, shadow); }
 
 	void FreeCircle(Src& s, int u, bool shadow) {   // VI.Free(a, k): the circle, its leaving point, the trail
 		if (s.slotA == NONE) return;
@@ -137,10 +180,10 @@ namespace {
 	int Source(lua_State* L) {
 		if (!Synced(L)) return 0;
 		const int u = luaL_checkint(L, 1);
-		const bool any = !lua_isnoneornil(L, 2) || !lua_isnoneornil(L, 3) || lua_toboolean(L, 4);
+		const bool any = !lua_isnoneornil(L, 2) || !lua_isnoneornil(L, 3) || lua_toboolean(L, 4) || lua_istable(L, 5);
 		if (!any) {
 			auto it = srcs.find(u);
-			if (it != srcs.end()) { FreeCircle(it->second, u, lastShadow); srcs.erase(it); }
+			if (it != srcs.end()) { FreeCircle(it->second, u, lastShadow); FreeAllSens(it->second, u, cfg.sensors != 1); srcs.erase(it); }
 			builtC.erase(u);
 			return 0;
 		}
@@ -148,22 +191,45 @@ namespace {
 		s.hasV = lua_isnumber(L, 2); s.vr = s.hasV ? (float)lua_tonumber(L, 2) : 0.0f;
 		s.hasW = lua_isnumber(L, 3); s.wr = s.hasW ? (float)lua_tonumber(L, 3) : 0.0f;
 		s.nv = lua_toboolean(L, 4);
+		s.anySens = false;
+		for (int k = 0; k < NSENS; ++k) {
+			float r = 0.0f;
+			bool has = false;
+			if (lua_istable(L, 5)) {
+				lua_getfield(L, 5, SENS_NAME[k]);
+				has = lua_isnumber(L, -1);
+				if (has) r = (float)lua_tonumber(L, -1);
+				lua_pop(L, 1);
+			}
+			Sens& c = s.sens[k];
+			if (!has && c.has) FreeSens(c, k, u, cfg.sensors != 1);
+			c.has = has; c.r = r;
+			s.anySens = s.anySens || has;
+		}
+		return 0;
+	}
+
+	int UnitAnswers(lua_State* L) {
+		if (!Synced(L)) return 0;
+		auto it = srcs.find(luaL_checkint(L, 1));
+		if (it == srcs.end()) return 0;
+		it->second.upOff = lua_toboolean(L, 2);
+		it->second.scale = (float)luaL_optnumber(L, 3, 1.0);
 		return 0;
 	}
 
 	int Reset(lua_State* L) {
 		if (!Synced(L)) return 0;
-		for (auto& p : srcs) FreeCircle(p.second, p.first, lastShadow);
+		for (auto& p : srcs) { FreeCircle(p.second, p.first, lastShadow); FreeAllSens(p.second, p.first, cfg.sensors != 1); }
 		return 0;
 	}
 
 	// VI.Stamp (REQ INT-005 v6 R1, restamp_on_cell)
-	void Stamp(Src& s, float x, float z, float rE, float f, float& ox, float& oz) {
+	template<class T> void Stamp(T& s, float x, float z, float rE, float f, float& ox, float& oz, float c) {
 		const float fr = cfg.rf;
 		if (!(fr > 0.0f)) { ox = x; oz = z; return; }
 		if (s.hasSt) {
 			const float dx = x - s.stx, dz = z - s.stz, lim = fr * rE;
-			const float c = cfg.cell;
 			const bool crossed = cfg.rc && (Floor(x / c) != Floor(s.stx / c) || Floor(z / c) != Floor(s.stz / c));
 			if (!crossed && dx * dx + dz * dz < lim * lim && f - s.stf < cfg.ri && s.str == rE) {
 				s.stfresh = (dx == 0.0f && dz == 0.0f) ? 1 : 0;
@@ -176,14 +242,14 @@ namespace {
 		ox = x; oz = z;
 	}
 
-	int At(const Src& s, float t) {          // VI.At, 1-based
+	template<class T> int At(const T& s, float t) {          // VI.At, 1-based
 		int i = (int)s.hf.size();
 		while (i > 1 && s.hf[i - 1] > t) --i;
 		return i;
 	}
 
 	// VI.Shot (heights not kept: no height term on this path)
-	void Shot(Src& s, float x, float z, float c, float f, float reF, float& ox, float& oz) {
+	template<class T> void Shot(T& s, float x, float z, float c, float f, float reF, float& ox, float& oz) {
 		const float g = Floor(f / reF);
 		if (s.hf.empty() || !s.hasShc || s.shc != c) {
 			s.hf.assign(1, f); s.hx.assign(1, x); s.hz.assign(1, z);
@@ -372,10 +438,13 @@ namespace {
 
 			// the source (vision here; Lua finishes the other kinds)
 			auto si = srcs.find(u);
-			const bool luaFin = luaDef || (si != srcs.end() && (si->second.nv || !si->second.hasV));
+			const bool sensOn = cfg.sensors == 1;
+			// Lua finishes what it keeps: cloak and jammers (luaDef), the fields (nv), and with the sensors off a unit without vision
+			const bool luaFin = luaDef || (si != srcs.end() && (si->second.nv || (!si->second.hasV && !(sensOn && si->second.anySens))));
 			if (luaFin && fsfI) { nFin += 1; SetN(L, FIN, 2 * nFin - 1, (float)i); SetN(L, FIN, 2 * nFin, (float)fl); }
-			if (si == srcs.end() || !si->second.hasV) continue;
+			if (si == srcs.end()) continue;
 			Src& s = si->second;
+			if (!s.hasV && !(cfg.sensors != 0 && s.anySens)) continue;
 			const int a = own;
 			bool built = builtC.count(u) > 0;
 			if (!built) {
@@ -383,6 +452,52 @@ namespace {
 				if (built) { builtC.insert(u); SetB(L, W_built, u, true); }
 			}
 			const bool carried = fl >= 0 ? (fl & 1) != 0 : unit->GetTransporter() != nullptr;
+			// the sensor kinds (F.SrcLua's loop, the four kinds only), before vision as their own records
+			if (cfg.sensors != 0 && s.anySens) {
+				const bool sShadow = shadow || cfg.sensors == 2;
+				const bool on = (!((size_t)d < defOnOff.size() && defOnOff[d]) || (fl >= 0 ? (fl & 2) != 0 : unit->activated)) && !s.upOff;
+				for (int k = 0; k < NSENS; ++k) {
+					Sens& c = s.sens[k];
+					if (!c.has) continue;
+					bool liveS = !carried && (built || (cfg.unfinished && k == WATER_VISION)) && (on || !SENS_SWITCHED[k]);
+					float r = c.r;
+					if (SENS_POWER[k]) r = r * s.scale;
+					if (k == WATER_VISION && air) { if (landed) r = r * cfg.landedV; }
+					if (k == WATER_VISION) liveS = liveS && cfg.waterSeesSub;
+					c.hasDr = liveS && r > 0.0f; c.dr = c.hasDr ? r : 0.0f;
+					if (c.sda != NONE && (c.sda != a || !c.hasDr)) FreeSens(c, k, u, sShadow);
+					if (c.hasDr) {
+						const float sc = cfg.sensCell[k];
+						float qx, qz, sx, sz;
+						Stamp(c, x, z, c.dr * cfg.MU, f, qx, qz, sc);
+						Shot(c, qx, qz, sc, f, cfg.reF, sx, sz);
+						const float cE = Reach(c.dr, sc);
+						const float r2 = Sq(cE + cfg.hk * cfg.hclamp + sc);
+						const bool same = c.sda == a && c.px == sx && c.pz == sz && c.pr2 == r2 && c.pce == cE;
+						if (!sShadow && !same) SupComIntIndex::PutC(SENS_NAME[k], a, u, sx, sz, r2, stamp, cE);
+						c.px = sx; c.pz = sz; c.pr2 = r2; c.pce = cE;
+						c.sda = a; c.mark = stamp;
+					}
+					// the source table's radius in use (cases read it), as Lua writes it
+					if (sensOn && !shadow) {
+						lua_rawgeti(L, R_sources, u);
+						if (lua_istable(L, -1)) {
+							lua_getfield(L, -1, SENS_NAME[k]);
+							if (lua_istable(L, -1)) {
+								if (c.hasDr) lua_pushnumber(L, c.dr); else lua_pushnil(L);
+								lua_setfield(L, -2, "dr");
+								lua_pushnumber(L, (float)c.stamps); lua_setfield(L, -2, "stamps");
+							}
+							lua_pop(L, 1);
+						}
+						lua_pop(L, 1);
+					}
+				}
+			}
+			if (!s.hasV) {                                                             // a sensor-only source (sensors on): no vision part
+				if (sensOn) { SetTrueOrNil(L, W_nv, u, true); SetNil(L, W_calm, u); }
+				continue;
+			}
 			const bool liveV = !carried && (built || cfg.unfinished);
 			float r = s.vr;
 			if (air) {
@@ -399,7 +514,7 @@ namespace {
 			if (s.hasDr) {
 				const float rE = s.dr * cfg.MU;
 				float qx, qz;
-				Stamp(s, x, z, rE, f, qx, qz);
+				Stamp(s, x, z, rE, f, qx, qz, cell);
 				const float kx = Floor(qx / cell), kz = Floor(qz / cell);
 				const bool k0 = !all0 && s.slotA == a;
 				if (k0 && s.hf.size() == 1 && s.hasShc && s.shc == cell && s.hasRk && s.rkx == kx && s.rkz == kz && s.rdr == s.dr && s.rda == a) {
@@ -439,12 +554,18 @@ namespace {
 			// the engine's sight radius follows the water radius (Lua: SetUnitSensorRadius)
 			const int uv = sub ? 1 : 0;
 			if (s.hasW && liveV && s.under != uv) { s.under = uv; nEv += 1; SetN(L, EV, 3 * nEv - 2, uf); SetN(L, EV, 3 * nEv - 1, 2.0f); SetN(L, EV, 3 * nEv, (float)uv); }
-			SetTrueOrNil(L, W_nv, u, s.nv);
-			s.calm = fsfI && !s.nv && builtC.count(u) > 0 && !carried && !mayCloak && s.hasDr && s.stfresh != 0;
+			const bool other = s.nv || s.anySens;                                      // a kind other than vision (fields or sensors)
+			SetTrueOrNil(L, W_nv, u, other);
+			s.calm = fsfI && !other && builtC.count(u) > 0 && !carried && !mayCloak && s.hasDr && s.stfresh != 0;
 			SetTrueOrNil(L, W_calm, u, s.calm);
 		}
 		if (all0) {                                                                    // circles not written this pass (VI.Sweep)
 			for (auto& p : srcs) if (p.second.slotA != NONE && p.second.mark != stamp) FreeCircle(p.second, p.first, shadow);
+			if (cfg.sensors != 0)
+				for (auto& p : srcs) for (int k = 0; k < NSENS; ++k) {
+					Sens& c = p.second.sens[k];
+					if (c.sda != NONE && c.mark != stamp) FreeSens(c, k, p.first, shadow || cfg.sensors == 2);
+				}
 		}
 		lua_settop(L, 14);
 		lua_pushnumber(L, nRd); lua_pushnumber(L, nSt); lua_pushnumber(L, nSh);
@@ -469,8 +590,29 @@ namespace {
 	}
 }
 
+namespace {
+	int SensorCircle(lua_State* L) {
+		if (!Synced(L)) return 0;
+		const auto it = srcs.find(luaL_checkint(L, 1));
+		if (it == srcs.end()) return 0;
+		const std::string kind = luaL_checkstring(L, 2);
+		for (int k = 0; k < NSENS; ++k) {
+			if (kind != SENS_NAME[k]) continue;
+			const Sens& c = it->second.sens[k];
+			if (c.sda == NONE) lua_pushnil(L); else lua_pushnumber(L, c.sda);
+			lua_pushnumber(L, c.px); lua_pushnumber(L, c.pz); lua_pushnumber(L, c.pr2); lua_pushnumber(L, c.pce);
+			if (c.hasDr) lua_pushnumber(L, c.dr); else lua_pushnil(L);
+			lua_pushnumber(L, c.stamps);
+			return 7;
+		}
+		return 0;
+	}
+}
+
 void SupComIntFacts::PushSyncedCtrl(lua_State* L)
 {
+	LuaPushRawNamedCFunc(L, "SupComIntUnitAnswers", UnitAnswers);
+	LuaPushRawNamedCFunc(L, "SupComIntSensorCircle", SensorCircle);
 	LuaPushRawNamedCFunc(L, "SupComIntFactsInit", Init);
 	LuaPushRawNamedCFunc(L, "SupComIntSource", Source);
 	LuaPushRawNamedCFunc(L, "SupComIntFactsReset", Reset);
