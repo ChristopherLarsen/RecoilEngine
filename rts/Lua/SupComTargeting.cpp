@@ -164,7 +164,9 @@ bool Acceptable(const CUnit* u, const WDef& w, int tid, bool noLine, bool& faile
 	if (Arriving(t))
 		return false;
 	failed = true;
-	if (!losHandler->InLos(t, u->allyteam))
+	// CMB-027 v1: a candidate (and a held target) needs contact for the shooter allyteam: raw LOS status bits & 7
+	// (1 in sight, 2 radar or sonar/omni via int_coverage, 4 seen before: structures only); the 0xF0 mask bits do not count
+	if ((t->losStatus[u->allyteam] & 7) == 0)
 		return false;
 	if (!LayerOK(w, t))
 		return false;
