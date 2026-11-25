@@ -197,6 +197,8 @@ static bool StandingSlideOnceOn() { static const bool on = SupComSimSwitch::Get(
 static bool StandingBlocksOn() { static const bool on = SupComSimSwitch::Get("SupComStandingBlocks", true); return on; }
 static bool BlockMemoryOn() { static const bool on = SupComSimSwitch::Get("SupComBlockMemory", true); return on; }
 // pathing fix 4: an idle unit is not pushed into another obstacle (game docs/engine/PATHING-ROOT-CAUSE.md, hand-over finding)
+// MOV-021 R2 entry guard (d092c2d620): switch SupComEntryGuard, default 1 (MOV-018-G/H bisect)
+static bool EntryGuardOn() { static const bool on = SupComSimSwitch::Get("SupComEntryGuard", true); return on; }
 static bool IdleNoPushInOn() { static const bool on = SupComSimSwitch::Get("SupComIdleNoPushIn", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
 static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
@@ -1623,7 +1625,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		bool byStructure = false;
 
 		// MOV-021 R2 (pathing fix): out of the blocked space the unit started in, never into another obstacle
-		if (positionStuck && SupComPushCap::On() && EntersNewObstacle(owner, owner->pos, owner->pos + moveRequest)) {
+		if (positionStuck && SupComPushCap::On() && EntryGuardOn() && EntersNewObstacle(owner, owner->pos, owner->pos + moveRequest)) {
 			blocked = true;
 			byStructure = true;
 		}
