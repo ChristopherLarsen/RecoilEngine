@@ -82,8 +82,10 @@ namespace {
 	// the engine's waypoint search radius (GroundMoveType.cpp WAYPOINT_RADIUS)
 	constexpr float ROUTE_WP_RADIUS = 1.25f * SQUARE_SIZE;
 
-	// a change of position smaller than this is no change (elmos; float noise and collision jitter; DESIGN)
-	constexpr float STILL_EPS = 0.1f;
+	// a change of position smaller than this is no change (elmos; DESIGN): a mover pressed against an idle unit or a wall is
+	// rocked back and forth by the collision push by more than 0.1 elmo, which kept resetting its stuck clock (L11101 route log:
+	// PTH-002-C/D movers blocked for the whole case, no stuck ending); a quarter square still sees any unit making headway
+	constexpr float STILL_EPS = SQUARE_SIZE * 0.25f;
 }
 
 bool CSupComGroundMoveType::RouteFollowOn()
