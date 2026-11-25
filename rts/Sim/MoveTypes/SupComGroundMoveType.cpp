@@ -111,6 +111,25 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(holdBestDist),
 	CR_MEMBER(holdBestFrame),
 	CR_MEMBER(holdGoal),
+	CR_MEMBER(rfPts),
+	CR_MEMBER(rfAim),
+	CR_MEMBER(rfStillPos),
+	CR_MEMBER(rfShortFor),
+	CR_MEMBER(rfPathID),
+	CR_MEMBER(rfNext),
+	CR_MEMBER(rfAimIdx),
+	CR_MEMBER(rfAimDist),
+	CR_MEMBER(rfRecheckFrame),
+	CR_MEMBER(rfStillFrame),
+	CR_MEMBER(rfWaitUntil),
+	CR_MEMBER(rfWaits),
+	CR_MEMBER(rfRounds),
+	CR_MEMBER(rfRequests),
+	CR_MEMBER(rfActive),
+	CR_MEMBER(rfFresh),
+	CR_MEMBER(rfShortSeen),
+	CR_MEMBER(rfLastWaited),
+	CR_MEMBER(rfWaitShort),
 
 	CR_PREALLOC(GetPreallocContainer)
 ))
@@ -176,6 +195,8 @@ static bool StandingKeepHalfOn() { static const bool on = SupComSimSwitch::Get("
 static bool StandingSlideOnceOn() { static const bool on = SupComSimSwitch::Get("SupComStandingSlideOnce", true); return on; }
 static bool StandingBlocksOn() { static const bool on = SupComSimSwitch::Get("SupComStandingBlocks", true); return on; }
 static bool BlockMemoryOn() { static const bool on = SupComSimSwitch::Get("SupComBlockMemory", true); return on; }
+// pathing fix 4: an idle unit is not pushed into another obstacle (game docs/engine/PATHING-ROOT-CAUSE.md, hand-over finding)
+static bool IdleNoPushInOn() { static const bool on = SupComSimSwitch::Get("SupComIdleNoPushIn", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
 static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
 // sideways search for a line that fits through a gap: up to this many elmos either side, in this step (PLACEHOLDER)
@@ -313,6 +334,7 @@ void CSupComGroundMoveType::ResetForNewOrder()
 	gqFrame = -1;
 	gqAhead = false;
 	gqHeld = false;
+	RouteReset();
 
 	// a new order during braking or the settle replaces it
 	if (scSpeed > 0.0f)
@@ -380,6 +402,17 @@ void CSupComGroundMoveType::PushLuaState(lua_State* L) const
 	LuaPushNamedNumber(L, "supcomGapRoom", gqRoom);
 	LuaPushNamedNumber(L, "supcomCrowdFrames", crowdFrames);
 	LuaPushNamedNumber(L, "supcomStructFrames", scStructFrames);
+	// SupComRouteFollow (PTH-007 v2, PTH-002 v7 R9-R13): the follower's counters (cases PTH-002-K..R, PTH-007-A..I)
+	LuaPushNamedBool(L, "supcomRouteOn", RouteFollowOn() && rfActive);
+	LuaPushNamedNumber(L, "supcomRouteWaits", rfWaits);
+	LuaPushNamedNumber(L, "supcomRouteRounds", rfRounds);
+	LuaPushNamedNumber(L, "supcomRouteRequests", rfRequests);
+	LuaPushNamedNumber(L, "supcomRouteNext", rfNext);
+	LuaPushNamedNumber(L, "supcomRouteAimIndex", rfAimIdx);
+	LuaPushNamedNumber(L, "supcomRoutePoints", int(rfPts.size()));
+	LuaPushNamedNumber(L, "supcomRouteWaitUntil", rfWaitUntil);
+	LuaPushNamedNumber(L, "supcomRouteAimX", rfAim.x);
+	LuaPushNamedNumber(L, "supcomRouteAimZ", rfAim.z);
 }
 
 void CSupComGroundMoveType::StartMovingRaw(const float3 moveGoalPos, float moveGoalRadius)
@@ -956,6 +989,14 @@ float3 CSupComGroundMoveType::SmoothedWaypoint(const float3& cwp, const float3& 
 
 void CSupComGroundMoveType::SetWaypointDir(const float3& cwp, const float3& opos)
 {
+	// SupComRouteFollow (PTH-007 v2 R2): steer at the aim point the follower chose (single-threaded, before this pass); the
+	// direct-to-goal and smoothing shortcuts are not used: the aim point is the farthest of the next route points in a straight line
+	if (RouteFollowOn() && rfActive && rfAimIdx >= 0 && progressState == Active) {
+		const float3 target = FitWaypoint(rfAim);
+		CGroundMoveType::SetWaypointDir(GapQueueTarget(rfAim, opos, target), opos);
+		return;
+	}
+
 	// a clear straight line to the goal is driven directly, not through the path's waypoints
 	if (progressState == Active && owner->commandAI->commandQue.size() <= 1 && DirectLineClear()) {
 		if (YieldLog() && !goalPos.same(scLogTarget)) {
@@ -1190,6 +1231,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	// before the engine acts on this frame's arrival flags (UpdatePreCollisions)
 	HoldEarlyArrival();
 	HeldLegProgress();
+	// SupComRouteFollow (PTH-007 v2, PTH-002 v7 R9-R13): the aim point, searches, waits and the end of a blocked order
+	RouteFollowUpdate();
 
 	if (owner->UnderFirstPersonControl()) {
 		CGroundMoveType::UpdateUnitPosition();
@@ -1882,6 +1925,21 @@ bool CSupComGroundMoveType::SetMemberValue(unsigned int memberHash, void* member
 {
 	static const unsigned int SUBMERGED_HASH = spring::LiteHash("submerged", sizeof("submerged") - 1, 0);
 	static const unsigned int HEADING_FREE_HASH = spring::LiteHash("supcomHeadingFree", sizeof("supcomHeadingFree") - 1, 0);
+	static const unsigned int ROUTE_SCRIPT_HASH = spring::LiteHash("supcomRouteScript", sizeof("supcomRouteScript") - 1, 0);
+
+	// SupComRouteFollow test hook (Spring.MoveCtrl.SetGroundMoveTypeData(u, "supcomRouteScript", k)): appends one scripted result
+	// for the unit's next route search (0 empty, k > 0 a route of k points that reaches the goal, -k k points that do not reach the
+	// old route); -999 clears the script. Tests only; the game never sets it.
+	if (memberHash == ROUTE_SCRIPT_HASH) {
+		const float v = *(reinterpret_cast<float*>(memberValue));
+		if (v <= -999.0f) {
+			rfScript.clear();
+			rfScriptPos = 0;
+		} else {
+			rfScript.push_back(int(v));
+		}
+		return true;
+	}
 
 	if (memberHash == HEADING_FREE_HASH) {
 		if (owner->moveDef == nullptr || owner->moveDef->speedModClass != MoveDef::Hover)
@@ -2028,6 +2086,16 @@ bool CSupComGroundMoveType::Update()
 	// pathing fix (game PATHING-ROOT-CAUSE causes 3, 4): this frame's collision push (resultantForces, computed after the step was
 	// applied) is capped so the step and the push together stay within a fraction of top speed (SupComPushCap; values PLACEHOLDER)
 	SupComPushCap::Clamp(resultantForces, owner->speed, maxSpeed);
+	// pathing fix 4 (MOV-021 v1 R2 extended to idle units; the stock static push of HandleStaticObjectCollision): a unit with no
+	// active move is not pushed where its footprint covers another immobile obstacle or impassable ground it is not on now (an idle
+	// tank overlapping a factory edge was pushed onto the power plant beside it); SupComIdleNoPushIn, default on
+	if (IdleNoPushInOn() && progressState != Active && resultantForces.SqLength2D() > 0.0f) {
+		const float3 to = owner->pos + resultantForces;
+		if (EntersNewObstacle(owner, owner->pos, to) || (FootprintBlocked(to) && !FootprintBlocked(owner->pos))) {
+			resultantForces = ZeroVector;
+			owner->SetVelocityAndSpeed(ZeroVector);
+		}
+	}
 	scPushLen = std::sqrt(resultantForces.x * resultantForces.x + resultantForces.z * resultantForces.z);
 	// pathing fix 5 (L11400-L11402: MOV-007-D, PTH-002-J, PTH-004-B/D pass only with the pushed state off): MOV-021 R4's pushed state is
 	// a unit shoved by moving units; contact with a unit that stands (an idle unit holding against the push, a jammed neighbour) is
