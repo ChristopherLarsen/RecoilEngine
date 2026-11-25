@@ -52,3 +52,7 @@ void SupComPushCap::Clamp(float3& push, const float3& step, float maxSpeed)
 	push.x *= k;
 	push.z *= k;
 }
+
+float SupComPushCap::PushClearFrac() { static const float v = Opt("supcompushclear", 0.1f); return v; }
+float SupComPushCap::PushBackFrac() { static const float v = Opt("supcompushback", 0.25f); return v; }
+bool SupComPushCap::NoSlide() { static const bool on = SupComSimSwitch::Get("SupComNoSlide", true); return on; }

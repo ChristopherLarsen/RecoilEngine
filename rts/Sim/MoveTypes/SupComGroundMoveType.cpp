@@ -81,6 +81,8 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scBlockedFrames),
 	CR_MEMBER(scStructFrames),
 	CR_MEMBER(scHandoverFrames),
+	CR_MEMBER(scPushLen),
+	CR_MEMBER(scPushBack),
 	CR_MEMBER(scHandoverFrom),
 	CR_MEMBER(scYieldFrames),
 	CR_MEMBER(scYieldUnit),
@@ -1119,11 +1121,24 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		return;
 	}
 
+	// MOV-021 v1 R4 (pathing fix): a unit pushed harder than push_clear_speed_fraction of its top speed last frame does not follow its route
+	// this frame (no step of its own); an idle unit is never pushed (SupComGoRound), so this only holds movers being separated
+	const bool pushedState = (SupComPushCap::On() && progressState == Active && scPushLen > SupComPushCap::PushClearFrac() * maxSpeed);
+	if (pushedState) {
+		scSpeed = 0.0f;
+		scPhase = PHASE_DRIVE;
+		owner->SetVelocityAndSpeed(ZeroVector);
+		resultantForces = ZeroVector;
+		UpdateTurnRate();
+		return;
+	}
+
 	// refused by a structure for half a second while following a path: the planner, with the move class's
 	// square-offset footprint, cut the corner of a structure that the engine's own position test then refuses (a mex
 	// beside a factory exit, Q100), and this move type's exact steps cannot get round it. The engine's own ground
 	// movement slides along the structure, as stock units do, until the unit has moved two squares or two seconds pass.
-	if (scHandoverFrames == 0 && scStructFrames >= STRUCT_HANDOVER_FRAMES && progressState == Active) {
+	// MOV-021 v1 R1 (pathing fix): no part of a blocked step is kept along the obstacle, so with SupComNoSlide the handover is not started
+	if (!SupComPushCap::NoSlide() && scHandoverFrames == 0 && scStructFrames >= STRUCT_HANDOVER_FRAMES && progressState == Active) {
 		scHandoverFrames = STRUCT_HANDOVER_TIME;
 		scHandoverFrom = owner->pos;
 		scStructFrames = 0;
@@ -1551,6 +1566,16 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				for (const CUnit* u: *q.units) { if (u != owner) near += " " + std::to_string(u->id) + "@(" + std::to_string(int(u->pos.x)) + "," + std::to_string(int(u->pos.z)) + ")"; }
 				LOG("[SupComYield] f=%d unit %d wanted step (%.2f, %.2f) to (%.1f, %.1f); our footprint %s; units near:%s", gs->frameNum, owner->id, moveRequest.x, moveRequest.z, next.x, next.z, FootprintBlocked(next)? "blocked": "fits", near.c_str());
 			}
+			// MOV-021 v1 R1 (pathing fix): a small push back along the line the unit tried to move, unless it is being pushed; it
+			// changes position by less than one step at top speed and never into blocked squares
+			if (SupComPushCap::On() && !stop && scPushLen <= 0.0f) {
+				const float len = std::sqrt(moveRequest.x * moveRequest.x + moveRequest.z * moveRequest.z);
+				if (len > 0.0f) {
+					const float3 back = float3(-moveRequest.x / len, 0.0f, -moveRequest.z / len) * (SupComPushCap::PushBackFrac() * maxSpeed);
+					if (!FootprintBlocked(owner->pos + back))
+						scPushBack = back;
+				}
+			}
 			// the step is not taken and the speed is lost
 			moveRequest = ZeroVector;
 			scSpeed = 0.0f;
@@ -1585,7 +1610,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	// reported velocity is the step's displacement
 	owner->SetVelocityAndSpeed(moveRequest);
-	resultantForces = moveRequest;
+	resultantForces = moveRequest + scPushBack;
+	scPushBack = ZeroVector;
 
 	UpdateTurnRate();
 }
@@ -1852,6 +1878,7 @@ bool CSupComGroundMoveType::Update()
 	// pathing fix (game PATHING-ROOT-CAUSE causes 3, 4): this frame's collision push (resultantForces, computed after the step was
 	// applied) is capped so the step and the push together stay within a fraction of top speed (SupComPushCap; values PLACEHOLDER)
 	SupComPushCap::Clamp(resultantForces, owner->speed, maxSpeed);
+	scPushLen = std::sqrt(resultantForces.x * resultantForces.x + resultantForces.z * resultantForces.z);
 
 	const bool moved = CGroundMoveType::Update();
 

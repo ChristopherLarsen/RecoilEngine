@@ -10,4 +10,7 @@ class CFactory;
 
 namespace SupComFactoryPad {
 	bool Blocked(const CFactory* factory, const float3& buildPos);
+	// FAC-002 v6 R11 (pathing fix 2026-11-25): the turn of the unit on the build point, in heading units, from the factory's unit rules
+	// param "supcom_build_spin" (degrees, set by the game when it chooses the exit point; synced); 0 without it
+	int BuildSpin(const CFactory* factory);
 }
