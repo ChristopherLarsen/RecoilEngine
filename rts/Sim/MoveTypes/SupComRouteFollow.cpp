@@ -372,7 +372,13 @@ void CSupComGroundMoveType::RouteRequest(bool fresh)
 		}
 		rfShortSeen = true;
 		rfShortFor = nextPt;
-		RouteAdopt(id, pts);
+		// a short route is a detour to the old route's next point: after it the unit heads for that point again
+		std::vector<float3> detour = pts;
+		const int oldNext = rfNext;
+		const std::vector<float3> oldPts = rfPts;
+		for (int i = oldNext; i < int(oldPts.size()); i++)
+			detour.push_back(oldPts[i]);
+		RouteAdopt(id, detour);
 		return;
 	}
 
