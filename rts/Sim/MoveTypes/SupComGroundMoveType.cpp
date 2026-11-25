@@ -30,6 +30,7 @@
 #include "System/Threading/ThreadPool.h"
 #include "System/Config/ConfigHandler.h"
 #include "System/Log/ILog.h"
+#include "SupComPushCap.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -140,6 +141,8 @@ static bool yieldLogSquares = false;
 
 CONFIG(bool, SupComMakeWay).defaultValue(true).description("supcom: SupComGroundMoveType units line up with a gap their own width instead of stopping at its edge, and make way faster (PTH-002, PTH-004); 0 behaves as before.");
 static bool MakeWayOn() { static const bool on = SupComSimSwitch::Get("SupComMakeWay", true); return on; }
+// pathing fix 2026-11-25 (game docs/engine/PATHING-ROOT-CAUSE.md cause 5): a structure step the engine's footprint refuses is refused
+static bool OneFootprintOn() { static const bool on = SupComSimSwitch::Get("SupComOneFootprint", true); return on; }
 CONFIG(bool, SupComGoRound).defaultValue(true).description("supcom: an idle unit is never displaced: a mover goes round it where there is a way and otherwise stops (no make-way, no push, no walk-back) (PTH-006 v8 R3, PTH-002 v5 R3a, owner decision 2026-11-24); 0 asks the idle unit to make way, as before.");
 static bool GoRoundOn() { static const bool on = SupComSimSwitch::Get("SupComGoRound", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
@@ -1134,8 +1137,10 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			// PTH-004-E (L5987): the engine's slide (its own square footprint) took a unit held at a block in a one-cell gap
 			// up to 6 elmos sideways into the wall cells; a slide that puts this move type's footprint onto impassable
 			// squares it was not on is undone
-			if (FootprintBlocked(owner->pos) && !FootprintBlocked(before)) {
-				owner->Move(before, false);
+			// pathing fix: the stock step only sets resultantForces (UpdateOwnerPos; applied in UpdatePreCollisions), so the
+			// slide is tested where it would take the unit; the earlier test compared the unmoved position and never fired
+			if (FootprintBlocked(before + resultantForces) && !FootprintBlocked(before)) {
+				resultantForces = ZeroVector;
 				owner->SetVelocityAndSpeed(ZeroVector);
 			}
 
@@ -1524,7 +1529,10 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 					// courses L5866 lane 12 (MOV-020): a tank 4 elmos clear of a structure was refused by the engine's square
 					// footprint (the move def's size) while its own footprint (supcom_footprint_x/z) touched no structure square;
 					// this move type's footprint decides, so the step is taken
-					if (byStructure && !FootprintBlocked(next) && !FootprintOnStructure(next)) {
+					// pathing fix (PATHING-ROOT-CAUSE cause 5): with SupComOneFootprint (mod option, default 1) the engine's footprint,
+					// the one the collision response and the planner use, decides structure contact too, so no step is taken that the
+					// collision pass then pushes back; 0: this move type's smaller footprint decides, as before
+					if (!OneFootprintOn() && byStructure && !FootprintBlocked(next) && !FootprintOnStructure(next)) {
 						byStructure = false;
 						blocked = false;
 					}
@@ -1840,6 +1848,10 @@ bool CSupComGroundMoveType::Update()
 	const float3 updStart = owner->pos;
 	if (YieldLog() && FootprintBlocked(owner->pos) && updStart.SqDistance2D(dbgEndPos) > 1e-4f)
 		LOG("[SupComYield] f=%d unit %d on impassable squares: moved between updates (%.2f, %.2f) to (%.1f, %.1f)", gs->frameNum, owner->id, updStart.x - dbgEndPos.x, updStart.z - dbgEndPos.z, updStart.x, updStart.z);
+
+	// pathing fix (game PATHING-ROOT-CAUSE causes 3, 4): this frame's collision push (resultantForces, computed after the step was
+	// applied) is capped so the step and the push together stay within a fraction of top speed (SupComPushCap; values PLACEHOLDER)
+	SupComPushCap::Clamp(resultantForces, owner->speed, maxSpeed);
 
 	const bool moved = CGroundMoveType::Update();
 
