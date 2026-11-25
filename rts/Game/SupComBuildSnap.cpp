@@ -4,6 +4,9 @@
 #include "Sim/Units/UnitDef.h"
 #include "System/SpringMath.h"
 
+#include <algorithm>
+#include <cstdint>
+
 bool SupComBuildSnap::Fine(const UnitDef* def)
 {
 	if (def == nullptr)
@@ -14,7 +17,15 @@ bool SupComBuildSnap::Fine(const UnitDef* def)
 
 float SupComBuildSnap::Axis(float v, int size)
 {
-	if (size & 1)
-		return math::floor(v / SQUARE_SIZE) * SQUARE_SIZE + SQUARE_SIZE * 0.5f;
-	return math::floor(v / SQUARE_SIZE + 0.5f) * SQUARE_SIZE;
+	// BLD-001 v10 R10: the footprint low edge snaps to the nearest square line; an edge exactly halfway goes to the even line
+	const int n = std::max(size, 1);
+	const float e = v / SQUARE_SIZE - n * 0.5f;
+	const float f = math::floor(e);
+	const float r = e - f;
+	float line;
+	if (r == 0.5f)
+		line = ((static_cast<int64_t>(f) & 1) == 0) ? f : f + 1.0f;
+	else
+		line = (r < 0.5f) ? f : f + 1.0f;
+	return (line + n * 0.5f) * SQUARE_SIZE;
 }
