@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include <cstring>
+#include "Game/Camera/SupComCamFar.h"
 
 #include "Camera.h"
 #include "CameraHandler.h"
@@ -349,6 +350,7 @@ void CCamera::UpdateViewRange()
 	wantedViewRange = std::clamp(wantedViewRange, CGlobalRendering::MIN_ZNEAR_DIST, CGlobalRendering::MAX_VIEW_RANGE);
 	#endif
 
+	if (camType == CAMTYPE_PLAYER) wantedViewRange = std::max(wantedViewRange, SupComCamFar::minFar);   // supcom: CAM-001 R5 furthest view never clipped
 	frustum.scales.z = std::max(wantedViewRange * ZFAR_ZNEAR_FACTOR, globalRendering->minViewRange);
 	frustum.scales.w = std::min(wantedViewRange                    , globalRendering->maxViewRange);
 }

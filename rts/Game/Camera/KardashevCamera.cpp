@@ -14,6 +14,7 @@
 // in GetState and SetState below). Display only: nothing here touches the simulation.
 
 #include "KardashevCamera.h"
+#include "Game/Camera/SupComCamFar.h"
 
 #include "Game/Camera.h"
 #include "Game/CameraHandler.h"
@@ -197,6 +198,7 @@ void CKardashevCamera::Refit()
 
 	lim.dMin = feel.minDist;
 	lim.dMax = std::max((dMaxOverride > 0.0f)? dMaxOverride: hi, feel.minDist * 1.5f);   // Lua's R5 limit wins over the fit while set
+	SupComCamFar::minFar = lim.dMax * SupComCamFar::FAR_FACTOR;   // the player far plane reaches past the furthest view
 }
 
 
