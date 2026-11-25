@@ -79,6 +79,7 @@ namespace {
 		bool hasShc = false; float shc = 0, shg = 0, scx = 0, scz = 0, lcx = 0, lcz = 0;
 		int sda = INT_MIN; int mark = 0;      // the ally team its circle is placed for, its stamp
 		float px = 0, pz = 0, pr2 = -1, pce = 0;   // the circle last put (VI.PutK's "same")
+		bool placed = false;                  // this file wrote it into the kind's index (never in shadow)
 	};
 
 	struct Src {
@@ -158,12 +159,12 @@ namespace {
 		return 0;
 	}
 
-	void FreeSens(Sens& c, int k, int u, bool shadow) {   // VI.FreeU(I, a, u)
+	void FreeSens(Sens& c, int k, int u) {   // VI.FreeU(I, a, u); the index only where this file placed the circle
 		if (c.sda == NONE) return;
-		if (!shadow) SupComIntIndex::FreeC(SENS_NAME[k], c.sda, u);
-		c.sda = NONE; c.pr2 = -1;
+		if (c.placed) SupComIntIndex::FreeC(SENS_NAME[k], c.sda, u);
+		c.sda = NONE; c.pr2 = -1; c.placed = false;
 	}
-	void FreeAllSens(Src& s, int u, bool shadow) { for (int k = 0; k < NSENS; ++k) FreeSens(s.sens[k], k, u, shadow); }
+	void FreeAllSens(Src& s, int u) { for (int k = 0; k < NSENS; ++k) FreeSens(s.sens[k], k, u); }
 
 	void FreeCircle(Src& s, int u, bool shadow) {   // VI.Free(a, k): the circle, its leaving point, the trail
 		if (s.slotA == NONE) return;
@@ -183,7 +184,7 @@ namespace {
 		const bool any = !lua_isnoneornil(L, 2) || !lua_isnoneornil(L, 3) || lua_toboolean(L, 4) || lua_istable(L, 5);
 		if (!any) {
 			auto it = srcs.find(u);
-			if (it != srcs.end()) { FreeCircle(it->second, u, lastShadow); FreeAllSens(it->second, u, cfg.sensors != 1); srcs.erase(it); }
+			if (it != srcs.end()) { FreeCircle(it->second, u, lastShadow); FreeAllSens(it->second, u); srcs.erase(it); }
 			builtC.erase(u);
 			return 0;
 		}
@@ -202,7 +203,7 @@ namespace {
 				lua_pop(L, 1);
 			}
 			Sens& c = s.sens[k];
-			if (!has && c.has) FreeSens(c, k, u, cfg.sensors != 1);
+			if (!has && c.has) FreeSens(c, k, u);
 			c.has = has; c.r = r;
 			s.anySens = s.anySens || has;
 		}
@@ -220,7 +221,7 @@ namespace {
 
 	int Reset(lua_State* L) {
 		if (!Synced(L)) return 0;
-		for (auto& p : srcs) { FreeCircle(p.second, p.first, lastShadow); FreeAllSens(p.second, p.first, cfg.sensors != 1); }
+		for (auto& p : srcs) { FreeCircle(p.second, p.first, lastShadow); FreeAllSens(p.second, p.first); }
 		return 0;
 	}
 
@@ -465,7 +466,7 @@ namespace {
 					if (k == WATER_VISION && air) { if (landed) r = r * cfg.landedV; }
 					if (k == WATER_VISION) liveS = liveS && cfg.waterSeesSub;
 					c.hasDr = liveS && r > 0.0f; c.dr = c.hasDr ? r : 0.0f;
-					if (c.sda != NONE && (c.sda != a || !c.hasDr)) FreeSens(c, k, u, sShadow);
+					if (c.sda != NONE && (c.sda != a || !c.hasDr)) FreeSens(c, k, u);
 					if (c.hasDr) {
 						const float sc = cfg.sensCell[k];
 						float qx, qz, sx, sz;
@@ -473,8 +474,8 @@ namespace {
 						Shot(c, qx, qz, sc, f, cfg.reF, sx, sz);
 						const float cE = Reach(c.dr, sc);
 						const float r2 = Sq(cE + cfg.hk * cfg.hclamp + sc);
-						const bool same = c.sda == a && c.px == sx && c.pz == sz && c.pr2 == r2 && c.pce == cE;
-						if (!sShadow && !same) SupComIntIndex::PutC(SENS_NAME[k], a, u, sx, sz, r2, stamp, cE);
+						const bool same = c.placed && c.sda == a && c.px == sx && c.pz == sz && c.pr2 == r2 && c.pce == cE;
+						if (!sShadow && !same) { SupComIntIndex::PutC(SENS_NAME[k], a, u, sx, sz, r2, stamp, cE); c.placed = true; }
 						c.px = sx; c.pz = sz; c.pr2 = r2; c.pce = cE;
 						c.sda = a; c.mark = stamp;
 					}
@@ -564,7 +565,7 @@ namespace {
 			if (cfg.sensors != 0)
 				for (auto& p : srcs) for (int k = 0; k < NSENS; ++k) {
 					Sens& c = p.second.sens[k];
-					if (c.sda != NONE && c.mark != stamp) FreeSens(c, k, p.first, shadow || cfg.sensors == 2);
+					if (c.sda != NONE && c.mark != stamp) FreeSens(c, k, p.first);
 				}
 		}
 		lua_settop(L, 14);
