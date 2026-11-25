@@ -320,6 +320,7 @@ void CSupComGroundMoveType::RouteEnd(const char* why)
 
 	rfActive = false;
 	rfWaitUntil = -1;
+	rfEndFrame = gs->frameNum;
 
 	// PTH-002 R10/R11: the order ends silently (no sound: the engine's failure plays none) and leaves the queue; the next queued
 	// order starts in this same update (the command AI is polled here, as an arrival does)

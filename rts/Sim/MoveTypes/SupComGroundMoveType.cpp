@@ -122,6 +122,7 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(rfWaits),
 	CR_MEMBER(rfRounds),
 	CR_MEMBER(rfRequests),
+	CR_MEMBER(rfEndFrame),
 	CR_MEMBER(rfActive),
 	CR_MEMBER(rfFresh),
 	CR_MEMBER(rfShortSeen),
@@ -379,6 +380,8 @@ void CSupComGroundMoveType::PushLuaState(lua_State* L) const
 	LuaPushNamedNumber(L, "supcomRouteWaits", rfWaits);
 	LuaPushNamedNumber(L, "supcomRouteRounds", rfRounds);
 	LuaPushNamedNumber(L, "supcomRouteRequests", rfRequests);
+	// the frame the follower last ended an order as blocked: the game consumes that move without re-issuing it (PTH-002 R11)
+	LuaPushNamedNumber(L, "supcomRouteEndFrame", rfEndFrame);
 	LuaPushNamedNumber(L, "supcomRouteNext", rfNext);
 	LuaPushNamedNumber(L, "supcomRouteAimIndex", rfAimIdx);
 	LuaPushNamedNumber(L, "supcomRoutePoints", int(rfPts.size()));

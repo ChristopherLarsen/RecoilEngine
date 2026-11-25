@@ -303,6 +303,7 @@ private:
 	int rfWaits = 0;             ///< R5/R9: waits used in this round
 	int rfRounds = 0;            ///< R5/R9: rounds used in this order
 	int rfRequests = 0;          ///< searches made in this order (cases read it)
+	int rfEndFrame = -1;         ///< frame the follower last ended an order as blocked (synced Lua: supcomRouteEndFrame)
 	bool rfActive = false;       ///< the follower holds this order
 	bool rfFresh = false;        ///< R2: a new route: aim at its next point
 	bool rfShortSeen = false;    ///< R6/R10: one short route followed for rfShortFor
