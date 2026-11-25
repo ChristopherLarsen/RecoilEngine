@@ -88,6 +88,11 @@ namespace {
 	constexpr float STILL_EPS = SQUARE_SIZE * 0.25f;
 }
 
+// a stuck unit cut off by idle units looks for a way round them on the square grid before it stops following (DESIGN; switch
+// SupComRouteDetour, default 1), this many squares each way (DESIGN: about two group widths of T1 units)
+static bool RouteDetourOn() { static const bool on = SupComSimSwitch::Get("SupComRouteDetour", true); return on; }
+static constexpr int DETOUR_HALF = 24;
+
 bool CSupComGroundMoveType::RouteFollowOn()
 {
 	static const bool on = SupComSimSwitch::Get("SupComRouteFollow", true);
@@ -496,6 +501,111 @@ bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 		}
 	}
 	rfFresh = false;
+
+	// A stuck unit whose next points are all cut off by idle units (they block only now, see routeUnitsBlock): before it stops
+	// following (R10), a local search on the square grid round the idle units, as far as the next route points. The path finder does
+	// not see idle units, and the steering round them (SupComGoRound) can jam a mover against a group with a way round it
+	// (L11108: PTH-002-G 4 of 6, PTH-004-A 5 of 20, PTH-004-F). If a way round exists the unit gets it as a detour at the front
+	// of its route; only with none does it stop. Implementation freedom (PTH-007: how the straight-line test is made).
+	if (aim < 0 && stuck && RouteDetourOn()) {
+		const MoveDef* md = owner->moveDef;
+		const int H = DETOUR_HALF;                                   // squares each way from the unit
+		const int W = 2 * H + 1;
+		const int cx = int(pos.x / SQUARE_SIZE), cz = int(pos.z / SQUARE_SIZE);
+		const int thread = ThreadPool::GetThreadNum();
+		const MoveTypes::CheckCollisionQuery query(owner);
+
+		// idle units under the footprint now do not block (the unit can leave them)
+		const CSolidObject* here[16] = {};
+		int nh = 0;
+		{
+			int sx0, sz0, sx1, sz1;
+			FootprintSquares(md, pos, sx0, sz0, sx1, sz1);
+			for (int sz = sz0; sz <= sz1; sz++)
+				for (int sx = sx0; sx <= sx1; sx++) {
+					const CSolidObject* o = groundBlockingObjectMap.GroundBlocked(sx, sz);
+					if (o != nullptr && o->moveDef != nullptr && Blocks(o, owner) && std::find(here, here + nh, o) == here + nh && nh < 16)
+						here[nh++] = o;
+				}
+		}
+		const auto Centre = [&](int gx, int gz) { return float3((cx - H + gx + 0.5f) * SQUARE_SIZE, pos.y, (cz - H + gz + 0.5f) * SQUARE_SIZE); };
+		const auto Open = [&](int gx, int gz) {
+			const int mx = cx - H + gx, mz = cz - H + gz;
+			if (mx < 0 || mz < 0 || mx > mapDims.mapxm1 || mz > mapDims.mapym1)
+				return false;
+			const float3 c = Centre(gx, gz);
+			if (FootprintBlocked(c))
+				return false;
+			int sx0, sz0, sx1, sz1;
+			FootprintSquares(md, c, sx0, sz0, sx1, sz1);
+			if ((CMoveMath::RangeIsBlocked(sx0, sx1, sz0, sz1, &query, thread) & CMoveMath::BLOCK_STRUCTURE) != 0)
+				return false;
+			for (int sz = sz0; sz <= sz1; sz++)
+				for (int sx = sx0; sx <= sx1; sx++) {
+					const CSolidObject* o = groundBlockingObjectMap.GroundBlocked(sx, sz);
+					if (o != nullptr && o->moveDef != nullptr && Blocks(o, owner) && std::find(here, here + nh, o) == here + nh)
+						return false;
+				}
+			return true;
+		};
+
+		// breadth-first, 8 neighbours, in a fixed order (deterministic on every client)
+		std::vector<int> from(W * W, -2);
+		std::vector<int> queue;
+		queue.reserve(W * W);
+		const int start = H * W + H;
+		from[start] = -1;
+		queue.push_back(start);
+		static constexpr int DX[8] = {1, -1, 0, 0, 1, 1, -1, -1};
+		static constexpr int DZ[8] = {0, 0, 1, -1, 1, -1, 1, -1};
+		for (size_t qi = 0; qi < queue.size(); qi++) {
+			const int c = queue[qi], gx = c % W, gz = c / W;
+			for (int d = 0; d < 8; d++) {
+				const int nx = gx + DX[d], nz = gz + DZ[d];
+				if (nx < 0 || nz < 0 || nx >= W || nz >= W)
+					continue;
+				const int ni = nz * W + nx;
+				if (from[ni] != -2 || !Open(nx, nz))
+					continue;
+				// a diagonal step needs both side squares open (no corner cutting)
+				if (d >= 4 && (!Open(nx, gz) || !Open(gx, nz)))
+					continue;
+				from[ni] = c;
+				queue.push_back(ni);
+			}
+		}
+
+		// the farthest of the next route points reached
+		const int last = std::min(n - 1, rfNext + LookPoints() - 1);
+		for (int k = last; k >= rfNext && aim < 0; k--) {
+			const int gx = int(rfPts[k].x / SQUARE_SIZE) - (cx - H), gz = int(rfPts[k].z / SQUARE_SIZE) - (cz - H);
+			if (gx < 0 || gz < 0 || gx >= W || gz >= W || from[gz * W + gx] == -2 || gz * W + gx == start)
+				continue;
+			// the path back to the unit, then pulled taut: each kept point is the farthest still reached in a unit-free straight line
+			std::vector<float3> path;
+			for (int c = gz * W + gx; c != -1 && c != start; c = from[c])
+				path.push_back(Centre(c % W, c / W));
+			std::reverse(path.begin(), path.end());
+			std::vector<float3> pulled;
+			float3 at = pos;
+			size_t i = 0;
+			while (i < path.size()) {
+				size_t far = i;
+				for (size_t j = path.size(); j-- > i; ) {
+					if (RouteLineClear(at, path[j])) { far = j; break; }
+				}
+				pulled.push_back(path[far]);
+				at = path[far];
+				i = far + 1;
+			}
+			if (pulled.empty())
+				continue;
+			rfPts.insert(rfPts.begin() + rfNext, pulled.begin(), pulled.end());
+			aim = rfNext;                                          // the first leg of the detour
+			if (RouteLog())
+				LOG("[SupComRoute] f=%d u=%d stuck: detour round idle units, %d points to route point %d", gs->frameNum, owner->id, int(pulled.size()), k);
+		}
+	}
 
 	if (aim < 0)
 		return false;
