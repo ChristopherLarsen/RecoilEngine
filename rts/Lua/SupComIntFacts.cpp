@@ -69,6 +69,7 @@ namespace {
 	const char* const SENS_NAME[NSENS] = { "radar", "sonar", "omni", "water_vision" };
 	constexpr bool SENS_SWITCHED[NSENS] = { true, true, true, false };
 	constexpr bool SENS_POWER[NSENS] = { true, true, false, false };
+	constexpr int RADAR = 0;
 	constexpr int WATER_VISION = 3;
 
 	struct Sens {                             // one sensor kind's source (int_coverage: sources[u][kind])
@@ -80,6 +81,8 @@ namespace {
 		int sda = INT_MIN; int mark = 0;      // the ally team its circle is placed for, its stamp
 		float px = 0, pz = 0, pr2 = -1, pce = 0;   // the circle last put (VI.PutK's "same")
 		bool placed = false;                  // this file wrote it into the kind's index (never in shadow)
+		bool trail = false;                   // radar: a leaving point is placed ("radar_leave")
+		float tlx = 0, tlz = 0, tr2 = 0, tce = 0;
 	};
 
 	struct Src {
@@ -162,7 +165,8 @@ namespace {
 	void FreeSens(Sens& c, int k, int u) {   // VI.FreeU(I, a, u); the index only where this file placed the circle
 		if (c.sda == NONE) return;
 		if (c.placed) SupComIntIndex::FreeC(SENS_NAME[k], c.sda, u);
-		c.sda = NONE; c.pr2 = -1; c.placed = false;
+		if (c.trail) SupComIntIndex::FreeC("radar_leave", c.sda, u);
+		c.sda = NONE; c.pr2 = -1; c.placed = false; c.trail = false;
 	}
 	void FreeAllSens(Src& s, int u) { for (int k = 0; k < NSENS; ++k) FreeSens(s.sens[k], k, u); }
 
@@ -476,6 +480,14 @@ namespace {
 						const float r2 = Sq(cE + cfg.hk * cfg.hclamp + sc);
 						const bool same = c.placed && c.sda == a && c.px == sx && c.pz == sz && c.pr2 == r2 && c.pce == cE;
 						if (!sShadow && !same) { SupComIntIndex::PutC(SENS_NAME[k], a, u, sx, sz, r2, stamp, cE); c.placed = true; }
+						if (k == RADAR && !sShadow) {   // radar's leaving point (int_coverage VI.RadarLeave, INT-005 v8)
+							if (c.lcx != sx || c.lcz != sz) {
+								if (!c.trail || c.sda != a || c.tlx != c.lcx || c.tlz != c.lcz || c.tr2 != r2 || c.tce != cE) {
+									SupComIntIndex::PutC("radar_leave", a, u, c.lcx, c.lcz, r2, stamp, cE);
+									c.trail = true; c.tlx = c.lcx; c.tlz = c.lcz; c.tr2 = r2; c.tce = cE;
+								}
+							} else if (c.trail) { SupComIntIndex::FreeC("radar_leave", a, u); c.trail = false; }
+						}
 						c.px = sx; c.pz = sz; c.pr2 = r2; c.pce = cE;
 						c.sda = a; c.mark = stamp;
 					}
