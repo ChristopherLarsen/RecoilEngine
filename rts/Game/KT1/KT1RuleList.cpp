@@ -18,6 +18,7 @@ namespace KT1 {
 	std::unique_ptr<Rule> MakeDraw();      // UI/Rnd005: RND-005 R12 draw cut-offs (unsynced)
 	std::unique_ptr<Rule> MakeDecals();    // UI/Rnd005: RND-005 R13 decal fade (unsynced)
 	std::unique_ptr<Rule> MakeFarView();   // UI/FarView: far above the map, a baked map mesh instead of the full world pass (unsynced)
+	std::unique_ptr<Rule> MakeUnitAnim();  // Rules/UnitAnim: the unit script framework tick (locomotion, aim rest, aim poll) (synced)
 
 	void AddAllRules(Registry& reg) {
 		reg.Add(MakeCensus());
@@ -33,5 +34,6 @@ namespace KT1 {
 		reg.Add(MakeDraw());
 		reg.Add(MakeDecals());
 		reg.Add(MakeFarView());
+		reg.Add(MakeUnitAnim());
 	}
 }
