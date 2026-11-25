@@ -181,18 +181,19 @@ bool CSupComGroundMoveType::RouteLineClear(const float3& a, const float3& b) con
 		return true;
 
 	const int thread = ThreadPool::GetThreadNum();
-	const MoveTypes::CheckCollisionQuery query(owner);
-	const auto StructureAt = [&](const float3& p) {
-		int sx0, sz0, sx1, sz1;
-		FootprintSquares(md, p, sx0, sz0, sx1, sz1);
-		// the structure blocking the path finder uses (yardmaps included); one object pointer per square missed yard squares (007-C)
-		return ((CMoveMath::RangeIsBlocked(sx0, sx1, sz0, sz1, &query, thread) & CMoveMath::BLOCK_STRUCTURE) != 0);
-	};
 
-	// idle units the footprint overlaps at the start do not block (a unit in a crowd can still leave)
+	// terrain and structures: the path finder's own straight-line test (MoveDef::DoRawSearch, as the stock follower's waypoint
+	// skip uses), so a route the path finder made is never judged unreachable by a stricter sweep (L11095: a replacement route
+	// every frame, none of its points steerable)
+	if (!md->DoRawSearch(owner, md, a, b, 0, true, true, false, nullptr, nullptr, nullptr, thread))
+		return false;
+	if (!routeUnitsBlock)
+		return true;
+
+	// idle units (only for a stuck unit, see routeUnitsBlock); those the footprint overlaps at the start do not block
 	const CSolidObject* here[16] = {};
 	int n = 0;
-	if (routeUnitsBlock) {
+	{
 		int sx0, sz0, sx1, sz1;
 		FootprintSquares(md, a, sx0, sz0, sx1, sz1);
 		for (int sz = sz0; sz <= sz1; sz++) {
@@ -206,25 +207,11 @@ bool CSupComGroundMoveType::RouteLineClear(const float3& a, const float3& b) con
 		}
 	}
 
-	// a unit touching a structure or impassable ground can still leave: those count once the footprint is a footprint away
-	const bool startBlocked = FootprintBlocked(a);
-	const bool startStructure = StructureAt(a);
-	const float away = (md->xsize + md->zsize) * SQUARE_SIZE * 0.5f;
 	const float3 d = (b - a) * XZVector;
 	const int steps = std::max(1, int(math::ceil(d.Length2D() / (SQUARE_SIZE * 0.5f))));
 
 	for (int k = 1; k <= steps; k++) {
 		const float3 p = a + d * (float(k) / steps);
-		const bool far = (p.SqDistance2D(a) > Square(away));
-
-		if ((!startBlocked || far) && FootprintBlocked(p))
-			return false;
-		if ((!startStructure || far) && StructureAt(p))
-			return false;
-
-		if (!routeUnitsBlock)
-			continue;
-
 		int sx0, sz0, sx1, sz1;
 		FootprintSquares(md, p, sx0, sz0, sx1, sz1);
 		for (int sz = sz0; sz <= sz1; sz++) {
@@ -488,9 +475,11 @@ bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 
 	int aim = -1;
 	if (rfFresh && !stuck) {
-		// R2: right after a new route, the next route point
-		if (RouteLineClear(pos, rfPts[rfNext]))
-			aim = rfNext;
+		// R2: right after a new route the unit aims at its next point (no straight-line condition: the route's own first leg; a
+		// point on the unit itself is passed over)
+		aim = rfNext;
+		while (aim + 1 < n && rfPts[aim].SqDistance2D(pos) <= Square(SQUARE_SIZE))
+			aim++;
 	}
 	if (aim < 0) {
 		// R2: the farthest of the next look_points points within look_range reachable in a straight line
