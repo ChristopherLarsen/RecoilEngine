@@ -31,6 +31,7 @@
 #include "System/Config/ConfigHandler.h"
 #include "System/Log/ILog.h"
 #include "SupComPushCap.h"
+#include "Sim/Misc/GroundBlockingObjectMap.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -1105,6 +1106,55 @@ bool CSupComGroundMoveType::IsAtGoal() const
 	return atGoal;
 }
 
+// MOV-021 v1 R2 with R1 (pathing fix 2026-11-25): a unit that starts in blocked space (a product on its factory's build point; the
+// engine's positionStuck) may move out of it, but not into another obstacle: a step is refused when the move def's footprint at the
+// new position covers a square blocked by an immobile object that does not already block a square under the footprint now.
+// The objects are compared by pointer only for equality (no ordering), so the result is the same on every client.
+static bool EntersNewObstacle(const CUnit* owner, const float3& from, const float3& to)
+{
+	const MoveDef* md = owner->moveDef;
+	if (md == nullptr)
+		return false;
+
+	const auto Squares = [&](const float3& p, auto&& visit) {
+		const int sx0 = std::clamp(int(p.x / SQUARE_SIZE) - md->xsizeh, 0, mapDims.mapxm1);
+		const int sz0 = std::clamp(int(p.z / SQUARE_SIZE) - md->zsizeh, 0, mapDims.mapym1);
+		const int sx1 = std::clamp(int(p.x / SQUARE_SIZE) + md->xsizeHi, 0, mapDims.mapxm1);
+		const int sz1 = std::clamp(int(p.z / SQUARE_SIZE) + md->zsizeHi, 0, mapDims.mapym1);
+		for (int sz = sz0; sz <= sz1; sz++) {
+			for (int sx = sx0; sx <= sx1; sx++) {
+				if (visit(groundBlockingObjectMap.GroundBlocked(sx, sz)))
+					return true;
+			}
+		}
+		return false;
+	};
+
+	const CSolidObject* here[8] = {};
+	int n = 0;
+	Squares(from, [&](const CSolidObject* o) {
+		if (o == nullptr || o == owner || !o->immobile)
+			return false;
+		for (int i = 0; i < n; i++) {
+			if (here[i] == o)
+				return false;
+		}
+		if (n < 8)
+			here[n++] = o;
+		return false;
+	});
+
+	return Squares(to, [&](const CSolidObject* o) {
+		if (o == nullptr || o == owner || !o->immobile)
+			return false;
+		for (int i = 0; i < n; i++) {
+			if (here[i] == o)
+				return false;
+		}
+		return true;
+	});
+}
+
 void CSupComGroundMoveType::UpdateUnitPosition()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -1468,6 +1518,12 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (!moveRequest.same(ZeroVector)) {
 		bool blocked = false;
 		bool byStructure = false;
+
+		// MOV-021 R2 (pathing fix): out of the blocked space the unit started in, never into another obstacle
+		if (positionStuck && SupComPushCap::On() && EntersNewObstacle(owner, owner->pos, owner->pos + moveRequest)) {
+			blocked = true;
+			byStructure = true;
+		}
 
 		if (!positionStuck) {
 			blocked = (FootprintBlocked(owner->pos + moveRequest) && !FootprintBlocked(owner->pos));
