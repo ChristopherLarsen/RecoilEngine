@@ -171,6 +171,34 @@ private:
 	void StartDive(bool submerge);
 	float CurrentDepth() const;
 
+public:
+	/// SupComRouteFollow (PTH-007 v2, PTH-002 v7 R9-R13; SupComRouteFollow.cpp): no timed re-planning or idle failure
+	void SlowUpdate() override;
+	static bool RouteFollowOn();
+	/// SupComRouteFollow: the blocked-order counters (synced Lua reads them: cases PTH-002-K..R, PTH-007-E..I)
+	int GetRouteWaits() const { return rfWaits; }
+	int GetRouteRounds() const { return rfRounds; }
+	int GetRouteRequests() const { return rfRequests; }
+	int GetRouteAimIndex() const { return rfAimIdx; }
+	int GetRouteNextIndex() const { return rfNext; }
+	int GetRoutePoints() const { return int(rfPts.size()); }
+	int GetRouteWaitUntil() const { return rfWaitUntil; }
+	const float3& GetRouteAim() const { return rfAim; }
+	/// SupComRouteFollow test hook: the next n route searches of this unit return what the script says (0 empty, k > 0: a
+	/// straight route of k points towards the goal, -k: k points that do not reach the old route; kept until cleared)
+	void ScriptRouteResults(const std::vector<int>& results) { rfScript = results; rfScriptPos = 0; }
+private:
+	void RouteFollowUpdate();
+	void RouteReset();
+	void RouteLoad(unsigned int id);
+	bool RouteChooseAim(bool stuck);
+	void RouteRequest(bool fresh);
+	void RouteAdopt(unsigned int id, const std::vector<float3>& pts);
+	void RouteEnd(const char* why);
+	bool RouteLineClear(const float3& a, const float3& b) const;
+	bool RouteCellOccupied(const float3& p) const;
+	unsigned int RouteSearch(std::vector<float3>& pts);
+
 private:
 	// per-unit values, engine units (elmos, frames, heading units)
 	float baseTurnRate = 0.0f;   ///< turn rate limit at low speed (heading units per frame)
@@ -257,6 +285,29 @@ private:
 	bool yieldReturning = false; ///< driving back to its place
 	bool yieldInternal = false;  ///< a start from the yield code (not a new order)
 	bool headingFree = false;    ///< hover unit following its route without turning (MOV-005 R7, set from Lua)
+
+	// SupComRouteFollow state (saved)
+	std::vector<float3> rfPts;   ///< the route being followed (start to end)
+	std::vector<int> rfScript;   ///< test hook: scripted search results (not saved: tests only)
+	float3 rfAim;                ///< the aim point
+	float3 rfStillPos;           ///< where the unit was when its position last changed
+	float3 rfShortFor;           ///< R6/R10: the old route's next point a short route was followed for
+	unsigned int rfPathID = 0;   ///< the engine path the points were read from
+	int rfScriptPos = 0;
+	int rfNext = 0;              ///< index of the next route point (not passed)
+	int rfAimIdx = -1;           ///< index of the aim point (-1: none chosen)
+	float rfAimDist = 0.0f;      ///< distance to the aim point when it was chosen
+	int rfRecheckFrame = 0;      ///< next periodic line test
+	int rfStillFrame = 0;        ///< frame of the last change of position
+	int rfWaitUntil = -1;        ///< R5/R9: a pending search after a wait (-1: none)
+	int rfWaits = 0;             ///< R5/R9: waits used in this round
+	int rfRounds = 0;            ///< R5/R9: rounds used in this order
+	int rfRequests = 0;          ///< searches made in this order (cases read it)
+	bool rfActive = false;       ///< the follower holds this order
+	bool rfFresh = false;        ///< R2: a new route: aim at its next point
+	bool rfShortSeen = false;    ///< R6/R10: one short route followed for rfShortFor
+	bool rfLastWaited = false;   ///< R4: the wait before a search at an occupied last point was taken
+	bool rfWaitShort = false;    ///< R6/R10: the pending wait came from a short route at a point not free
 
 	// submarine (MOV-011): depth below the water surface, moving between depthFrom and depthTo along a smooth curve
 	bool submarine = false;
