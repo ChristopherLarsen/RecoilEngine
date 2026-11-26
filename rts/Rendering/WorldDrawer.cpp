@@ -209,9 +209,25 @@ void CWorldDrawer::Kill()
 
 
 
+// supcom (TOP-COSTS-4K item 3, 2026-11-26): a headless engine has no window, so the drawers' per-frame work (unit and feature
+// draw positions and icon states, Lua object drawer, ground drawer, projectile draw flags and textures, sky and water) is for
+// nothing: at 4K CUnitDrawerBase::Update alone was 6.2 ms a frame. Off in headless (headlessValue false); readMap->UpdateDraw
+// still runs, since unsynced Lua reads the unsynced heightmap it keeps (Spring.GetGroundHeight in unsynced code). All of it is
+// unsynced: no sim state is read back from it. SupComDrawerUpdates=1 in a headless run restores the old behaviour.
+CONFIG(bool, SupComDrawerUpdates).defaultValue(true).headlessValue(false).description("supcom: run the world, unit and feature drawers' per-frame update (off by default in headless engines, where nothing is drawn)");
+
 void CWorldDrawer::Update(bool newSimFrame)
 {
 	SCOPED_TIMER("Update::WorldDrawer");
+
+	static const bool drawerUpdates = configHandler->GetBool("SupComDrawerUpdates");
+	if (!drawerUpdates) {
+		readMap->UpdateDraw(numUpdates == 0);
+		if (newSimFrame)
+			modelLoader.LogErrors();
+		numUpdates += 1;
+		return;
+	}
 
 	LuaObjectDrawer::Update(numUpdates == 0);
 	readMap->UpdateDraw(numUpdates == 0);
