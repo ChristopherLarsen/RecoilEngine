@@ -258,10 +258,15 @@ void* spring_lua_alloc(void* ud, void* ptr, size_t osize, size_t nsize)
 	SLuaAllocState* las = &lcd->allocState;
 	LuaMemPool* lmp = lcd->memPool;
 
-	gLuaAllocState.allocedBytes -= osize;
-	gLuaAllocState.allocedBytes += nsize;
-	las->allocedBytes -= osize;
-	las->allocedBytes += nsize;
+	// supcom (perf, PERF-REVIEW-B R4-1): one locked add per call instead of six (alloc) or four (free).
+	// The global byte count is shared by every state (any thread), so it stays one atomic add; it feeds the
+	// OOM limit below and the GC skip ratio, and its value is the same as before. Per-state counters and the
+	// allocation counts have one writer at a time (a Lua state runs on one thread at a time; the counts are
+	// /debug statistics cleared every second), so a relaxed load and store is enough. None of these values is
+	// visible to synced code.
+	const uint64_t deltaBytes = uint64_t(nsize) - uint64_t(osize);
+	const uint64_t totalBytes = gLuaAllocState.allocedBytes.fetch_add(deltaBytes, std::memory_order_relaxed) + deltaBytes;
+	las->allocedBytes.store(las->allocedBytes.load(std::memory_order_relaxed) + deltaBytes, std::memory_order_relaxed);
 
 	if (nsize == 0) {
 		// deallocation; must return NULL
@@ -269,7 +274,7 @@ void* spring_lua_alloc(void* ud, void* ptr, size_t osize, size_t nsize)
 		return nullptr;
 	}
 
-	if ((nsize > osize) && (gLuaAllocState.allocedBytes.load() > SLuaAllocLimit::MAX_ALLOC_BYTES)) {
+	if ((nsize > osize) && (totalBytes > SLuaAllocLimit::MAX_ALLOC_BYTES)) {
 		// (re)allocation
 		// better kill Lua than whole engine; instant desync if synced handle
 		// NOTE: this will trigger luaD_throw, which calls exit(EXIT_FAILURE)
@@ -288,12 +293,12 @@ void* spring_lua_alloc(void* ud, void* ptr, size_t osize, size_t nsize)
 	const spring_time t1 = spring_gettime();
 #endif
 
-	gLuaAllocState.numLuaAllocs += 1;
+	gLuaAllocState.numLuaAllocs.store(gLuaAllocState.numLuaAllocs.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
 #if LUA_MEASURE_ALLOC_TIME == 1
 	gLuaAllocState.luaAllocTime += (t1 - t0).toMicroSecsi();
 	las->luaAllocTime += (t1 - t0).toMicroSecsi();
 #endif
-	las->numLuaAllocs += 1;
+	las->numLuaAllocs.store(las->numLuaAllocs.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
 
 	return mem;
 }
