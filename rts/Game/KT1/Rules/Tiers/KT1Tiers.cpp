@@ -24,6 +24,7 @@
 #include "KT1Tiers.h"
 #include "KT1TiersCore.h"
 
+#include "Game/GameSetup.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
@@ -93,8 +94,12 @@ public:
 		grid.Init(mapDims.mapx * SQUARE_SIZE, mapDims.mapy * SQUARE_SIZE, cellElmos);
 		Tiers::asleep.assign(unitHandler.MaxUnits(), 0);
 		snaps.assign(unitHandler.MaxUnits(), Snap{});
+		const auto& opts = CGameSetup::GetModOptions();   // KT1 hook: tiers-exact
+		const auto ex = opts.find("kt1_tiers_exact");
+		exact = (ex != opts.end() && (ex->second == "1" || ex->second == "true"));
+		if (exact) grid.InitExact(teamHandler.ActiveAllyTeams());
 		Tiers::on = true;
-		LOG("[KT1] Tiers: period %d frames, margin %.0f elmos, cell %.0f", period, marginElmos, cellElmos);
+		LOG("[KT1] Tiers: period %d frames, margin %.0f elmos, cell %.0f, near test %s", period, marginElmos, cellElmos, exact ? "exact" : "cell");
 	}
 
 	void GameFrame(int frame) override {
@@ -108,8 +113,12 @@ public:
 				if (!teamHandler.Ally(a, b)) enemyMask[a] |= (1ull << b);
 
 		grid.Clear();
-		for (const CUnit* u : units)
-			if (!u->isDead) grid.Add(u->pos.x, u->pos.z, u->allyteam);
+		if (exact) grid.ClearExact();
+		for (const CUnit* u : units) {
+			if (u->isDead) continue;
+			grid.Add(u->pos.x, u->pos.z, u->allyteam);
+			if (exact) grid.AddExact(u->pos.x, u->pos.z, u->allyteam, Reach(u));   // KT1 hook: tiers-exact
+		}
 
 		const int next = frame;   // the rule runs before the unit update of the same frame
 		nAsleep = nIdleNear = 0;
@@ -126,8 +135,9 @@ public:
 
 			f.idle = Idle(u);
 			if (f.idle && !f.changed) {
-				const float reach = std::max(u->maxRange, u->unitDef->losRadius) + marginElmos;
-				f.far = (nAlly <= 64) && !grid.EnemyWithin(u->pos.x, u->pos.z, reach, enemyMask[u->allyteam]);
+				const float reach = Reach(u);
+				f.far = (nAlly <= 64) && !(exact ? grid.EnemyWithinExact(u->pos.x, u->pos.z, reach, enemyMask[u->allyteam])
+				                                 : grid.EnemyWithin(u->pos.x, u->pos.z, reach, enemyMask[u->allyteam]));
 				nIdleNear += !f.far;
 			}
 			const bool sleep = TiersCore::Decide(f, next, id, period);
@@ -144,6 +154,7 @@ public:
 	}
 
 private:
+	float Reach(const CUnit* u) const { return std::max(u->maxRange, u->unitDef->losRadius) + marginElmos; }
 	static bool Idle(const CUnit* u) {
 		if (u->isDead || u->IsSkidding() || u->selfDCountdown > 0 || u->unitDef->IsBuilderUnit())
 			return false;
@@ -171,6 +182,7 @@ private:
 
 	float periodSeconds = 0.5f, marginElmos = 80.0f, cellElmos = 512.0f;
 	int period = 15;
+	bool exact = false;                   // kt1_tiers_exact=1: pair distance within the larger reach instead of any enemy in a touched cell
 	int nAsleep = 0, nIdleNear = 0, nTotal = 0;
 	TiersCore::Grid grid;
 	std::vector<uint64_t> enemyMask;

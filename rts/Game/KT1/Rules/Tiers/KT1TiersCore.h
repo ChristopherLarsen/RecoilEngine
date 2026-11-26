@@ -64,7 +64,40 @@ namespace TiersCore {
 					if (cells[Idx(i, j)] & enemyMask) return true;
 			return false;
 		}
+		// exact mode (kt1_tiers_exact=1): each unit's position and reach per cell and ally team; a pair is near when the
+		// distance is within the larger of the two reaches (either side could engage). Only cells the occupancy test flags are scanned.
+		void InitExact(int nAlly) {
+			nA = std::clamp(nAlly, 1, 64);
+			pts.assign(cells.size() * (size_t)nA, {});
+			maxReach = 0.0f;
+		}
+		void ClearExact() { for (auto& v : pts) v.clear(); maxReach = 0.0f; }
+		void AddExact(float x, float z, int ally, float reach) {
+			if (ally < 0 || ally >= nA) return;
+			pts[Idx(CX(x), CZ(z)) * (size_t)nA + ally].push_back({x, z, reach});
+			maxReach = std::max(maxReach, reach);
+		}
+		bool EnemyWithinExact(float x, float z, float r, uint64_t enemyMask) const {
+			const float s = std::max(r, maxReach);
+			const int x0 = CX(x - s), x1 = CX(x + s), z0 = CZ(z - s), z1 = CZ(z + s);
+			for (int j = z0; j <= z1; ++j)
+				for (int i = x0; i <= x1; ++i) {
+					const size_t c = Idx(i, j);
+					uint64_t m = cells[c] & enemyMask;
+					for (int b = 0; m != 0 && b < nA; ++b, m >>= 1) {
+						if ((m & 1ull) == 0) continue;
+						for (const Pt& q : pts[c * (size_t)nA + b]) {
+							const float dx = q.x - x, dz = q.z - z, rr = std::max(r, q.reach);
+							if (dx * dx + dz * dz <= rr * rr) return true;
+						}
+					}
+				}
+			return false;
+		}
 	private:
+		struct Pt { float x, z, reach; };
+		std::vector<std::vector<Pt>> pts;
+		int nA = 1; float maxReach = 0.0f;
 		int CX(float x) const { return std::clamp((int)std::floor(x / cellSize), 0, nx - 1); }
 		int CZ(float z) const { return std::clamp((int)std::floor(z / cellSize), 0, nz - 1); }
 		size_t Idx(int i, int j) const { return (size_t)j * nx + i; }
