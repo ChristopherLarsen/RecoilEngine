@@ -575,15 +575,34 @@ bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 			}
 		}
 
-		// the farthest of the next route points reached
+		// the farthest of the next route points reached; with none reached (they lie in or past the idle group, or outside the
+		// search square) the reached square nearest the farthest of them, if it is at least two squares nearer than the unit
+		// (DESIGN: the route itself then goes on from there)
 		const int last = std::min(n - 1, rfNext + LookPoints() - 1);
-		for (int k = last; k >= rfNext && aim < 0; k--) {
+		int tgt = -1, tgtK = -1;
+		for (int k = last; k >= rfNext && tgt < 0; k--) {
 			const int gx = int(rfPts[k].x / SQUARE_SIZE) - (cx - H), gz = int(rfPts[k].z / SQUARE_SIZE) - (cz - H);
 			if (gx < 0 || gz < 0 || gx >= W || gz >= W || from[gz * W + gx] == -2 || gz * W + gx == start)
 				continue;
+			tgt = gz * W + gx;
+			tgtK = k;
+		}
+		int reached = 0;
+		if (tgt < 0) {
+			const float3& far = rfPts[last];
+			float best = pos.distance2D(far) - 2.0f * SQUARE_SIZE;
+			for (int c = 0; c < W * W; c++) {
+				if (from[c] == -2 || c == start)
+					continue;
+				reached++;
+				const float d = Centre(c % W, c / W).distance2D(far);
+				if (d < best) { best = d; tgt = c; }
+			}
+		}
+		if (tgt >= 0) {
 			// the path back to the unit, then pulled taut: each kept point is the farthest still reached in a unit-free straight line
 			std::vector<float3> path;
-			for (int c = gz * W + gx; c != -1 && c != start; c = from[c])
+			for (int c = tgt; c != -1 && c != start; c = from[c])
 				path.push_back(Centre(c % W, c / W));
 			std::reverse(path.begin(), path.end());
 			std::vector<float3> pulled;
@@ -598,12 +617,14 @@ bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 				at = path[far];
 				i = far + 1;
 			}
-			if (pulled.empty())
-				continue;
-			rfPts.insert(rfPts.begin() + rfNext, pulled.begin(), pulled.end());
-			aim = rfNext;                                          // the first leg of the detour
-			if (RouteLog())
-				LOG("[SupComRoute] f=%d u=%d stuck: detour round idle units, %d points to route point %d", gs->frameNum, owner->id, int(pulled.size()), k);
+			if (!pulled.empty()) {
+				rfPts.insert(rfPts.begin() + rfNext, pulled.begin(), pulled.end());
+				aim = rfNext;                                          // the first leg of the detour
+				if (RouteLog())
+					LOG("[SupComRoute] f=%d u=%d stuck: detour round idle units, %d points to %s %d (unit %.0f,%.0f)", gs->frameNum, owner->id, int(pulled.size()), (tgtK >= 0? "route point": "nearest square towards route point"), (tgtK >= 0? tgtK: last), pos.x, pos.z);
+			}
+		} else if (RouteLog()) {
+			LOG("[SupComRoute] f=%d u=%d stuck: no detour (%d squares reached; route points %d..%d, next at %.0f,%.0f, last at %.0f,%.0f; unit %.0f,%.0f)", gs->frameNum, owner->id, reached, rfNext, last, rfPts[rfNext].x, rfPts[rfNext].z, rfPts[last].x, rfPts[last].z, pos.x, pos.z);
 		}
 	}
 
