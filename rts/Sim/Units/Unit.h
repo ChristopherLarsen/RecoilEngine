@@ -253,6 +253,7 @@ protected:
 
 public: // unsynced methods
 	int supcomIdleRun = 0; // SupComHalfRate.h: frames idle in a row (not saved state)
+	bool supcomPlanSkip = false; // SupComHalfRate::PlanOffTick: this frame's plan and serial update are skipped (set each frame, not saved state)
 	bool supcomPassMoving = false; // SupComUnitPass move step: moving at its last step
 	int supcomMoveFrame = -1; // SupComHalfRate.h: the last frame its movement update ran (cases read it)
 	float supcomLastHealth = -1.0f; // SupComHalfRate.h: health at the last check (a change wakes it, PRF-002 v1 R2)

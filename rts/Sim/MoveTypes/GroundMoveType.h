@@ -124,6 +124,8 @@ public:
 
 	unsigned int GetPathID() const { return pathID; }
 	bool SupComQuiet() const { return pathID == 0 && deletePathId == 0 && !pathingArrived && !pathingFailed && resultantForces.SqLength() == 0.f; } // supcom: SupComHalfRate.h
+	// supcom: SupComHalfRate::PlanOffTick: nothing pending that this frame's plan or serial update would act on
+	virtual bool SupComPlanQuiet() const { return SupComQuiet() && nextPathId == 0 && progressState != Active && setHeading == HEADING_CHANGED_NONE; }
 
 	const SyncedFloat3& GetCurrWayPoint() const { return currWayPoint; }
 	const SyncedFloat3& GetNextWayPoint() const { return nextWayPoint; }

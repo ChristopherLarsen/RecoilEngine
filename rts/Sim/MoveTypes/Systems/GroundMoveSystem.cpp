@@ -51,6 +51,7 @@ void GroundMoveSystem::Update() {
 			unit->SanityCheck();
             #endif
 
+			if (SupComHalfRate::PlanOffTick(unit)) return; // supcom: idle half rate for the plan (SupComHalfRate.h)
 			moveType->UpdateTraversalPlan();
 		});
 		// supcom: AvoidPlanSplit, every unit's avoidance, then every unit's speed and heading (SupComAvoidSnapshot.h)
@@ -59,6 +60,7 @@ void GroundMoveSystem::Update() {
 				for_mt(0, view.size(), [&view, part](const int i) {
 					auto entity = (*view.storage<GroundMoveType>())[i];
 					CUnit* unit = unitHandler.GetUnit(view.get<GroundMoveType>(entity).value);
+					if (unit->supcomPlanSkip) return; // supcom: idle half rate (SupComHalfRate.h)
 					static_cast<CGroundMoveType*>(unit->moveType)->SupComPlanPart(part);
 				});
 			}
@@ -170,6 +172,7 @@ void GroundMoveSystem::Update() {
             CUnit* unit = unitHandler.GetUnit(unitId.value);
             CGroundMoveType* moveType = static_cast<CGroundMoveType*>(unit->moveType);
             assert(moveType != nullptr);
+            if (unit->supcomPlanSkip) return; // supcom: idle half rate (SupComHalfRate::PlanOffTick)
             if (moveType->Update()) 
                 eventHandler.UnitMoved(unit);
 

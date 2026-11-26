@@ -13,6 +13,7 @@
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "System/Log/ILog.h"
+#include "System/SupComSimSwitch.h"
 
 namespace {
 	constexpr int IDLE_FRAMES = 0;    // PRF-002 v1 R2: idle from the tick after an update that shows no change
@@ -85,6 +86,21 @@ bool SupComHalfRate::LandedRest(CUnit* u)
 	Tally(false, half);
 	const bool skip = half && ((u->id + gs->frameNum) & 1) != 0;   // PRF-002 v1 R1: updated when tick + id is even
 	if (!skip) u->supcomMoveFrame = gs->frameNum;
+	return skip;
+}
+
+bool SupComHalfRate::PlanOffTick(CUnit* u)
+{
+	static const bool on = SupComSimSwitch::Get("SupComHalfRatePlan", true);
+	bool skip = false;
+	if (on && Enabled() && ((u->id + gs->frameNum) & 1) != 0) {
+		// the idle test of SkipGround, read only (the health it compares with is the last pre-collision step's)
+		const CGroundMoveType* mt = static_cast<const CGroundMoveType*>(u->moveType);
+		skip = u->health == u->supcomLastHealth && !u->beingBuilt && !u->isDead && !u->IsStunned() && !u->IsSkidding() && !u->IsFalling()
+			&& u->GetTransporter() == nullptr && !u->requestRemoveUnloadTransportId && u->commandAI != nullptr && u->commandAI->commandQue.empty()
+			&& u->lastAttackFrame < gs->frameNum - HIT_FRAMES && u->speed.w == 0.0f && mt->SupComPlanQuiet();
+	}
+	u->supcomPlanSkip = skip;
 	return skip;
 }
 
