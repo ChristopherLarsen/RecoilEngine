@@ -181,6 +181,41 @@ bool CSupComGroundMoveType::RouteCellOccupied(const float3& p) const
 // and never got round (L11088, PTH-002-C/D/G/I). Set and read only in the single-threaded follower update.
 static bool routeUnitsBlock = false;
 
+// The centre-line test for a stuck unit (PTH-007 implementation freedom: how the straight-line test is made; the reference's test
+// is by grid cells, fixture SF-PTH-007 unit footprint 1): the squares the unit's centre crosses from a to b are passable for its
+// move class, hold no structure and (routeUnitsBlock) no idle unit other than those under the unit at a. The footprint-wide test
+// (DoRawSearch) finds no route point from a unit pushed a little off the line of a gap its own width, so a unit queued at a
+// one-cell gap stopped following there and plugged it (L11194: PTH-004-A, first ending at f=1947).
+static bool RouteCentreOn() { static const bool on = SupComSimSwitch::Get("SupComRouteCentreLine", true); return on; }
+
+static bool CentreLineClear(const CSolidObject* self, const MoveDef* md, const float3& a, const float3& b, bool unitsBlock)
+{
+	const int ax = int(a.x / SQUARE_SIZE), az = int(a.z / SQUARE_SIZE);
+	const CSolidObject* here = groundBlockingObjectMap.GroundBlocked(std::clamp(ax, 0, mapDims.mapxm1), std::clamp(az, 0, mapDims.mapym1));
+	const float3 d = (b - a) * XZVector;
+	const int steps = std::max(1, int(math::ceil(d.Length2D() / (SQUARE_SIZE * 0.25f))));
+	int lx = -1, lz = -1;
+	for (int k = 1; k <= steps; k++) {
+		const float3 p = a + d * (float(k) / steps);
+		const int sx = int(p.x / SQUARE_SIZE), sz = int(p.z / SQUARE_SIZE);
+		if (sx == lx && sz == lz)
+			continue;
+		lx = sx; lz = sz;
+		if (sx < 0 || sz < 0 || sx > mapDims.mapxm1 || sz > mapDims.mapym1)
+			return false;
+		if (CMoveMath::GetPosSpeedMod(*md, sx, sz) <= 0.0f)
+			return false;
+		const CSolidObject* o = groundBlockingObjectMap.GroundBlocked(sx, sz);
+		if (o == nullptr || o == self || o == here)
+			continue;
+		if (o->moveDef == nullptr)
+			return false;
+		if (unitsBlock && Blocks(o, self))
+			return false;
+	}
+	return true;
+}
+
 bool CSupComGroundMoveType::RouteLineClear(const float3& a, const float3& b) const
 {
 	const MoveDef* md = owner->moveDef;
@@ -496,6 +531,20 @@ bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 				continue;
 			if (RouteLineClear(pos, rfPts[k])) {
 				aim = k;
+				break;
+			}
+		}
+	}
+	// a stuck unit with no point by the footprint-wide test: the farthest of the same points by the centre-line test
+	if (aim < 0 && stuck && RouteCentreOn()) {
+		const int last = std::min(n - 1, rfNext + LookPoints() - 1);
+		for (int k = last; k >= rfNext; k--) {
+			if (rfPts[k].SqDistance2D(pos) > Square(LookRange()))
+				continue;
+			if (CentreLineClear(owner, owner->moveDef, pos, rfPts[k], true)) {
+				aim = k;
+				if (RouteLog())
+					LOG("[SupComRoute] f=%d u=%d stuck: centre line to route point %d (unit %.0f,%.0f)", gs->frameNum, owner->id, k, pos.x, pos.z);
 				break;
 			}
 		}
