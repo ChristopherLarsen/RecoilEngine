@@ -6,6 +6,7 @@
 #include <tuple>
 #include <bit>
 
+#include "Game/KT1/UI/FarView/KT1FarView.h" // KT1 hook: FarView fx
 #include "Game/Camera.h"
 #include "Game/CameraHandler.h"
 #include "Game/GlobalUnsynced.h"
@@ -511,7 +512,7 @@ void CProjectileDrawer::UpdateDrawFlags()
 
 		const float drawRadius = p->GetDrawRadius();
 
-		if (camPlayer->InView(p->drawPos, drawRadius)) {
+		if (camPlayer->InView(p->drawPos, drawRadius) && !KT1::FarView::FxCulled(camPlayer->ProjectedDistance(p->drawPos), p->weapon)) { // KT1 hook: FarView fx
 			p->SetSortDist(CCamera::CAMTYPE_PLAYER, camPlayer->ProjectedDistance(p->drawPos));
 
 			if (hasModel)
@@ -1220,6 +1221,8 @@ void CProjectileDrawer::DrawGroundFlashes()
 			continue;
 
 		if (!camera->InView(gf->pos, gf->size))
+			continue;
+		if (KT1::FarView::FxCulled(camPlayer->ProjectedDistance(gf->pos), false)) // KT1 hook: FarView fx
 			continue;
 
 		bool depthTestWanted = needSoften ? false : gf->depthTest;
