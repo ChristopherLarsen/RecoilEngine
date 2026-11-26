@@ -774,6 +774,8 @@ void CSupComGroundMoveType::RouteFollowUpdate()
 	if (!retarget && frame >= rfRecheckFrame) {
 		rfRecheckFrame = frame + RecheckFrames();
 		retarget = !RouteLineClear(pos, rfAim);
+		if (RouteLog())
+			LOG("[SupComRoute] f=%d u=%d recheck: aim %d (%.0f,%.0f) %s (unit %.0f,%.0f)", frame, owner->id, rfAimIdx, rfAim.x, rfAim.z, retarget? "blocked": "clear", pos.x, pos.z);
 	}
 	if (!retarget && stuck)
 		retarget = true;
