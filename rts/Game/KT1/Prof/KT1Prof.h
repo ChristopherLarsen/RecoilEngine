@@ -5,7 +5,8 @@
 //   (b) no "Misc::Profiler::AddTime" self-timing on every call
 //   (c) no per-call thread-graph samples (threadProfiles) in cheap mode
 //   (d) ThreadPool::RunTask / AddTask / WaitFor timers dropped unless KT1ProfThreadPool=1
-// Config (springsettings): KT1CheapProfiler (default 1; 0 = stock behaviour), KT1ProfThreadPool (default 0).
+// Switches (environment, so the engine tests that link TimeProfiler.cpp need no config system): KT1_PROF_STOCK=1 restores the
+// stock profiler; KT1_PROF_POOL=1 keeps the ThreadPool timers.
 
 #ifndef KT1_PROF_H
 #define KT1_PROF_H
@@ -17,7 +18,7 @@
 
 #include "System/StringHash.h"
 #include "System/Threading/SpringThreading.h"
-#include "System/Config/ConfigHandler.h"
+#include <cstdlib>
 #include "System/TimeProfiler.h"
 
 namespace KT1Prof {
@@ -40,13 +41,15 @@ namespace KT1Prof {
 		return *t;
 	}
 
-	// read the two keys once the config exists (called from CTimeProfiler::Update on the main thread)
+	// read the two switches once (called from CTimeProfiler::Update on the main thread)
 	inline void ReadConfig() {
 		static bool done = false;
-		if (done || configHandler == nullptr) return;
+		if (done) return;
 		done = true;
-		Cheap() = configHandler->GetInt("KT1CheapProfiler") != 0;
-		PoolTimers() = configHandler->GetInt("KT1ProfThreadPool") != 0;
+		const char* a = std::getenv("KT1_PROF_STOCK");
+		const char* b = std::getenv("KT1_PROF_POOL");
+		Cheap() = !(a && a[0] == '1');
+		PoolTimers() = (b && b[0] == '1');
 	}
 
 	// true when handled here (the caller returns); false: the stock path runs

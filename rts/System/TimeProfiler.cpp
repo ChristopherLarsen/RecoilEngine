@@ -26,8 +26,6 @@ static spring::unordered_map<unsigned, int> refCounters;
 
 static CGlobalUnsyncedRNG profileColorRNG;
 
-CONFIG(int, KT1CheapProfiler).defaultValue(1).description("KT1: cheaper profiler (per-thread sums, no self-timing, no ThreadPool timers); 0 = stock"); // KT1 hook: Prof
-CONFIG(int, KT1ProfThreadPool).defaultValue(0).description("KT1: with KT1CheapProfiler, also time ThreadPool::RunTask/AddTask/WaitFor"); // KT1 hook: Prof
 
 const std::array<CTimeProfiler::ProfileSortFunc, CTimeProfiler::SortType::ST_COUNT> CTimeProfiler::SortingFunctions = {
 	[](const TimeRecordPair& a, const TimeRecordPair& b) { return (a.first          < b.first         ); }, // ST_ALPHABETICAL = 0,
