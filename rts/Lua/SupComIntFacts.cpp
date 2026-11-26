@@ -20,6 +20,12 @@
 //       fin: slots Lua finishes (cloak, jammer, other kinds), with their batch flags (fin[2k-1] slot, fin[2k] flags or -1);
 //       drop: (slot, unit) pairs gone without a destroy event (F.Drop); ev: (unit, code, value) triples, code 1 int_landed, 2 under water.
 //       shadow: compute only (state of this file evolves; no index writes, writes go to W only).
+//       lean (optional 15th argument, game mod option unitpass_intel_lean; SIM-CUTS-RANKED §9): the frame runs the KT1 Intel rule, so Lua
+//       reads the cell indices and keys (fcx fcz ccx ccz vx vz vkey skey fk ck fb cb), psub and pland only for the units it finishes
+//       (fin) and the full-record defs (cfg.full: cloakers, jammers, fake contacts). Those 14 arrays are written for those units only.
+//       Never in shadow. The game makes the pass after leaving lean mode all0, which writes every slot again.
+//   A source's dr and stamps fields (sources[u][kind]) are written when they differ from what this file last wrote to that source;
+//   the record of what was written is forgotten on Spring.SupComIntSource (the game's table may be new) and on Reset.
 //   Spring.SupComIntFactsCircle(u) -> a, x, z, r2, ce, trail, lx, lz, dr, calm, stamps   (check mode and cases; nil when no circle)
 //
 // Sensor kinds (SIM-CUTS-RANKED #7 second half, 2026-11-24; game mod option unitpass_intel_sensors, cfg.sensors 0 off, 1 on, 2 shadow):
@@ -62,7 +68,7 @@ namespace {
 		bool waterSeesSub = false;
 		float sensCell[4] = {0, 0, 0, 0};         // I.cell per kind (map cells x MU)
 	} cfg;
-	std::vector<uint8_t> defAir, defLua, defCloak, defOnOff;   // per def: aircraft; Lua finishes the unit (may cloak, jammer); may cloak; on/off-able
+	std::vector<uint8_t> defAir, defLua, defCloak, defOnOff, defFull;   // per def: aircraft; Lua finishes the unit (may cloak, jammer); may cloak; on/off-able
 
 	// the sensor kinds, in a fixed order; SWITCHED and POWER_FIELD as int_coverage.lua's tables
 	constexpr int NSENS = 4;
@@ -83,6 +89,7 @@ namespace {
 		bool placed = false;                  // this file wrote it into the kind's index (never in shadow)
 		bool trail = false;                   // radar: a leaving point is placed ("radar_leave")
 		float tlx = 0, tlz = 0, tr2 = 0, tce = 0;
+		bool wOk = false, wHasDr = false; float wDr = 0; int wSt = 0;   // dr and stamps last written to the game's table
 	};
 
 	struct Src {
@@ -101,7 +108,12 @@ namespace {
 		Sens sens[NSENS];
 		bool anySens = false;
 		bool upOff = false; float scale = 1.0f;   // Lua answers (upkeep unpaid; FieldScale), sent on change
+		bool wOk = false, wHasDr = false; float wDr = 0; int wSt = 0;   // vision: dr and stamps last written to the game's table
 	};
+	void Unwritten(Src& s) { s.wOk = false; for (int k = 0; k < NSENS; ++k) s.sens[k].wOk = false; }
+	// the game's table needs dr and stamps again
+	template<typename T> bool WriteDue(const T& c) { return !c.wOk || c.wHasDr != c.hasDr || (c.hasDr && c.wDr != c.dr) || c.wSt != c.stamps; }
+	template<typename T> void Written(T& c) { c.wOk = true; c.wHasDr = c.hasDr; c.wDr = c.dr; c.wSt = c.stamps; }
 	std::map<int, Src> srcs;                  // ordered: the sweep frees in id order
 	std::unordered_set<int> builtC;           // F.built
 
@@ -154,6 +166,7 @@ namespace {
 		DefFlags(L, 1, "lua", defLua);
 		DefFlags(L, 1, "cloak", defCloak);
 		DefFlags(L, 1, "onoff", defOnOff);
+		DefFlags(L, 1, "full", defFull);                                   // lean writes: the defs that always get the full record
 		cfg.sensors = (int)NumField(L, 1, "sensors", 0);
 		cfg.waterSeesSub = BoolField(L, 1, "waterSeesSub");
 		for (int k = 0; k < NSENS; ++k) cfg.sensCell[k] = NumField(L, 1, (std::string("cell_") + SENS_NAME[k]).c_str(), 0);
@@ -193,6 +206,7 @@ namespace {
 			return 0;
 		}
 		Src& s = srcs[u];
+		Unwritten(s);                                                          // sources[u] may be a new table
 		s.hasV = lua_isnumber(L, 2); s.vr = s.hasV ? (float)lua_tonumber(L, 2) : 0.0f;
 		s.hasW = lua_isnumber(L, 3); s.wr = s.hasW ? (float)lua_tonumber(L, 3) : 0.0f;
 		s.nv = lua_toboolean(L, 4);
@@ -225,7 +239,7 @@ namespace {
 
 	int Reset(lua_State* L) {
 		if (!Synced(L)) return 0;
-		for (auto& p : srcs) { FreeCircle(p.second, p.first, lastShadow); FreeAllSens(p.second, p.first); }
+		for (auto& p : srcs) { FreeCircle(p.second, p.first, lastShadow); FreeAllSens(p.second, p.first); Unwritten(p.second); }
 		return 0;
 	}
 
@@ -324,6 +338,8 @@ namespace {
 		luaL_checktype(L, 12, LUA_TTABLE);
 		luaL_checktype(L, 13, LUA_TTABLE);
 		luaL_checktype(L, 14, LUA_TTABLE);
+		const bool lean = lua_toboolean(L, 15) && !shadow;
+		lua_settop(L, 14);
 		lastShadow = shadow;
 		if (!lua_checkstack(L, 64)) return luaL_error(L, "SupComIntFactsRun: stack");
 		if (!cfg.ok) return luaL_error(L, "SupComIntFactsRun: SupComIntFactsInit first");
@@ -408,17 +424,26 @@ namespace {
 			if (unit == nullptr) return luaL_error(L, "SupComIntFactsRun: unit %d gone while calm", u);
 			const int d = unit->unitDef->id;
 			const int own = unit->allyteam;
+			const bool luaDef = (size_t)d < defLua.size() && defLua[d];
+			auto si = srcs.find(u);
+			const bool sensOn = cfg.sensors == 1;
+			// Lua finishes what it keeps: cloak and jammers (luaDef), the fields (nv), and with the sensors off a unit without vision
+			const bool luaFin = luaDef || (si != srcs.end() && (si->second.nv || (!si->second.hasV && !(sensOn && si->second.anySens))));
+			// lean: the 14 arrays only where Lua reads them under the KT1 rule (its finish, the full-record defs)
+			const bool fullRec = !lean || luaFin || ((size_t)d < defFull.size() && defFull[d]);
 			SetN(L, W_px, i, x); SetN(L, W_pz, i, z); SetN(L, W_pdef, i, (float)d); SetN(L, W_pown, i, (float)own);
 			const float a1 = Floor(x / fe), b1 = Floor(z / fe), a2 = Floor(x / ce), b2 = Floor(z / ce);
-			SetN(L, W_fcx, i, a1); SetN(L, W_fcz, i, b1); SetN(L, W_ccx, i, a2); SetN(L, W_ccz, i, b2);
-			const float vx = x, vz = z;                                                // not the req raster: exact position
-			SetN(L, W_vx, i, vx); SetN(L, W_vz, i, vz);
-			SetN(L, W_vkey, i, Floor(vx / cfg.VS) * 8192.0f + Floor(vz / cfg.VS));
-			SetN(L, W_skey, i, Floor(x / cfg.SS) * 8192.0f + Floor(z / cfg.SS));
-			SetN(L, W_fk, i, (a1 >= 0 && b1 >= 0 && a1 < fnx && b1 < fnz) ? b1 * fnx + a1 : -1.0f);
-			SetN(L, W_ck, i, (a2 >= 0 && b2 >= 0 && a2 < cnx && b2 < cnz) ? b2 * cnx + a2 : -1.0f);
-			SetN(L, W_fb, i, Floor(a1 / FB) * 65536.0f + Floor(b1 / FB));
-			SetN(L, W_cb, i, Floor(a2 / CB) * 65536.0f + Floor(b2 / CB));
+			if (fullRec) {
+				SetN(L, W_fcx, i, a1); SetN(L, W_fcz, i, b1); SetN(L, W_ccx, i, a2); SetN(L, W_ccz, i, b2);
+				const float vx = x, vz = z;                                            // not the req raster: exact position
+				SetN(L, W_vx, i, vx); SetN(L, W_vz, i, vz);
+				SetN(L, W_vkey, i, Floor(vx / cfg.VS) * 8192.0f + Floor(vz / cfg.VS));
+				SetN(L, W_skey, i, Floor(x / cfg.SS) * 8192.0f + Floor(z / cfg.SS));
+				SetN(L, W_fk, i, (a1 >= 0 && b1 >= 0 && a1 < fnx && b1 < fnz) ? b1 * fnx + a1 : -1.0f);
+				SetN(L, W_ck, i, (a2 >= 0 && b2 >= 0 && a2 < cnx && b2 < cnz) ? b2 * cnx + a2 : -1.0f);
+				SetN(L, W_fb, i, Floor(a1 / FB) * 65536.0f + Floor(b1 / FB));
+				SetN(L, W_cb, i, Floor(a2 / CB) * 65536.0f + Floor(b2 / CB));
+			}
 			bool sub = false;
 			if (y < 0.0f && fl >= 0 && (fl & 16)) sub = true;
 			else if (y < 0.0f) {
@@ -428,24 +453,19 @@ namespace {
 				else if (l == "water") sub = false;
 				else sub = y + unit->height < 0.0f;
 			}
-			SetB(L, W_psub, i, sub);
+			if (fullRec) SetB(L, W_psub, i, sub);
 			bool landed = false;
 			const bool air = (size_t)d < defAir.size() && defAir[d];
 			if (air) {
 				const float gy = fl >= 0 ? gh : CGround::GetHeightReal(x, z, true);
 				landed = y - (gy > 0.0f ? gy : 0.0f) <= cfg.landedH * cfg.MU;
 			}
-			SetB(L, W_pland, i, landed);
-			const bool luaDef = (size_t)d < defLua.size() && defLua[d];
+			if (fullRec) SetB(L, W_pland, i, landed);
 			if (!luaDef) SetB(L, W_pcloak, i, false);                                  // Lua answers the units it finishes
 			const bool mayCloak = (size_t)d < defCloak.size() && defCloak[d];
 			SetN(L, W_py, i, y);
 
 			// the source (vision here; Lua finishes the other kinds)
-			auto si = srcs.find(u);
-			const bool sensOn = cfg.sensors == 1;
-			// Lua finishes what it keeps: cloak and jammers (luaDef), the fields (nv), and with the sensors off a unit without vision
-			const bool luaFin = luaDef || (si != srcs.end() && (si->second.nv || (!si->second.hasV && !(sensOn && si->second.anySens))));
 			if (luaFin && fsfI) { nFin += 1; SetN(L, FIN, 2 * nFin - 1, (float)i); SetN(L, FIN, 2 * nFin, (float)fl); }
 			if (si == srcs.end()) continue;
 			Src& s = si->second;
@@ -492,7 +512,8 @@ namespace {
 						c.sda = a; c.mark = stamp;
 					}
 					// the source table's radius in use (cases read it), as Lua writes it
-					if (sensOn && !shadow) {
+					if (sensOn && !shadow && WriteDue(c)) {
+						Written(c);
 						lua_rawgeti(L, R_sources, u);
 						if (lua_istable(L, -1)) {
 							lua_getfield(L, -1, SENS_NAME[k]);
@@ -551,7 +572,8 @@ namespace {
 				}
 			}
 			// the source table's radius in use (cases read it), as Lua writes it
-			if (!shadow) {
+			if (!shadow && WriteDue(s)) {
+				Written(s);
 				lua_rawgeti(L, R_sources, u);
 				if (lua_istable(L, -1)) {
 					lua_getfield(L, -1, "vision");
