@@ -86,6 +86,7 @@ add_library(engineSim STATIC
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/PathEstimator.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/PathFinder.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/PathFinderDef.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/SupComPathBatch.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/PathFlowMap.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/PathHeatMap.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Path/HAPFS/PathingState.cpp"
