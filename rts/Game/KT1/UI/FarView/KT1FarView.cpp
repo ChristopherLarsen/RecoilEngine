@@ -9,7 +9,8 @@
 // Switch:     mod option kt1_farview (default off until the bench proves it). Unsynced: draw only.
 // Config:     gamedata/kt1/farview.lua: switch_height, hysteresis, grid, refresh_frames, water_level, water_color, brightness,
 //             texture (labels and pending values there).
-// Hooks:      rts/Rendering/WorldDrawer.cpp, CWorldDrawer::Draw: `if (!KT1::FarView::Draw()) { DrawOpaqueObjects(); DrawAlphaObjects(); }`.
+// Hooks:      ProjectileDrawer.cpp UpdateDrawFlags and DrawGroundFlashes: FxCulled (far only: effects past their view-depth cutoff).
+//             rts/Rendering/WorldDrawer.cpp, CWorldDrawer::Draw: `if (!KT1::FarView::Draw()) { DrawOpaqueObjects(); DrawAlphaObjects(); }`.
 //             Lua DrawWorld, DrawMiscObjects (icons, order lines, selection box, map marks) and DrawBelowWaterOverlay still run.
 // Height:     the camera's height above the map's average height, or the game camera's zoom when Lua sets it (SetZoom); the engine
 //             falls back to height when Lua has not set it for 30 drawn frames.
@@ -40,6 +41,7 @@
 #include "Lua/LuaUtils.h"
 #include "Map/ReadMap.h"
 #include "Rendering/DepthBufferCopy.h"
+#include "Rendering/Env/Particles/ProjectileDrawer.h"
 #include "Rendering/GL/SubState.h"
 #include "Rendering/GL/VAO.h"
 #include "Rendering/GL/VBO.h"
@@ -125,6 +127,9 @@ struct Cfg {
 	float rampLight[3] = {0.80f, 0.80f, 0.68f};   // PARITY: G0-FARVIEW cartographic_terrain.builtin_ramp_light_rgb
 	float contourStep = 0.10f;      // PARITY: G0-FARVIEW cartographic_terrain.builtin_contour_step_percent (10%)
 	float edgeGain = 16.0f;         // PARITY: G0-FARVIEW cartographic_terrain.contour_edge_gain
+	bool drawFx = true;             // REQ (owner 2026-11-26, D-Z3 withdrawn): projectiles, particles and ground flashes draw in the far view
+	float fxCutoff = 1200.0f;       // PARITY: G0-WVFXZOOM cutoff_all_particle_layers, the common layer cutoff 150 map units (x 8 elmos), view depth; <= 0 never culls
+	float weaponCutoff = -1.0f;     // DESIGN: weapon projectiles are not culled here; the VFX side sizes and cuts the shot's look (gfx_shots)
 };
 
 Cfg cfg;
@@ -290,6 +295,9 @@ public:
 		for (int i = 0; i < 3; ++i) { cfg.rampDark[i] = rd.GetFloat(i + 1, cfg.rampDark[i]); cfg.rampLight[i] = rl.GetFloat(i + 1, cfg.rampLight[i]); }
 		cfg.contourStep = std::max(0.001f, t.GetFloat("contour_step", cfg.contourStep));
 		cfg.edgeGain = t.GetFloat("contour_edge_gain", cfg.edgeGain);
+		cfg.drawFx = t.GetBool("draw_fx", cfg.drawFx);
+		cfg.fxCutoff = t.GetFloat("fx_cutoff", cfg.fxCutoff);
+		cfg.weaponCutoff = t.GetFloat("weapon_cutoff", cfg.weaponCutoff);
 	}
 	void Start() override {
 		active = true;
@@ -362,9 +370,27 @@ bool Draw() {
 	selectedUnitsHandler.Draw();
 	eventHandler.DrawWorldPreUnit();
 
+	// Effects (D-Z3 withdrawn): as the full pass draws them, past their cutoffs culled in ProjectileDrawer (FxCulled).
+	// No water surface is drawn far, so one alpha pass covers above and below the water.
+	if (cfg.drawFx) {
+		SCOPED_TIMER("KT1::FarView::Fx");
+		projectileDrawer->DrawGroundFlashes();
+		projectileDrawer->DrawOpaque(false);
+		glEnable(GL_BLEND);
+		glDepthFunc(GL_LEQUAL);
+		projectileDrawer->DrawAlpha(true, true, false, false);
+		KT1::Registry::DrawWorld(true);   // unsynced rules' world draw (Ribbons), as in the full alpha pass
+	}
+
 	stDrawMs += (spring_gettime() - t0).toMilliSecsf();
 	stFrames += 1;
 	return true;
+}
+
+bool FxCulled(float viewDepth, bool weapon) {
+	if (!active || !farNow) return false;
+	const float cut = weapon ? cfg.weaponCutoff : cfg.fxCutoff;
+	return cut > 0.0f && viewDepth > cut;
 }
 
 } // namespace FarView
