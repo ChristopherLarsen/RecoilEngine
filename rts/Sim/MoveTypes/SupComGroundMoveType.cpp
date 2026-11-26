@@ -84,6 +84,7 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scHandoverFrames),
 	CR_MEMBER(scPushLen),
 	CR_MEMBER(scPushBack),
+	CR_MEMBER(scBlockPos),
 	CR_MEMBER(scHandoverFrom),
 	CR_MEMBER(scYieldFrames),
 	CR_MEMBER(scYieldUnit),
@@ -148,6 +149,11 @@ static bool MakeWayOn() { static const bool on = SupComSimSwitch::Get("SupComMak
 static bool OneFootprintOn() { static const bool on = SupComSimSwitch::Get("SupComOneFootprint", true); return on; }
 CONFIG(bool, SupComGoRound).defaultValue(true).description("supcom: an idle unit is never displaced: a mover goes round it where there is a way and otherwise stops (no make-way, no push, no walk-back) (PTH-006 v8 R3, PTH-002 v5 R3a, owner decision 2026-11-24); 0 asks the idle unit to make way, as before.");
 static bool GoRoundOn() { static const bool on = SupComSimSwitch::Get("SupComGoRound", true); return on; }
+// pathing fix 4 (L11397/L11398: PTH-003-C/E/F pass only with supcompushback=0): with the MOV-021 R1 push back a unit refused at a
+// corner loses ground, its next step succeeds and cleared the refusal count, so the corner steering (scBlockedFrames > 0) was
+// dropped and it drove into the same corner again. The count now clears only once the unit is a square away from where it was
+// refused (switch SupComBlockMemory, default 1)
+static bool BlockMemoryOn() { static const bool on = SupComSimSwitch::Get("SupComBlockMemory", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
 static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
 // sideways search for a line that fits through a gap: up to this many elmos either side, in this step (PLACEHOLDER)
@@ -1171,6 +1177,18 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		return;
 	}
 
+	// MOV-007 v2 R2 and R3, MOV-021 v1 R1 and case A (pathing fix 4): on the blocked step the unit stays at its old position with speed 0
+	// (L11389: MOV-007-B moved -0.113 elmos in the blocked step itself); the push back moves it on the next frame, with no step of its
+	// own (it is being pushed), and the restart at v_restart (scRestart, kept) follows on the frame after
+	if (scPushBack.SqLength2D() > 0.0f) {
+		scSpeed = 0.0f;
+		owner->SetVelocityAndSpeed(ZeroVector);
+		resultantForces = scPushBack;
+		scPushBack = ZeroVector;
+		UpdateTurnRate();
+		return;
+	}
+
 	// MOV-021 v1 R4 (pathing fix): a unit pushed harder than push_clear_speed_fraction of its top speed last frame does not follow its route
 	// this frame (no step of its own); an idle unit is never pushed (SupComGoRound), so this only holds movers being separated
 	const bool pushedState = (SupComPushCap::On() && progressState == Active && scPushLen > SupComPushCap::PushClearFrac() * maxSpeed);
@@ -1649,6 +1667,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 					byStructure? "a structure": (byTerrain? "terrain": "a unit or the engine"), owner->pos.x, owner->pos.z, flatFrontDir.x, flatFrontDir.z, moveRequest.x, moveRequest.z, currWayPoint.x, currWayPoint.z);
 			}
 			scBlockedFrames += int(!stop);
+			scBlockPos = owner->pos;
 			scStructFrames = (byStructure && !stop)? scStructFrames + 1: 0;
 
 			ReRequestPath(false);
@@ -1656,7 +1675,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			positionStuck = false;
 			if (YieldLog() && scBlockedFrames > 0)
 				LOG("[SupComYield] f=%d unit %d moves again after %d refused frames", gs->frameNum, owner->id, scBlockedFrames);
-			scBlockedFrames = 0;
+			if (!BlockMemoryOn() || scBlockedFrames == 0 || owner->pos.SqDistance2D(scBlockPos) >= Square(SQUARE_SIZE))
+				scBlockedFrames = 0;
 			scStructFrames = 0;
 		}
 	}
@@ -1666,8 +1686,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 
 	// reported velocity is the step's displacement
 	owner->SetVelocityAndSpeed(moveRequest);
-	resultantForces = moveRequest + scPushBack;
-	scPushBack = ZeroVector;
+	resultantForces = moveRequest;
 
 	UpdateTurnRate();
 }
