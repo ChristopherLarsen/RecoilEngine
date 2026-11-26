@@ -587,7 +587,10 @@ void CProjectileHandler::CheckUnitFeatureCollisions(bool synced)
 		const float3 ppos1 = p->pos + p->speed;
 		// const float3 ppos1 = p->pos + p->dir * (p->speed.w + p->radius);
 
-		quadField.GetUnitsAndFeaturesColVol(p->pos, p->speed.w + p->radius, tempUnits, tempFeatures, &tempRepulsers);
+		// KT1 hook: combatcut. The hit test is the segment ppos0..ppos1, so query the circle around its midpoint
+		// (radius half the step) instead of around ppos0 (radius the whole step): same candidates that can hit,
+		// about a quarter of the area for fast projectiles. Was: GetUnitsAndFeaturesColVol(p->pos, p->speed.w + p->radius, ...)
+		quadField.GetUnitsAndFeaturesColVol((ppos0 + ppos1) * 0.5f, p->speed.w * 0.5f + p->radius, tempUnits, tempFeatures, &tempRepulsers);
 
 		CheckShieldCollisions (p, tempRepulsers, ppos0, ppos1); tempRepulsers.clear();
 		CheckUnitCollisions   (p, tempUnits    , ppos0, ppos1); tempUnits.clear();
