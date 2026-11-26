@@ -1779,19 +1779,22 @@ void CGame::SimFrame() {
 
 			// keep garbage-collection rate tied to sim-speed
 			// (fixed 30Hz gc is not enough while catching up)
-			if (luaGCControl == 0)
+			if (luaGCControl == 0) { SCOPED_TIMER("Sim::GameFrame::GC"); // KT1 hook: gfself
 				eventHandler.CollectGarbage(false);
+			}
 
-			SupComUnitQuery::OnUnitsUpdated(); // supcom: change lists for Spring.GetUnitChanges
-			SupComTargeting::Update(gs->frameNum); // supcom: CMB-004 target choice (unitpass_target), before the Lua GameFrame
-			KT1::Registry::GameFrame(gs->frameNum); // KT1 hook: registry (engine rules, before the Lua GameFrame)
-			eventHandler.GameFrame(gs->frameNum);
+			{ SCOPED_TIMER("Sim::GameFrame::UnitQuery"); SupComUnitQuery::OnUnitsUpdated(); } // supcom: change lists for Spring.GetUnitChanges // KT1 hook: gfself
+			{ SCOPED_TIMER("Sim::GameFrame::Targeting"); SupComTargeting::Update(gs->frameNum); } // supcom: CMB-004 target choice (unitpass_target), before the Lua GameFrame // KT1 hook: gfself
+			{ SCOPED_TIMER("Sim::GameFrame::KT1"); KT1::Registry::GameFrame(gs->frameNum); } // KT1 hook: registry (engine rules, before the Lua GameFrame) // KT1 hook: gfself
+			{ SCOPED_TIMER("Sim::GameFrame::Lua"); eventHandler.GameFrame(gs->frameNum); } // KT1 hook: gfself
 		}
 
+		{ SCOPED_TIMER("Sim::Misc::Pre"); // KT1 hook: gfself (helper, readMap, smoothGround, mapDamage)
 		helper->Update();
 		readMap->Update();
 		smoothGround.UpdateSmoothMesh();
 		mapDamage->Update();
+		}
 		unitHandler.Update();
 		pathManager->Update();
 		projectileHandler.Update();
@@ -1811,18 +1814,20 @@ void CGame::SimFrame() {
 
 			unitHandler.UpdatePostAnimation();
 		}
-		envResHandler.Update();
+		{ SCOPED_TIMER("Sim::Misc::EnvRes"); envResHandler.Update(); } // KT1 hook: gfself
 		losHandler->Update();
 		// dead ghosts have to be updated in sim, after los,
 		// to make sure they represent the current knowledge correctly.
 		// should probably be split from drawer
-		CUnitDrawer::UpdateGhostedBuildings();
-		interceptHandler.Update(false);
+		{ SCOPED_TIMER("Sim::Misc::Ghosts"); CUnitDrawer::UpdateGhostedBuildings(); } // KT1 hook: gfself
+		{ SCOPED_TIMER("Sim::Misc::Intercept"); interceptHandler.Update(false); } // KT1 hook: gfself
 
+		{ SCOPED_TIMER("Sim::Misc::TeamPlayer"); // KT1 hook: gfself
 		teamHandler.GameFrame(gs->frameNum);
 		playerHandler.GameFrame(gs->frameNum);
-		SupComCib::FrameEnd(); // supcom: hand queued fight call-ins to Lua before the frame ends
-		eventHandler.GameFramePost(gs->frameNum);
+		}
+		{ SCOPED_TIMER("Sim::Misc::Cib"); SupComCib::FrameEnd(); } // supcom: hand queued fight call-ins to Lua before the frame ends // KT1 hook: gfself
+		{ SCOPED_TIMER("Sim::Misc::GameFramePost"); eventHandler.GameFramePost(gs->frameNum); } // KT1 hook: gfself
 	}
 
 	lastSimFrameTime = spring_gettime();
