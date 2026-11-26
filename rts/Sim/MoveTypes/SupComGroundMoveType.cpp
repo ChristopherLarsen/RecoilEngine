@@ -199,6 +199,7 @@ static bool BlockMemoryOn() { static const bool on = SupComSimSwitch::Get("SupCo
 // pathing fix 4: an idle unit is not pushed into another obstacle (game docs/engine/PATHING-ROOT-CAUSE.md, hand-over finding)
 // MOV-021 R2 entry guard (d092c2d620): switch SupComEntryGuard, default 1 (MOV-018-G/H bisect)
 static bool EntryGuardOn() { static const bool on = SupComSimSwitch::Get("SupComEntryGuard", true); return on; }
+static bool LaneHandoverOn() { static const bool on = SupComSimSwitch::Get("SupComLaneHandover", true); return on; }
 static bool IdleNoPushInOn() { static const bool on = SupComSimSwitch::Get("SupComIdleNoPushIn", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
 static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
@@ -1293,7 +1294,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	// beside a factory exit, Q100), and this move type's exact steps cannot get round it. The engine's own ground
 	// movement slides along the structure, as stock units do, until the unit has moved two squares or two seconds pass.
 	// MOV-021 v1 R1 (pathing fix): no part of a blocked step is kept along the obstacle, so with SupComNoSlide the handover is not started
-	if (!SupComPushCap::NoSlide() && scHandoverFrames == 0 && scStructFrames >= STRUCT_HANDOVER_FRAMES && progressState == Active) {
+	if (scHandoverFrames == 0 && scStructFrames >= STRUCT_HANDOVER_FRAMES && progressState == Active) {
 		scHandoverFrames = STRUCT_HANDOVER_TIME;
 		scHandoverFrom = owner->pos;
 		scStructFrames = 0;
@@ -1623,6 +1624,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (!moveRequest.same(ZeroVector)) {
 		bool blocked = false;
 		bool byStructure = false;
+		// refused by a structure under the engine's square footprint while this move type's footprint fits (see laneRefusal)
+		bool laneRefusal = false;
 
 		// MOV-021 R2 (pathing fix): out of the blocked space the unit started in, never into another obstacle
 		if (positionStuck && SupComPushCap::On() && EntryGuardOn() && EntersNewObstacle(owner, owner->pos, owner->pos + moveRequest)) {
@@ -1753,6 +1756,12 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 						byStructure = false;
 						blocked = false;
 					}
+					// MOV-018 v4 R5 (every measured kind passes straight between small structures with skirts touching; how the lane
+					// is represented on the movement grid is free): with SupComOneFootprint the engine's square footprint refuses a
+					// lane this move type's footprint fits. That refusal is not a blocked step of MOV-021 R1: no push back, and the
+					// engine's own movement takes the unit through as before the no-slide rule (switch SupComLaneHandover, default 1;
+					// L11191/L11200: MOV-018-G/H pass only with both no-slide and push back off)
+					laneRefusal = (blocked && byStructure && LaneHandoverOn() && !FootprintBlocked(next) && !FootprintOnStructure(next));
 				}
 			}
 		}
@@ -1772,7 +1781,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			// changes position by less than one step at top speed and never into blocked squares
 			const bool byTerrainStep = FootprintBlocked(owner->pos + moveRequest);
 			const bool pressedSamePlace = (BlockMemoryOn() && scBlockedFrames > 0 && owner->pos.SqDistance2D(scBlockPos) < Square(SQUARE_SIZE));
-			if (SupComPushCap::On() && !stop && scPushLen <= 0.0f && !(TerrainNoPushBackOn() && byTerrainStep) && !(PushBackOnceOn() && pressedSamePlace) && !(PushBackStructOnlyOn() && !byStructure)) {
+			if (SupComPushCap::On() && !stop && scPushLen <= 0.0f && !laneRefusal && !(TerrainNoPushBackOn() && byTerrainStep) && !(PushBackOnceOn() && pressedSamePlace) && !(PushBackStructOnlyOn() && !byStructure)) {
 				const float len = std::sqrt(moveRequest.x * moveRequest.x + moveRequest.z * moveRequest.z);
 				if (len > 0.0f) {
 					const float3 back = float3(-moveRequest.x / len, 0.0f, -moveRequest.z / len) * (SupComPushCap::PushBackFrac() * maxSpeed);
@@ -1798,7 +1807,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			}
 			scBlockedFrames += int(!stop);
 			scBlockPos = owner->pos;
-			scStructFrames = (byStructure && !stop)? scStructFrames + 1: 0;
+			// with SupComNoSlide only a lane refusal starts the handover (MOV-018 R5); other structure refusals count as before
+			scStructFrames = (byStructure && !stop && (!SupComPushCap::NoSlide() || laneRefusal))? scStructFrames + 1: 0;
 
 			ReRequestPath(false);
 		} else {
