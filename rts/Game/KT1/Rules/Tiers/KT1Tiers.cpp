@@ -43,6 +43,8 @@ namespace KT1 {
 namespace Tiers {
 	bool on = false;
 	std::vector<uint8_t> asleep;
+	std::vector<CUnit*> awake;
+	size_t collected = 0;
 
 	static TiersCore::Live ReadLive(const CUnit* u) {
 		TiersCore::Live l;
@@ -92,6 +94,7 @@ public:
 		period = TiersCore::Period(periodSeconds, GAME_SPEED);
 		grid.Init(mapDims.mapx * SQUARE_SIZE, mapDims.mapy * SQUARE_SIZE, cellElmos);
 		Tiers::asleep.assign(unitHandler.MaxUnits(), 0);
+		Tiers::awake.reserve(unitHandler.MaxUnits());
 		snaps.assign(unitHandler.MaxUnits(), Snap{});
 		Tiers::on = true;
 		LOG("[KT1] Tiers: period %d frames, margin %.0f elmos, cell %.0f", period, marginElmos, cellElmos);

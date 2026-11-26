@@ -400,11 +400,13 @@ void CUnitHandler::UpdateUnits()
 
 	// units created during the loop get their first update next frame
 	const size_t activeUnitCount = activeUnits.size();
+	if (KT1::Tiers::on) KT1::Tiers::BeginCollect(activeUnitCount); // KT1 hook: Tiers
 	for (size_t i = 0; i < activeUnitCount; ++i) {
 		CUnit* unit = activeUnits[i];
 
 		unit->SanityCheck();
 		unit->Update();
+		if (KT1::Tiers::on) KT1::Tiers::Collect(unit); // KT1 hook: Tiers
 
 		// rate checked here, most units are not due and their move type stays untouched
 		if (((gs->frameNum + unit->id) % modInfo.unitQuadPositionUpdateRate) == 0)
@@ -449,6 +451,12 @@ void CUnitHandler::UpdateUnits()
 void CUnitHandler::UpdateUnitWeapons()
 {
 	SCOPED_TIMER("Sim::Unit::Weapon");
+	if (KT1::Tiers::on) { // KT1 hook: Tiers (C-10: awake units, then units added since UpdateUnits; activeUnits only grows here)
+		for (CUnit* unit: KT1::Tiers::awake) unit->UpdateWeapons();
+		for (activeUpdateUnit = KT1::Tiers::collected; activeUpdateUnit < activeUnits.size(); ++activeUpdateUnit)
+			activeUnits[activeUpdateUnit]->UpdateWeapons();
+		return;
+	}
 	for (activeUpdateUnit = 0; activeUpdateUnit < activeUnits.size(); ++activeUpdateUnit) {
 		activeUnits[activeUpdateUnit]->UpdateWeapons();
 	}

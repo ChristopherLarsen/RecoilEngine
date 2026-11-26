@@ -4,6 +4,7 @@
 #ifndef KT1_TIERS_H
 #define KT1_TIERS_H
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -17,6 +18,13 @@ namespace Tiers {
 
 	/// true: skip this unit's tiered work this frame (move step, CAI and weapon slow updates, weapon update and vectors)
 	bool Asleep(const CUnit* u);
+
+	// C-10 (PERF-REVIEW-C): the weapon pass walks only the units awake after their Update. Collect runs in the
+	// UpdateUnits loop (which visits every unit anyway); a unit woken later in the frame acts on the next frame.
+	extern std::vector<CUnit*> awake;     // this frame, in activeUnits order
+	extern size_t collected;              // activeUnits.size() when collecting started; units added later are walked in full
+	inline void BeginCollect(size_t n) { awake.clear(); collected = n; }
+	inline void Collect(CUnit* u) { if (!Asleep(u)) awake.push_back(u); }
 }
 }
 
