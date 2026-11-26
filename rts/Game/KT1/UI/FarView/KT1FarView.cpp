@@ -128,7 +128,7 @@ struct Cfg {
 	float contourStep = 0.10f;      // PARITY: G0-FARVIEW cartographic_terrain.builtin_contour_step_percent (10%)
 	float edgeGain = 16.0f;         // PARITY: G0-FARVIEW cartographic_terrain.contour_edge_gain
 	bool drawFx = true;             // REQ (owner 2026-11-26, D-Z3 withdrawn): projectiles, particles and ground flashes draw in the far view
-	float fxCutoff = 1200.0f;       // PARITY: G0-WVFXZOOM cutoff_all_particle_layers, the common layer cutoff 150 map units (x 8 elmos), view depth; <= 0 never culls
+	float fxCutoff = -1.0f;         // REQ (released sweep 5b51164): no far-view cull by default; each layer keeps its own cut-off; a value > 0 is a cap (owner decision)
 	float weaponCutoff = -1.0f;     // DESIGN: weapon projectiles are not culled here; the VFX side sizes and cuts the shot's look (gfx_shots)
 };
 
