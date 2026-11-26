@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include <chrono> // KT1 hook: weaponsplit
 #include "Weapon.h"
 #include "WeaponDefHandler.h"
 #include "WeaponMemPool.h"
@@ -316,6 +317,11 @@ float CWeapon::GetPredictedImpactTime(const float3& p) const
 	return aimFromPos.distance(p) / projectileSpeed;
 }
 
+// KT1 hook: weaponsplit. Per-frame sums (ns) of the parts of CWeapon::Update, reported by CUnitHandler::UpdateUnitWeapons
+// as Sim::Unit::Weapon::{Lead,Aim,TryTarget,Fire}. Main thread only. Two clock reads per part per weapon that has work.
+namespace KT1WeaponSplit { int64_t lead = 0, aim = 0, tryTarget = 0, fire = 0; }
+static inline int64_t KT1SplitNow() { return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+
 void CWeapon::Update()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
@@ -346,13 +352,18 @@ void CWeapon::Update()
 	if (salvoLeft == 0 && HaveDeniedInterceptTarget())
 		UpdateInterceptTarget();
 
+	int64_t t0 = KT1SplitNow(); // KT1 hook: weaponsplit
 	currentTargetPos = GetLeadTargetPos(currentTarget);
+	int64_t t1 = KT1SplitNow(); KT1WeaponSplit::lead += t1 - t0; // KT1 hook: weaponsplit
 
 	if (!UpdateStockpile())
 		return;
 
+	t0 = KT1SplitNow(); // KT1 hook: weaponsplit
 	UpdateAim();
+	t1 = KT1SplitNow(); KT1WeaponSplit::aim += t1 - t0; // KT1 hook: weaponsplit
 	UpdateFire();
+	KT1WeaponSplit::fire += KT1SplitNow() - t1; // KT1 hook: weaponsplit (includes TryTarget)
 	UpdateSalvo();
 }
 
@@ -480,7 +491,10 @@ void CWeapon::UpdateFire()
 		UpdateWeaponVectors();
 	} 
 
-	if (!TryTarget(currentTargetPos, currentTarget, true))
+	const int64_t tt0 = KT1SplitNow(); // KT1 hook: weaponsplit
+	const bool tryOk = TryTarget(currentTargetPos, currentTarget, true);
+	KT1WeaponSplit::tryTarget += KT1SplitNow() - tt0; // KT1 hook: weaponsplit
+	if (!tryOk)
 		return;
 
 	// pre-check if we got enough resources (so CobBlockShot gets only called when really possible to shoot)

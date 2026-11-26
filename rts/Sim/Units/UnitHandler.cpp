@@ -446,12 +446,24 @@ void CUnitHandler::UpdateUnits()
 	}
 }
 
+namespace KT1WeaponSplit { extern int64_t lead, aim, tryTarget, fire; } // KT1 hook: weaponsplit
+
 void CUnitHandler::UpdateUnitWeapons()
 {
+	{
 	SCOPED_TIMER("Sim::Unit::Weapon");
 	for (activeUpdateUnit = 0; activeUpdateUnit < activeUnits.size(); ++activeUpdateUnit) {
 		activeUnits[activeUpdateUnit]->UpdateWeapons();
 	}
+	}
+	// KT1 hook: weaponsplit (sums from CWeapon::Update; Fire includes TryTarget)
+	static TimerNameRegistrar kt1wsL("Sim::Unit::Weapon::Lead"), kt1wsA("Sim::Unit::Weapon::Aim"), kt1wsT("Sim::Unit::Weapon::TryTarget"), kt1wsF("Sim::Unit::Weapon::Fire");
+	const spring_time now = spring_gettime();
+	CTimeProfiler::GetInstance().AddTime(hashString("Sim::Unit::Weapon::Lead"), now, spring_time::fromNanoSecs(KT1WeaponSplit::lead));
+	CTimeProfiler::GetInstance().AddTime(hashString("Sim::Unit::Weapon::Aim"), now, spring_time::fromNanoSecs(KT1WeaponSplit::aim));
+	CTimeProfiler::GetInstance().AddTime(hashString("Sim::Unit::Weapon::TryTarget"), now, spring_time::fromNanoSecs(KT1WeaponSplit::tryTarget));
+	CTimeProfiler::GetInstance().AddTime(hashString("Sim::Unit::Weapon::Fire"), now, spring_time::fromNanoSecs(KT1WeaponSplit::fire));
+	KT1WeaponSplit::lead = KT1WeaponSplit::aim = KT1WeaponSplit::tryTarget = KT1WeaponSplit::fire = 0;
 }
 
 void CUnitHandler::UpdatePreFrame()
