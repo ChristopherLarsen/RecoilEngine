@@ -5,6 +5,7 @@
 #include "BuilderCAI.h"
 #include "ExternalAI/EngineOutHandler.h"
 #include "Game/GameHelper.h"
+#include "Game/SupComBuildSnap.h"
 #include "Game/SelectedUnitsHandler.h"
 #include "Game/GlobalUnsynced.h"
 #include "Map/Ground.h"
@@ -624,8 +625,12 @@ void CBuilderCAI::ExecuteBuildCmd(Command& c)
 
 		#if 1
 		// snap build-position to multiples of SQUARE_SIZE
-		bi.pos.x = math::floor(c.GetParam(0) / SQUARE_SIZE) * SQUARE_SIZE;
-		bi.pos.z = math::floor(c.GetParam(2) / SQUARE_SIZE) * SQUARE_SIZE;
+		// supcom: not for a fine kind (supcom_footprint_squares): Pos2BuildPos snaps its raw position (BLD-001 v10 R10); flooring first
+		// turns a site on a half square (1100) into a tie (1096) that the even-line rule then sends 8 elmos down
+		if (!SupComBuildSnap::Fine(bi.def)) {
+			bi.pos.x = math::floor(c.GetParam(0) / SQUARE_SIZE) * SQUARE_SIZE;
+			bi.pos.z = math::floor(c.GetParam(2) / SQUARE_SIZE) * SQUARE_SIZE;
+		}
 		#endif
 
 		CFeature* f = nullptr;
