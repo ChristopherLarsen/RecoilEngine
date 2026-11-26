@@ -28,7 +28,7 @@ namespace SupComPathBatch {
 		bool active;
 	};
 
-	const CPathCache::CacheItem* Find(unsigned int blockSize, int2 strtBlock, int2 goalBlock, float goalRadius, int pathType, bool synced);
+	const HAPFS::CPathCache::CacheItem* Find(unsigned int blockSize, int2 strtBlock, int2 goalBlock, float goalRadius, int pathType, bool synced);
 	void Add(unsigned int blockSize, const IPath::Path& path, IPath::SearchResult result, int2 strtBlock, int2 goalBlock, float goalRadius, int pathType, bool synced);
 
 	// counts of the last batch, for the log line (hits, misses)

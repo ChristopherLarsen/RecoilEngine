@@ -37,7 +37,7 @@ namespace SupComPathBatch {
 		}
 
 		// main thread only (Active() is false elsewhere)
-		std::unordered_map<Key, CPathCache::CacheItem, KeyHash> items;
+		std::unordered_map<Key, HAPFS::CPathCache::CacheItem, KeyHash> items;
 		bool active = false;
 		int on = -1;
 		unsigned int hits = 0, misses = 0, requests = 0;
@@ -68,7 +68,7 @@ namespace SupComPathBatch {
 		items.clear();
 	}
 
-	const CPathCache::CacheItem* Find(unsigned int blockSize, int2 strtBlock, int2 goalBlock, float goalRadius, int pathType, bool synced) {
+	const HAPFS::CPathCache::CacheItem* Find(unsigned int blockSize, int2 strtBlock, int2 goalBlock, float goalRadius, int pathType, bool synced) {
 		const auto it = items.find(MakeKey(blockSize, strtBlock, goalBlock, goalRadius, pathType, synced));
 		if (it == items.end()) {
 			++misses;
@@ -79,7 +79,7 @@ namespace SupComPathBatch {
 	}
 
 	void Add(unsigned int blockSize, const IPath::Path& path, IPath::SearchResult result, int2 strtBlock, int2 goalBlock, float goalRadius, int pathType, bool synced) {
-		CPathCache::CacheItem ci;
+		HAPFS::CPathCache::CacheItem ci;
 		ci.result = result;
 		ci.path = path;
 		ci.strtBlock = strtBlock;
