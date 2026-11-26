@@ -21,6 +21,12 @@ namespace SupComHalfRate {
 	/// (stored in the unit, read again by the serial update); synced state only. Switch: mod option supcomhalfrateplan
 	/// (default on; 0: only the pre-collision step is on half rate, as before).
 	bool PlanOffTick(CUnit* u);
+	/// DESIGN (far-view proposal, coordinator 2026-11-26; beyond PRF-002 v1's period 2): a ground unit idle by the test of
+	/// PlanOffTick and not moved for SLEEP_FRAMES frames in a row sleeps: plan, pre-collision step, its own collision
+	/// detection and serial update are all skipped every frame. An order, damage, speed, a skid or a change of position (a
+	/// push found by a moving unit's collision test) wakes it the same frame. Switch: mod option supcommovesleep (default
+	/// off). Set by PlanOffTick; read by the other passes.
+	bool Asleep(const CUnit* u);
 	/// CSupComAirMoveType, landed: true = skip this frame's UpdateLanded (at rest, not the unit's 16th frame)
 	bool LandedRest(CUnit* u);
 	/// a movement update ran this frame (air move types outside LandedRest)

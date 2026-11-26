@@ -138,6 +138,7 @@ void GroundMoveSystem::Update() {
             assert(moveType != nullptr);
 
             moveType->SetMtJobId(i);
+            if (SupComHalfRate::Asleep(unit)) return; // supcom: SupComMoveSleep, a moving unit's test still finds it (SupComHalfRate.h)
             moveType->UpdateCollisionDetections();
         });
     }
