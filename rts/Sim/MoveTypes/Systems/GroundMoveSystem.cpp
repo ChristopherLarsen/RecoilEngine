@@ -2,6 +2,7 @@
 
 // #undef NDEBUG
 
+#include "Game/KT1/Rules/Tiers/KT1Tiers.h" // KT1 hook: Tiers
 #include "GroundMoveSystem.h"
 #include "Sim/MoveTypes/SupComHalfRate.h"
 #include "Sim/MoveTypes/SupComAvoidSnapshot.h"
@@ -108,6 +109,7 @@ void GroundMoveSystem::Update() {
 			CGroundMoveType* moveType = static_cast<CGroundMoveType*>(unit->moveType);
             assert(moveType != nullptr);
 
+			if (KT1::Tiers::Asleep(unit)) return; // KT1 hook: Tiers
 			if (SupComHalfRate::SkipGround(unit)) return; // supcom: idle half rate (SupComHalfRate.h)
 			moveType->UpdatePreCollisions();
 

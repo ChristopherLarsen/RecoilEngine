@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "Game/KT1/Rules/Tiers/KT1Tiers.h" // KT1 hook: Tiers
 #include <cassert>
 
 #include "UnitHandler.h"
@@ -376,7 +377,7 @@ void CUnitHandler::SlowUpdateUnits()
 
 			unit->SanityCheck();
 			unit->SlowUpdate();
-			unit->SlowUpdateWeapons();
+			if (!KT1::Tiers::Asleep(unit)) unit->SlowUpdateWeapons(); // KT1 hook: Tiers
 			unit->SanityCheck();
 
 			if (!unit->isDead && unit->localModel.GetBoundariesNeedsRecalc())
@@ -431,7 +432,7 @@ void CUnitHandler::UpdateUnits()
 			if (static_cast<size_t>(idx) < activeUnitCount)
 				physicalStateChanges[idx] = unit->UpdateState();
 
-			unit->UpdateWeaponVectors();
+			if (!KT1::Tiers::Asleep(unit)) unit->UpdateWeaponVectors(); // KT1 hook: Tiers
 		}, 1, 64);
 	}
 
