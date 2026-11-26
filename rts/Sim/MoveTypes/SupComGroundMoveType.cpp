@@ -153,6 +153,7 @@ static bool GoRoundOn() { static const bool on = SupComSimSwitch::Get("SupComGoR
 // corner loses ground, its next step succeeds and cleared the refusal count, so the corner steering (scBlockedFrames > 0) was
 // dropped and it drove into the same corner again. The count now clears only once the unit is a square away from where it was
 // refused (switch SupComBlockMemory, default 1)
+static bool PushFromMoversOn() { static const bool on = SupComSimSwitch::Get("SupComPushFromMovers", true); return on; }
 static bool BlockMemoryOn() { static const bool on = SupComSimSwitch::Get("SupComBlockMemory", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
 static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
@@ -1954,6 +1955,12 @@ bool CSupComGroundMoveType::Update()
 	// applied) is capped so the step and the push together stay within a fraction of top speed (SupComPushCap; values PLACEHOLDER)
 	SupComPushCap::Clamp(resultantForces, owner->speed, maxSpeed);
 	scPushLen = std::sqrt(resultantForces.x * resultantForces.x + resultantForces.z * resultantForces.z);
+	// pathing fix 5 (L11400-L11402: MOV-007-D, PTH-002-J, PTH-004-B/D pass only with the pushed state off): MOV-021 R4's pushed state is
+	// a unit shoved by moving units; contact with a unit that stands (an idle unit holding against the push, a jammed neighbour) is
+	// not, and it held the unit in the pushed state at every frame of the contact, so it never restarted. Only the push from moving
+	// collidees counts (switch SupComPushFromMovers, default 1)
+	if (PushFromMoversOn())
+		scPushLen = std::min(scPushLen, supcomPushFromMovers.Length2D());
 
 	const bool moved = CGroundMoveType::Update();
 

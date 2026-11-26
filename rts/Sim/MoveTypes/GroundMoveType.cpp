@@ -2581,6 +2581,7 @@ void CGroundMoveType::HandleObjectCollisions()
 	resultantForces = ZeroVector;
 	forceFromMovingCollidees = ZeroVector;
 	forceFromStaticCollidees = ZeroVector;
+	supcomPushFromMovers = ZeroVector;
 
 	// NOTE:
 	//   use the collider's MoveDef footprint as radius since it is
@@ -3000,9 +3001,12 @@ void CGroundMoveType::HandleUnitCollisions(
 
 		const bool moveCollider = ((pushCollider || !pushCollidee) && colliderMobile);
 		if (moveCollider) {
-			if (isCollision)
-				forceFromMovingCollidees += CalculatePushVector(colliderParams, collideeParams, allowUCO, separationVect, collider, collidee);
-			else {
+			if (isCollision) {
+				const float3 push = CalculatePushVector(colliderParams, collideeParams, allowUCO, separationVect, collider, collidee);
+				forceFromMovingCollidees += push;
+				if (collidee->IsMoving())
+					supcomPushFromMovers += push; // supcom: MOV-021 R4 (SupComGroundMoveType)
+			} else {
 				// push units away from each other though they are not colliding.
 				const float3 colliderParams2 = {colliderParams.x, colliderParams.y + separationDist * 0.5f, colliderParams.z};
 				const float2 collideeParams2 = {collidee->speed.w, collDist + separationDist * 0.5f};
