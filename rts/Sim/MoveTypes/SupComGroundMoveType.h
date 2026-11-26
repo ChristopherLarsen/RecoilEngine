@@ -272,7 +272,8 @@ private:
 	int scBlockedFrames = 0;     ///< consecutive frames with the wanted step refused
 	int scStructFrames = 0;      ///< consecutive frames with the wanted step refused by a structure (Q100)
 	int scHandoverFrames = 0;    ///< frames left of the engine's own ground movement after such a block
-	float3 scPushBack;           ///< this frame's push back on a blocked step (MOV-021 R1), applied with the step
+	float3 scBlockPos;           ///< where the last step was refused (SupComBlockMemory)
+	float3 scPushBack;           ///< the push back of the last blocked step (MOV-021 R1), applied alone on the next frame
 	float scPushLen = 0.0f;      ///< length of last frame's collision push, after the cap (MOV-021 R4 pushed state)
 	float3 scHandoverFrom;       ///< where that handover began
 	int scYieldFrames = 0;       ///< consecutive frames in contact with the same idle unit in front
