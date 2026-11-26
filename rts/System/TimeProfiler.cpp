@@ -10,6 +10,7 @@
 #include "System/StringHash.h"
 #include "System/Log/ILog.h"
 #include "System/Threading/SpringThreading.h"
+#include "Game/KT1/Prof/KT1Prof.h" // KT1 hook: Prof
 
 #ifdef THREADPOOL
 	#include "System/Threading/ThreadPool.h"
@@ -24,6 +25,9 @@ static spring::unordered_map<unsigned, std::string> hashToName;
 static spring::unordered_map<unsigned, int> refCounters;
 
 static CGlobalUnsyncedRNG profileColorRNG;
+
+CONFIG(int, KT1CheapProfiler).defaultValue(1).description("KT1: cheaper profiler (per-thread sums, no self-timing, no ThreadPool timers); 0 = stock"); // KT1 hook: Prof
+CONFIG(int, KT1ProfThreadPool).defaultValue(0).description("KT1: with KT1CheapProfiler, also time ThreadPool::RunTask/AddTask/WaitFor"); // KT1 hook: Prof
 
 const std::array<CTimeProfiler::ProfileSortFunc, CTimeProfiler::SortType::ST_COUNT> CTimeProfiler::SortingFunctions = {
 	[](const TimeRecordPair& a, const TimeRecordPair& b) { return (a.first          < b.first         ); }, // ST_ALPHABETICAL = 0,
@@ -214,6 +218,7 @@ void CTimeProfiler::ToggleLock(bool lock)
 
 void CTimeProfiler::Update()
 {
+	KT1Prof::ReadConfig(); // KT1 hook: Prof
 	// supcom hook (SupComProfiler.h, SupComProfiler): record every timer without the /debug overlay
 	if (!enabled && SupComProfiler::On())
 		enabled = true;
@@ -231,6 +236,7 @@ void CTimeProfiler::Update()
 	if (sortingType != ST_ALPHABETICAL)
 		++resortProfiles;
 
+	KT1Prof::Merge(*this); // KT1 hook: Prof
 	UpdateRaw();
 	ResortProfilesRaw();
 	RefreshProfilesRaw();
@@ -385,6 +391,8 @@ void CTimeProfiler::AddTime(
 		AddTimeRaw(hashString("Misc::Profiler::AddTime"), t0, spring_now() - t0, false, false);
 		return;
 	}
+
+	if (KT1Prof::AddTime(*this, nameHash, deltaTime, threadTimer, profileMutex)) return; // KT1 hook: Prof
 
 	// acquire lock at the start; one inserting thread could
 	// cause a profile rehash and invalidate <pi> for another
