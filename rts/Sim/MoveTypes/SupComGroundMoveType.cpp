@@ -154,6 +154,13 @@ static bool GoRoundOn() { static const bool on = SupComSimSwitch::Get("SupComGoR
 // dropped and it drove into the same corner again. The count now clears only once the unit is a square away from where it was
 // refused (switch SupComBlockMemory, default 1)
 static bool PushFromMoversOn() { static const bool on = SupComSimSwitch::Get("SupComPushFromMovers", true); return on; }
+// pathing fix 6 (L11534: MOV-007-C/D, PTH-004-F, PTH-006-E): the MOV-021 R1 push back is for contact with an object (a unit or a
+// structure: MOV-007 v2 edge cases, MEV-25); a step refused by impassable terrain or the map edge is MOV-007 R2/R3 alone (no move,
+// speed 0, restart at v_restart), switch SupComTerrainNoPushBack, default 1. A unit pressed against the same obstacle gets one push
+// back, not one per refused step: while it is refused again within a square of where it was last refused (SupComBlockMemory) it
+// stays put, so a mover at a held gap comes to rest instead of rocking back and forth (switch SupComPushBackOnce, default 1)
+static bool TerrainNoPushBackOn() { static const bool on = SupComSimSwitch::Get("SupComTerrainNoPushBack", true); return on; }
+static bool PushBackOnceOn() { static const bool on = SupComSimSwitch::Get("SupComPushBackOnce", true); return on; }
 static bool BlockMemoryOn() { static const bool on = SupComSimSwitch::Get("SupComBlockMemory", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
 static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
@@ -1643,7 +1650,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			}
 			// MOV-021 v1 R1 (pathing fix): a small push back along the line the unit tried to move, unless it is being pushed; it
 			// changes position by less than one step at top speed and never into blocked squares
-			if (SupComPushCap::On() && !stop && scPushLen <= 0.0f) {
+			const bool byTerrainStep = FootprintBlocked(owner->pos + moveRequest);
+			const bool pressedSamePlace = (BlockMemoryOn() && scBlockedFrames > 0 && owner->pos.SqDistance2D(scBlockPos) < Square(SQUARE_SIZE));
+			if (SupComPushCap::On() && !stop && scPushLen <= 0.0f && !(TerrainNoPushBackOn() && byTerrainStep) && !(PushBackOnceOn() && pressedSamePlace)) {
 				const float len = std::sqrt(moveRequest.x * moveRequest.x + moveRequest.z * moveRequest.z);
 				if (len > 0.0f) {
 					const float3 back = float3(-moveRequest.x / len, 0.0f, -moveRequest.z / len) * (SupComPushCap::PushBackFrac() * maxSpeed);
