@@ -53,8 +53,8 @@ constexpr float PI = TAU / 2.0f;
 
 float Wrap(float a) { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; }
 float LuaMod(float a, float b) { return a - math::floor(a / b) * b; }   // Lua's %
-float Rad(float d) { return d * (PI / 180.0f); }                         // math.rad
-float Deg(float r) { return r * (180.0f / PI); }                         // math.deg
+float Rad(float d) { return d * math::DEG_TO_RAD; }                         // math.rad
+float Deg(float r) { return r / math::DEG_TO_RAD; }                         // math.deg
 
 enum Loco { L_FIXED, L_TREADS, L_WHEELS, L_LEGS };
 enum Body { B_STATIC, B_TERRAIN, B_BANK };
@@ -228,7 +228,7 @@ private:
 						S->Turn(U.legs[i], 0, (float)std::max(1.0f, math::fabs(a - U.legAng[i]) / dt * 1.2f), (float)a);
 						U.legAng[i] = a;
 						if (i < U.feet.size() && U.feet[i] >= 0) {
-							const float l = std::max(0.0f, math::cos(ph * TAU)) * U.lift;
+							const float l = std::max(0.0f, math::cos(ph * 2.0f * PI)) * U.lift;   // Gait.Lift: cos(ph * 2 * math.pi), two roundings
 							S->Turn(U.feet[i], 0, (float)std::max(1.0f, math::fabs(l) / dt * 1.5f), (float)l);
 						}
 					}
