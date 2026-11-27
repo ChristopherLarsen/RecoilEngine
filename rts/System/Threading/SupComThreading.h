@@ -26,6 +26,17 @@ namespace SupComThreading {
 	// the core count, and replays and multiplayer clients diverged (desync 11460, bisected 2026-11-22). The searches run
 	// inside a parallel-section flag either way, so the shared path cache gets no adds from them in both modes.
 	bool PathRequestsSerial();
+
+	// supcom (PERF-REVIEW-F P1b, 2026-11-27): mod option "pathlanes" (SupComSimSwitch, default on; "0": serial as before). On, a
+	// frame's serial path request batch of PATH_LANES or more requests runs in PATH_LANES lanes on the thread pool: lane k takes
+	// the k-th contiguous slice of the batch (in batch order) and runs it in order with finder group k, its own path finders, and
+	// its own batch cache (SupComPathBatch). What a lane computes then depends only on its slice and on group k's state, never on
+	// which thread ran it or on the core count (stock's threaded requests picked finders by thread: desync 11460). The engine keeps
+	// at least PATH_LANES finder groups on any machine. Smaller batches run serially in lane 0 (group 0), as before.
+	static constexpr int PATH_LANES = 8;
+	bool PathLanes();
+	// the lane this thread is running (-1: none)
+	inline thread_local int pathLane = -1;
 }
 
 #endif
