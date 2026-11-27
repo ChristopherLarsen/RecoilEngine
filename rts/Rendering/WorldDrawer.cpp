@@ -209,25 +209,21 @@ void CWorldDrawer::Kill()
 
 
 
-// supcom (TOP-COSTS-4K item 3, 2026-11-26): a headless engine has no window, so the drawers' per-frame work (unit and feature
-// draw positions and icon states, Lua object drawer, ground drawer, projectile draw flags and textures, sky and water) is for
-// nothing: at 4K CUnitDrawerBase::Update alone was 6.2 ms a frame. Off in headless (headlessValue false); readMap->UpdateDraw
-// still runs, since unsynced Lua reads the unsynced heightmap it keeps (Spring.GetGroundHeight in unsynced code). All of it is
+// supcom (TOP-COSTS-4K item 3, 2026-11-26): a headless engine has no window, so the unit and feature drawers' per-frame work (draw
+// positions, icon states, LOD and visibility bins) is for nothing: at 4K CUnitDrawerBase::Update alone was 6.2 ms a frame. Off in headless (headlessValue false);
+// the rest of the update still runs (Lua object drawer, heightmap copy, ground, projectiles, sky, water). All of it is
 // unsynced: no sim state is read back from it. SupComDrawerUpdates=1 in a headless run restores the old behaviour.
-CONFIG(bool, SupComDrawerUpdates).defaultValue(true).headlessValue(false).description("supcom: run the world, unit and feature drawers' per-frame update (off by default in headless engines, where nothing is drawn)");
+CONFIG(bool, SupComDrawerUpdates).defaultValue(true).headlessValue(false).description("supcom: run the unit and feature drawers' per-frame update (off by default in headless engines, where nothing is drawn)");
 
 void CWorldDrawer::Update(bool newSimFrame)
 {
 	SCOPED_TIMER("Update::WorldDrawer");
 
+	// headless: the first call runs in full (it initialises the Lua object drawer, ground, projectile and sky/water state that
+	// the headless Draw path and Lua still touch: skipping it crashed at load, 02ead7ccfe); after that only the unit and feature
+	// drawer updates are skipped, the costly part (CUnitDrawerBase::Update 6.2 of 8.4 ms at 4K).
 	static const bool drawerUpdates = configHandler->GetBool("SupComDrawerUpdates");
-	if (!drawerUpdates) {
-		readMap->UpdateDraw(numUpdates == 0);
-		if (newSimFrame)
-			modelLoader.LogErrors();
-		numUpdates += 1;
-		return;
-	}
+	const bool unitFeatureUpdates = drawerUpdates || numUpdates == 0;
 
 	LuaObjectDrawer::Update(numUpdates == 0);
 	readMap->UpdateDraw(numUpdates == 0);
@@ -240,8 +236,10 @@ void CWorldDrawer::Update(bool newSimFrame)
 	// (it updates unitdrawpos which is used for maximized minimap too)
 	// unitDrawer->Update();
 	// lineDrawer.UpdateLineStipple();
-	CUnitDrawer::UpdateStatic();
-	CFeatureDrawer::UpdateStatic();
+	if (unitFeatureUpdates) {
+		CUnitDrawer::UpdateStatic();
+		CFeatureDrawer::UpdateStatic();
+	}
 	projectileDrawer->UpdateDrawFlags();
 
 	if (newSimFrame) {
