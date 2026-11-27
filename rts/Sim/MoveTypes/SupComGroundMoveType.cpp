@@ -1565,7 +1565,6 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (!moveRequest.same(ZeroVector)) {
 		bool blocked = false;
 		bool byStructure = false;
-		bool madeWay = false;   // the forward step was refused by terrain and a line-up / side step replaced it (pathing fix 13)
 
 		// MOV-021 R2 (pathing fix): out of the blocked space the unit started in, never into another obstacle
 		if (positionStuck && SupComPushCap::On() && EntersNewObstacle(owner, owner->pos, owner->pos + moveRequest)) {
@@ -1587,7 +1586,6 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			// across the step's main axis, from which the forward part of the step fits, approached by at most the
 			// step's length. Nearest first, the positive side first on a tie (deterministic).
 			if (blocked && MakeWayOn()) {
-				madeWay = true;
 				const bool alongX = (math::fabs(moveRequest.x) >= math::fabs(moveRequest.z));
 				const float3 fwd = alongX? float3(moveRequest.x, 0.0f, 0.0f): float3(0.0f, 0.0f, moveRequest.z);
 				const float3 lat = alongX? float3(0.0f, 0.0f, 1.0f): float3(1.0f, 0.0f, 0.0f);
@@ -1640,7 +1638,6 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				const float3 n = supcomStandingContact * (1.0f / supcomStandingContact.Length2D());
 				const float into = moveRequest.x * n.x + moveRequest.z * n.z;
 				if (into < 0.0f) {
-					const float3 orig = moveRequest;
 					moveRequest.x -= n.x * into;
 					moveRequest.z -= n.z * into;
 					moveRequest.x = GridStep(owner->pos.x, moveRequest.x);
@@ -1649,9 +1646,13 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 					// pathing fix 12 (L11677 PTH-006-E: a line-up step along the wall face towards a held gap, its inward part taken off,
 					// left a step back and away; the mover took it, left the contact margin and stepped in again): a step that keeps
 					// less than half its reach along its own line is refused. Switch SupComStandingKeepHalf, default 1
-					// pathing fix 13 (L11679: fix 12 broke PTH-002-I, a head-on mover on open ground no longer slid round the idle unit): only
-					// for a line-up step at terrain (madeWay)
-					if (!blocked && madeWay && StandingKeepHalfOn() && (moveRequest.x * orig.x + moveRequest.z * orig.z) < 0.5f * orig.SqLength2D())
+					// pathing fix 14 (L11698: fix 13 lost PTH-006-E: its sideways steps come from the path line-up, not the terrain make-way):
+					// the test is the goal instead: a step that, its inward part off, moves away from the goal (more than a tenth of its
+					// length) is refused; a slide across the goal line (PTH-002-I round an idle unit) is kept
+					const float3 toGoal = (goalPos - owner->pos) * XZVector;
+					const float goalLen = toGoal.Length2D();
+					if (!blocked && StandingKeepHalfOn() && goalLen > 0.0f
+							&& (moveRequest.x * toGoal.x + moveRequest.z * toGoal.z) / goalLen < -0.1f * moveRequest.Length2D())
 						blocked = true;
 				}
 			}
