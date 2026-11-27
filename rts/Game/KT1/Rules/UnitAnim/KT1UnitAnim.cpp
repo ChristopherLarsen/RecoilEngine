@@ -25,6 +25,7 @@
 // binding does; per-unit state reset when an id is reused; no clock, thread or hash order.
 // Doc:        game-build docs/engine/rules/unitanim.md
 
+#include <limits>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -118,6 +119,7 @@ public:
 		LuaPushRawNamedCFunc(L, "Add", LAdd);
 		LuaPushRawNamedCFunc(L, "Remove", LRemove);
 		LuaPushRawNamedCFunc(L, "Wake", LWake);
+		LuaPushRawNamedCFunc(L, "Start", LStart);
 		LuaPushRawNamedCFunc(L, "Aimed", LAimed);
 		LuaPushRawNamedCFunc(L, "AimWait", LAimWait);
 		LuaPushRawNamedCFunc(L, "State", LState);
@@ -275,10 +277,14 @@ private:
 		return true;
 	}
 
+	// a wake (Lua Wake: Signal, then StartThread(Loop)) ticks at once, as the new Loop thread runs to its first Sleep inside the call
+	// (exactness 2026-11-27: waiting for the rule's next GameFrame put the tick a frame late when the wake came after it)
 	void WakeUnit(Unit& U) {
 		if (!U.sleeping) return;
 		U.sleeping = false; U.idleTicks = 0;
-		U.wakeAt = gs->frameNum;   // the Lua StartThread(Loop) ran the tick in the same frame
+		CUnit* u = U.owner;
+		if (u != nullptr && u->script != nullptr) Tick(U, u, gs->frameNum);
+		else U.wakeAt = gs->frameNum;
 	}
 
 	// ---- Lua ---------------------------------------------------------------------------------------------------------------
@@ -354,7 +360,7 @@ private:
 		U.cap = Num(L, 2, "cap", 0); U.bankRate = Num(L, 2, "bank_rate", 1);
 		U.t = Num(L, 2, "t", 0);
 		U.lastFrame = gs->frameNum;
-		U.wakeAt = gs->frameNum;   // the Lua Create starts the Loop at once
+		U.wakeAt = std::numeric_limits<int>::max();   // Start (from script.Create) runs the first tick, as the Lua Create starts the Loop
 		lua_getfield(L, 2, "weapons");
 		if (lua_istable(L, -1)) {
 			const int w = lua_gettop(L);
@@ -385,6 +391,15 @@ private:
 		auto it = std::lower_bound(r->ids.begin(), r->ids.end(), id);
 		if (it != r->ids.end() && *it == id) r->ids.erase(it);
 		if (id >= 0 && id < (int)r->units.size()) r->units[id].owner = nullptr;
+		return 0;
+	}
+	// script.Create: the first tick now (the Lua Loop thread started in Create runs its first tick before Create returns)
+	static int LStart(lua_State* L) {
+		UnitAnim* r = Synced(L);
+		if (r == nullptr) return 0;
+		Unit* U = r->Get(luaL_checkint(L, 1));
+		if (U == nullptr || U->owner->script == nullptr) return 0;
+		r->Tick(*U, U->owner, gs->frameNum);
 		return 0;
 	}
 	static int LWake(lua_State* L) {
