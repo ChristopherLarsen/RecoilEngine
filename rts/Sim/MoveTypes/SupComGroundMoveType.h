@@ -193,7 +193,7 @@ private:
 	void RouteLoad(unsigned int id);
 	bool RouteChooseAim(bool stuck);
 	void RouteRequest(bool fresh);
-	void RouteAdopt(unsigned int id, const std::vector<float3>& pts);
+	void RouteAdopt(unsigned int id, const std::vector<float3>& pts, int head);
 	void RouteEnd(const char* why);
 	bool RouteLineClear(const float3& a, const float3& b) const;
 	bool RouteCellOccupied(const float3& p) const;
@@ -309,6 +309,9 @@ private:
 	int rfEndFrame = -1;         ///< frame the follower last ended an order as blocked (synced Lua: supcomRouteEndFrame)
 	bool rfActive = false;       ///< the follower holds this order
 	bool rfFresh = false;        ///< R2: a new route: aim at its next point
+	int rfHead = 0;              ///< points at the front of rfPts that are the engine path pathID (the rest: the old route spliced on)
+	int rfEngN = 0;              ///< point count of the engine path when last read (a refine is a change)
+	float3 rfEngLast;            ///< last point of the engine path when last read
 	bool rfShortSeen = false;    ///< R6/R10: one short route followed for rfShortFor
 	bool rfLastWaited = false;   ///< R4: the wait before a search at an occupied last point was taken
 	bool rfWaitShort = false;    ///< R6/R10: the pending wait came from a short route at a point not free

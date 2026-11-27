@@ -97,6 +97,13 @@ static constexpr int DETOUR_HALF = 24;
 // unit aims at a cell's centre): the engine path finder gives a square by its corner, half a square off the line of a unit standing
 // on a square centre, so the first aim (R2: the next route point, no straight-line condition) turned the unit off its line and back
 // (L11857 MOV-003-A: braking from 18 map units, speed rising again after it). Switch SupComRouteCellCentres, default 1.
+// a re-read of the engine path (it refines a route under the same id) replaces only the points that came from it; the old route
+// spliced on after a replacement route is kept, and an unchanged path is not re-read (L11858 route log: after a rejoining replacement
+// every aim choice read back only the replacement's points, ending at the old next point, and the order ended there as "end of a route
+// outside the goal area": PTH-004-A/B, PTH-003-C/F, MOV-018-F). A route point the unit has reached (within a square) is not a usable
+// aim while later points remain (R4: then a new route is requested; L11858 PTH-005-A circled its reached aim point for 4000 frames, no
+// later point reachable in a straight line). Switch SupComRouteKeepTail, default 1.
+static bool RouteKeepTailOn() { static const bool on = SupComSimSwitch::Get("SupComRouteKeepTail", true); return on; }
 static bool RouteCellCentresOn() { static const bool on = SupComSimSwitch::Get("SupComRouteCellCentres", true); return on; }
 static void RouteCellCentres(std::vector<float3>& pts)
 {
@@ -287,6 +294,8 @@ void CSupComGroundMoveType::RouteLoad(unsigned int id)
 	std::vector<int> starts;
 	pathManager->GetPathWayPoints(id, rfPts, starts);
 	RouteCellCentres(rfPts);
+	rfHead = rfEngN = int(rfPts.size());
+	if (!rfPts.empty()) rfEngLast = rfPts.back();
 	rfPathID = id;
 	rfNext = 0;
 	rfAimIdx = -1;
@@ -354,7 +363,7 @@ unsigned int CSupComGroundMoveType::RouteSearch(std::vector<float3>& pts, bool f
 	return id;
 }
 
-void CSupComGroundMoveType::RouteAdopt(unsigned int id, const std::vector<float3>& pts)
+void CSupComGroundMoveType::RouteAdopt(unsigned int id, const std::vector<float3>& pts, int head)
 {
 	if (id != 0 && id != pathID) {
 		if (nextPathId != 0) {
@@ -377,6 +386,8 @@ void CSupComGroundMoveType::RouteAdopt(unsigned int id, const std::vector<float3
 
 	rfPts = pts;
 	rfPathID = pathID;
+	rfHead = rfEngN = std::clamp(head, 0, int(pts.size()));
+	if (rfHead > 0) rfEngLast = pts[rfHead - 1];
 	rfNext = 0;
 	rfAimIdx = -1;
 	rfFresh = true;
@@ -436,7 +447,7 @@ void CSupComGroundMoveType::RouteRequest(bool fresh)
 		}
 		rfWaits = 0;
 		rfShortSeen = false;
-		RouteAdopt(id, pts);
+		RouteAdopt(id, pts, int(pts.size()));
 		return;
 	}
 
@@ -460,7 +471,7 @@ void CSupComGroundMoveType::RouteRequest(bool fresh)
 		}
 		rfShortSeen = true;
 		rfShortFor = nextPt;
-		RouteAdopt(id, Spliced(nextIdx));
+		RouteAdopt(id, Spliced(nextIdx), int(pts.size()));
 		return;
 	}
 
@@ -490,10 +501,10 @@ void CSupComGroundMoveType::RouteRequest(bool fresh)
 	if (rejoins) {
 		rfWaits = 0;
 		rfShortSeen = false;
-		RouteAdopt(id, Spliced(nextIdx + 1));
+		RouteAdopt(id, Spliced(nextIdx + 1), int(pts.size()));
 		return;
 	}
-	RouteAdopt(id, Spliced(nextIdx));
+	RouteAdopt(id, Spliced(nextIdx), int(pts.size()));
 }
 
 bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
@@ -508,7 +519,16 @@ bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 		std::vector<int> starts;
 		pathManager->GetPathWayPoints(pathID, pts, starts);
 		RouteCellCentres(pts);
-		if (!pts.empty() && !(rfScriptPos > 0)) {
+		const bool same = RouteKeepTailOn() && int(pts.size()) == rfEngN && !pts.empty() && pts.back().same(rfEngLast);
+		if (!pts.empty() && !(rfScriptPos > 0) && !same) {
+			if (RouteKeepTailOn()) {
+				rfEngN = int(pts.size());
+				rfEngLast = pts.back();
+				const int head = int(pts.size());
+				for (int i = std::clamp(rfHead, 0, int(rfPts.size())); i < int(rfPts.size()); i++)
+					pts.push_back(rfPts[i]);
+				rfHead = head;
+			}
 			int best = 0;
 			float bd = std::numeric_limits<float>::max();
 			for (int i = 0; i < int(pts.size()); i++) {
@@ -546,6 +566,8 @@ bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 		const int last = std::min(n - 1, rfNext + LookPoints() - 1);
 		for (int k = last; k >= rfNext; k--) {
 			if (rfPts[k].SqDistance2D(pos) > Square(LookRange()))
+				continue;
+			if (RouteKeepTailOn() && k < n - 1 && rfPts[k].SqDistance2D(pos) <= Square(SQUARE_SIZE))
 				continue;
 			if (RouteLineClear(pos, rfPts[k])) {
 				aim = k;
@@ -686,6 +708,7 @@ bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 			}
 			if (!pulled.empty()) {
 				rfPts.insert(rfPts.begin() + rfNext, pulled.begin(), pulled.end());
+				if (rfNext < rfHead) rfHead += int(pulled.size());
 				aim = rfNext;                                          // the first leg of the detour
 				if (RouteLog())
 					LOG("[SupComRoute] f=%d u=%d stuck: detour round idle units, %d points to %s %d (unit %.0f,%.0f)", gs->frameNum, owner->id, int(pulled.size()), (tgtK >= 0? "route point": "nearest square towards route point"), (tgtK >= 0? tgtK: last), pos.x, pos.z);
@@ -796,6 +819,8 @@ void CSupComGroundMoveType::RouteFollowUpdate()
 			LOG("[SupComRoute] f=%d u=%d recheck: aim %d (%.0f,%.0f) %s (unit %.0f,%.0f)", frame, owner->id, rfAimIdx, rfAim.x, rfAim.z, retarget? "blocked": "clear", pos.x, pos.z);
 	}
 	if (!retarget && stuck)
+		retarget = true;
+	if (!retarget && RouteKeepTailOn() && rfAimIdx < n - 1 && rfAim.SqDistance2D(pos) <= Square(SQUARE_SIZE))
 		retarget = true;
 
 	if (!retarget)
