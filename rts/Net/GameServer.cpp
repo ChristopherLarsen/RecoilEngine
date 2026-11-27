@@ -90,16 +90,16 @@ LOG_REGISTER_SECTION_GLOBAL(LOG_SECTION_GAMESERVER)
 
 
 /// frames until a synccheck will time out and a warning is given out
-static constexpr unsigned SYNCCHECK_TIMEOUT = 300;
+static constexpr unsigned SYNCCHECK_TIMEOUT = 10 * GAME_SPEED; // 10 s (300 frames at 30 Hz)
 
 /// used to prevent msg spam
-static constexpr unsigned SYNCCHECK_MSG_TIMEOUT = 400;
+static constexpr unsigned SYNCCHECK_MSG_TIMEOUT = (40 * GAME_SPEED) / 3; // 13.3 s (400 frames at 30 Hz)
 
 /// The time interval in msec for sending player statistics to each client
 static const spring_time playerInfoTime = spring_secs(2);
 
 /// every n'th frame will be a keyframe (and contain the server's framenumber)
-static constexpr unsigned serverKeyframeInterval = 16;
+static constexpr unsigned serverKeyframeInterval = (((16 * GAME_SPEED + 29) / 30) > 1)? ((16 * GAME_SPEED + 29) / 30): 1; // 0.53 s: 16 frames at 30 Hz, 6 at 10
 
 /// players incoming bandwidth new allowance every X milliseconds
 static constexpr unsigned playerBandwidthInterval = 100;

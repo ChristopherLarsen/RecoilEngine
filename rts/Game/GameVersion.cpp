@@ -6,6 +6,7 @@
 #include "GameVersion.h"
 
 #include "System/VersionGenerated.h"
+#include "Sim/Misc/GlobalConstants.h"
 
 #include <cstring>
 
@@ -209,7 +210,9 @@ const std::string& Get()
 
 const std::string& GetSync()
 {
-	static const std::string sync = SPRING_VERSION_ENGINE;
+	// KT1 SIM-10HZ-PLAN stage 0: the sim rate is part of the sync version, so a client or a replay of another rate is refused
+	// with a version message instead of a silent desync. Nothing is added at the stock 30 Hz (the version is unchanged).
+	static const std::string sync = std::string(SPRING_VERSION_ENGINE) + ((GAME_SPEED == 30)? "": (" gs" + std::to_string(GAME_SPEED)));
 	return sync;
 }
 

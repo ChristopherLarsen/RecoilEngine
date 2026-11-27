@@ -681,7 +681,7 @@ void CFeature::StartFire()
 		return;
 
 	// burn for a few seconds
-	fireTime = 200 + gsRNG.NextInt(GAME_SPEED);
+	fireTime = (200 * GAME_SPEED) / 30 + gsRNG.NextInt(GAME_SPEED); // 6.7 s + up to 1 s (200 frames at 30 Hz)
 
 	featureHandler.SetFeatureUpdateable(this);
 }
