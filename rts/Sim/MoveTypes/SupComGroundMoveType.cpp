@@ -170,6 +170,7 @@ static bool PushBackStructOnlyOn() { static const bool on = SupComSimSwitch::Get
 // pathing fix 7 (L11551 PTH-002-D: a mover went through the footprint of a standing enemy in a one-cell gap and reached the goal):
 // MOV-007 v2 R1, space occupied by a unit is blocked. A unit in contact with a standing unit (last collision pass) is refused a step
 // towards it; a step away from it or along it is taken (MOV-021 R2: it can leave). Switch SupComStandingBlocks, default 1
+static bool StandingKeepHalfOn() { static const bool on = SupComSimSwitch::Get("SupComStandingKeepHalf", true); return on; }
 static bool StandingBlocksOn() { static const bool on = SupComSimSwitch::Get("SupComStandingBlocks", true); return on; }
 static bool BlockMemoryOn() { static const bool on = SupComSimSwitch::Get("SupComBlockMemory", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
@@ -1637,11 +1638,17 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				const float3 n = supcomStandingContact * (1.0f / supcomStandingContact.Length2D());
 				const float into = moveRequest.x * n.x + moveRequest.z * n.z;
 				if (into < 0.0f) {
+					const float3 orig = moveRequest;
 					moveRequest.x -= n.x * into;
 					moveRequest.z -= n.z * into;
 					moveRequest.x = GridStep(owner->pos.x, moveRequest.x);
 					moveRequest.z = GridStep(owner->pos.z, moveRequest.z);
 					blocked = (moveRequest.SqLength2D() < Square(0.01f));
+					// pathing fix 12 (L11677 PTH-006-E: a line-up step along the wall face towards a held gap, its inward part taken off,
+					// left a step back and away; the mover took it, left the contact margin and stepped in again): a step that keeps
+					// less than half its reach along its own line is refused. Switch SupComStandingKeepHalf, default 1
+					if (!blocked && StandingKeepHalfOn() && (moveRequest.x * orig.x + moveRequest.z * orig.z) < 0.5f * orig.SqLength2D())
+						blocked = true;
 				}
 			}
 
