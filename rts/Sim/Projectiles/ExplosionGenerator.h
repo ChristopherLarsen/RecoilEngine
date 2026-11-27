@@ -157,6 +157,9 @@ protected:
 		unsigned int count = 0;
 		unsigned int flags = 0;
 
+		/// Kardashev: view-depth cut-off in elmos (CEG key "cullDistance"); <= 0 = never culled. Graphics only.
+		float cullDistance = 0.0f;
+
 		/// parsed explosion script code
 		std::vector<char> code;
 	};
@@ -173,6 +176,13 @@ public:
 	CCustomExplosionGenerator(): IExplosionGenerator() {}
 
 	static bool OutputProjectileClassInfo();
+
+	/// Kardashev CEG cull (CEG-ZOOM-CULL-SPEC): springsettings read by ReloadCullConfig (at load and once per drawn frame);
+	/// cegCulled counts the elements not made (for runs)
+	static bool cegCullOn;
+	static float cegCullScale;
+	static unsigned int cegCulled;
+	static void ReloadCullConfig();
 	static unsigned int GetFlagsFromTable(const LuaTable& table);
 	static unsigned int GetFlagsFromHeight(float height, float groundHeight);
 
