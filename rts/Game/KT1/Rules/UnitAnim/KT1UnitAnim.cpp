@@ -26,6 +26,7 @@
 // Doc:        game-build docs/engine/rules/unitanim.md
 
 #include <limits>
+#include "streflop_cond.h"   // math:: as the Lua math library (lmathlib): a pose is the same float either way
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -51,7 +52,7 @@ constexpr float TAU = 2.0f * 3.14159265358979323846f;   // math.pi in Lua is the
 constexpr float PI = TAU / 2.0f;
 
 float Wrap(float a) { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; }
-float LuaMod(float a, float b) { return a - std::floor(a / b) * b; }   // Lua's %
+float LuaMod(float a, float b) { return a - math::floor(a / b) * b; }   // Lua's %
 float Rad(float d) { return d * (PI / 180.0f); }                         // math.rad
 float Deg(float r) { return r * (180.0f / PI); }                         // math.deg
 
@@ -104,7 +105,7 @@ public:
 	void GameFrame(int frame) override {
 		if (luaDriven || ids.empty()) return;
 		const int n = (int)unitHandler.GetActiveUnits().size();
-		tickMs = (n <= fullUnits) ? 100 : std::min(maxMs, (int)std::floor(100.0f * n / fullUnits));
+		tickMs = (n <= fullUnits) ? 100 : std::min(maxMs, (int)math::floor(100.0f * n / fullUnits));
 		unitCount = n;
 		TickDue(frame);
 	}
@@ -136,7 +137,7 @@ public:
 private:
 	static constexpr size_t MAX_EVENTS = 4 * 4096;   // DESIGN: dust beyond this between pulls is dropped (look only)
 
-	static int SleepFrames(float ms) { return std::max(1, (int)std::floor(ms / 33.0f)); }   // base unit_script.lua Sleep
+	static int SleepFrames(float ms) { return std::max(1, (int)math::floor(ms / 33.0f)); }   // base unit_script.lua Sleep
 
 	// ---- the tick (anim.lua Loop body) ----------------------------------------------------------------------------------------
 	void Tick(Unit& U, CUnit* u, int f) {
@@ -147,7 +148,7 @@ private:
 		// sleep (anim.lua Loop tail)
 		float ms = U.quiet ? 1000.0f : (float)tickMs;
 		if (U.canIdle && ms > 100) {
-			if (std::fabs(U.vs) <= 0.3f && std::fabs(U.turn) <= 0.05f && AimIdle(U) && !u->beingBuilt) ++U.idleTicks; else U.idleTicks = 0;
+			if (math::fabs(U.vs) <= 0.3f && math::fabs(U.turn) <= 0.05f && AimIdle(U) && !u->beingBuilt) ++U.idleTicks; else U.idleTicks = 0;
 			if (U.idleTicks >= idleTicksN) {
 				ms = std::min(8000.0f, std::max(2000.0f, 2.0f * unitCount));
 				U.sleeping = true;
@@ -155,7 +156,7 @@ private:
 		}
 		if (U.first) {
 			U.first = false;
-			const int frames = (int)std::floor(ms / 33.333f);
+			const int frames = (int)math::floor(ms / 33.333f);
 			if (frames > 1) ms = std::max(1.0f, ms - (U.owner->id % frames) * 33.333f);
 		}
 		U.wakeAt = f + SleepFrames(ms);
@@ -169,8 +170,8 @@ private:
 		const float hd = (float)u->heading * TAU / 65536.0f;
 		if (!U.sensed) { U.sensed = true; U.px = x; U.py = y; U.pz = z; U.hd = hd; U.vs = 0; }
 		const float dx = x - U.px, dz = z - U.pz;
-		const float dist = std::sqrt(dx * dx + dz * dz);
-		const float along = dx * std::sin(hd) + dz * std::cos(hd);
+		const float dist = math::sqrt(dx * dx + dz * dz);
+		const float along = dx * math::sin(hd) + dz * math::cos(hd);
 		U.vs = (along >= 0 ? dist : -dist) / dt;
 		U.speed = dist / dt;
 		U.turn = Wrap(hd - U.hd) / dt;
@@ -185,11 +186,11 @@ private:
 		const float nx = n.x, ny = n.y, nz = n.z;
 		if (ny < 0.01f) { p = 0; r = 0; }
 		else {
-			const float fx = std::sin(U.hd), fz = std::cos(U.hd);
-			const float rx = -std::cos(U.hd), rz = std::sin(U.hd);
+			const float fx = math::sin(U.hd), fz = math::cos(U.hd);
+			const float rx = -math::cos(U.hd), rz = math::sin(U.hd);
 			const float up = -(nx * fx + nz * fz) / ny;
 			const float right = -(nx * rx + nz * rz) / ny;
-			p = Deg(std::atan(up)); r = Deg(std::atan(-right));
+			p = Deg(math::atan(up)); r = Deg(math::atan(-right));
 		}
 		U.tiltSet = true; U.tiltX = U.px; U.tiltZ = U.pz; U.tiltH = U.hd; U.tiltP = p; U.tiltR = r;
 	}
@@ -198,8 +199,8 @@ private:
 	void Loco(Unit& U, CUnitScript* S) {
 		const float dt = U.dt;
 		U.t += dt;
-		const bool moving = std::fabs(U.vs) > 0.3f;
-		const bool turning = std::fabs(U.turn) > 0.05f;
+		const bool moving = math::fabs(U.vs) > 0.3f;
+		const bool turning = math::fabs(U.turn) > 0.05f;
 		const bool rolling = U.loco == L_TREADS || U.loco == L_WHEELS;
 		if (rolling || U.loco == L_LEGS) {
 			float rate = 0, sl = 0, sr = 0;
@@ -223,15 +224,15 @@ private:
 				if (rate != 0) {
 					for (size_t i = 0; i < U.legs.size(); ++i) {
 						const float ph = LuaMod(U.phase + U.legOff[i], 1.0f);
-						const float a = std::sin(ph * TAU) * U.swing;
-						S->Turn(U.legs[i], 0, (float)std::max(1.0f, std::fabs(a - U.legAng[i]) / dt * 1.2f), (float)a);
+						const float a = math::sin(ph * TAU) * U.swing;
+						S->Turn(U.legs[i], 0, (float)std::max(1.0f, math::fabs(a - U.legAng[i]) / dt * 1.2f), (float)a);
 						U.legAng[i] = a;
 						if (i < U.feet.size() && U.feet[i] >= 0) {
-							const float l = std::max(0.0f, std::cos(ph * TAU)) * U.lift;
-							S->Turn(U.feet[i], 0, (float)std::max(1.0f, std::fabs(l) / dt * 1.5f), (float)l);
+							const float l = std::max(0.0f, math::cos(ph * TAU)) * U.lift;
+							S->Turn(U.feet[i], 0, (float)std::max(1.0f, math::fabs(l) / dt * 1.5f), (float)l);
 						}
 					}
-					bobAmp = U.bob * U.h * std::fabs(std::sin(U.phase * TAU * U.bobMul));
+					bobAmp = U.bob * U.h * math::fabs(math::sin(U.phase * TAU * U.bobMul));
 				}
 				if (U.base >= 0) S->Move(U.base, 1, 20.0f, (float)bobAmp);
 			}
@@ -240,15 +241,15 @@ private:
 		float tp = 0, tr = 0;
 		if (U.body == B_TERRAIN && U.land) GroundTilt(U, tp, tr);
 		else if (U.body == B_BANK) {
-			const float share = std::min(1.0f, std::fabs(U.turn) / U.bankRate);
+			const float share = std::min(1.0f, math::fabs(U.turn) / U.bankRate);
 			tr = (U.turn > 0 ? -1 : 1) * U.cap * share;
-			if (std::fabs(U.turn) < 0.01f) tr = 0;
+			if (math::fabs(U.turn) < 0.01f) tr = 0;
 		}
 		const float k = std::min(1.0f, dt / 0.25f);
 		U.pitch = U.pitch + (tp - U.pitch) * k;
 		U.roll = U.roll + (tr - U.roll) * k;
 		if (U.base >= 0) {
-			if (!(U.rollSentSet && std::fabs(U.roll - U.rollSent) < rollEps && std::fabs(U.pitch - U.pitchSent) < rollEps)) {
+			if (!(U.rollSentSet && math::fabs(U.roll - U.rollSent) < rollEps && math::fabs(U.pitch - U.pitchSent) < rollEps)) {
 				U.rollSentSet = true; U.rollSent = U.roll; U.pitchSent = U.pitch;
 				S->Turn(U.base, 2, 6.0f, (float)Rad(U.roll));
 				S->Turn(U.base, 0, 6.0f, (float)(-Rad(U.pitch)));
@@ -449,13 +450,13 @@ private:
 		const float ptol = std::max(w.tol, 0.02f);
 		float ey = 0, ep = 0;
 		bool ok = true;
-		if (w.yaw >= 0) { const auto* p = S->SafeGetPiece(w.yaw); ey = std::fabs(Wrap((p ? (float)p->GetRotation().y : 0.0f) - heading)); if (ey > w.tol) ok = false; }
-		if (w.pit >= 0) { const auto* p = S->SafeGetPiece(w.pit); ep = std::fabs(Wrap(-(p ? (float)p->GetRotation().x : 0.0f) + w.rest - pitch)); if (ep > ptol) ok = false; }
+		if (w.yaw >= 0) { const auto* p = S->SafeGetPiece(w.yaw); ey = math::fabs(Wrap((p ? (float)p->GetRotation().y : 0.0f) - heading)); if (ey > w.tol) ok = false; }
+		if (w.pit >= 0) { const auto* p = S->SafeGetPiece(w.pit); ep = math::fabs(Wrap(-(p ? (float)p->GetRotation().x : 0.0f) + w.rest - pitch)); if (ep > ptol) ok = false; }
 		if (ok) { lua_pushnumber(L, 0); return 1; }
 		float lb = 0;
 		if (w.yaw >= 0) lb = std::max(lb, (ey - w.tol) / (w.yawRate / 30.0f));
 		if (w.pit >= 0) lb = std::max(lb, (ep - ptol) / (w.pitchRate / 30.0f));
-		const float skip = std::floor(lb) - 1;
+		const float skip = math::floor(lb) - 1;
 		lua_pushnumber(L, (skip >= 2 && skip < 1e6f) ? SleepFrames(skip * 33) : 1);
 		return 1;
 	}
