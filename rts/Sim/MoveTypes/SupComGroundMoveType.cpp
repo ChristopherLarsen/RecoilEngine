@@ -165,6 +165,7 @@ static bool PushBackOnceOn() { static const bool on = SupComSimSwitch::Get("SupC
 // by a unit gets no MOV-021 R1 push back either: MOV-007 v2 case D (a parked unit in the way, removed after the first blocked step)
 // restarts at v_restart on the next step, and contact between units is MOV-021 R3 separation (R1: no push back for a unit already
 // being pushed). The R1 push back is for a structure (MOV-021-A). Switch SupComPushBackStructOnly, default 1
+static bool PushBackRecheckOn() { static const bool on = SupComSimSwitch::Get("SupComPushBackRecheck", true); return on; }
 static bool PushBackStructOnlyOn() { static const bool on = SupComSimSwitch::Get("SupComPushBackStructOnly", true); return on; }
 // pathing fix 7 (L11551 PTH-002-D: a mover went through the footprint of a standing enemy in a one-cell gap and reached the goal):
 // MOV-007 v2 R1, space occupied by a unit is blocked. A unit in contact with a standing unit (last collision pass) is refused a step
@@ -1197,6 +1198,16 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	// MOV-007 v2 R2 and R3, MOV-021 v1 R1 and case A (pathing fix 4): on the blocked step the unit stays at its old position with speed 0
 	// (L11389: MOV-007-B moved -0.113 elmos in the blocked step itself); the push back moves it on the next frame, with no step of its
 	// own (it is being pushed), and the restart at v_restart (scRestart, kept) follows on the frame after
+	// pathing fix 8 (MOV-007-D, L11575): the push back is for an obstacle that is still there; a structure removed after the blocked step
+	// (or a step that fits again) drops it, so the unit restarts at v_restart on this frame. Switch SupComPushBackRecheck, default 1
+	if (scPushBack.SqLength2D() > 0.0f && PushBackRecheckOn()) {
+		const float3 dir = scPushBack * (-1.0f / scPushBack.Length2D());
+		const float3 next = owner->pos + dir * std::max(maxSpeed, 1.0f);
+		const bool still = (CMoveMath::IsBlockedStructure(*owner->moveDef, int(next.x / SQUARE_SIZE), int(next.z / SQUARE_SIZE), owner, ThreadPool::GetThreadNum()) != 0)
+			|| FootprintOnStructure(next) || FootprintBlocked(next);
+		if (!still)
+			scPushBack = ZeroVector;
+	}
 	if (scPushBack.SqLength2D() > 0.0f) {
 		scSpeed = 0.0f;
 		owner->SetVelocityAndSpeed(ZeroVector);
@@ -1619,8 +1630,20 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				}
 			}
 
-			if (!blocked && StandingBlocksOn() && supcomStandingContact.SqLength2D() > 0.0f && moveRequest.dot(supcomStandingContact) < 0.0f)
-				blocked = true;
+			// pathing fix 8 (L11603: refusing the whole step broke PTH-002-J, PTH-004-B, where a unit slides round arrived units): only the
+			// part of the step into a standing unit in contact is taken off (MOV-007 R1 occupied space); sliding along it is kept, and a step
+			// with nothing left is refused
+			if (!blocked && StandingBlocksOn() && supcomStandingContact.SqLength2D() > 0.0f) {
+				const float3 n = supcomStandingContact * (1.0f / supcomStandingContact.Length2D());
+				const float into = moveRequest.x * n.x + moveRequest.z * n.z;
+				if (into < 0.0f) {
+					moveRequest.x -= n.x * into;
+					moveRequest.z -= n.z * into;
+					moveRequest.x = GridStep(owner->pos.x, moveRequest.x);
+					moveRequest.z = GridStep(owner->pos.z, moveRequest.z);
+					blocked = (moveRequest.SqLength2D() < Square(0.01f));
+				}
+			}
 
 			if (!blocked) {
 				float3 resultantMove;

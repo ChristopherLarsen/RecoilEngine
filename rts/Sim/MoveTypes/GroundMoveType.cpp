@@ -3,6 +3,7 @@
 // #undef NDEBUG
 
 #include "GroundMoveType.h"
+#include "System/SupComSimSwitch.h"
 #include "MoveDefHandler.h"
 #include "SupComAvoidSnapshot.h"
 #include "Components/MoveTypesComponents.h"
@@ -2613,6 +2614,17 @@ void CGroundMoveType::HandleObjectCollisions()
 	// then only apply forces from static objects/terrain. This prevent units from pushing each
 	// other into buildings far enough that the pathing systems can't get them out again.
 	float3 tryForce = forceFromStaticCollidees + forceFromMovingCollidees;
+	// supcom: pathing fix 8 (L11603 PTH-002-D: the collision pass carried a mover through a standing enemy in a one-cell gap): no
+	// collision push towards a standing unit in contact (MOV-007 R1 occupied space). Switch SupComStandingClipPush, default 1
+	static const bool clipOn = SupComSimSwitch::Get("SupComStandingClipPush", true);
+	if (clipOn && supcomStandingContact.SqLength2D() > 0.0f) {
+		const float3 n = supcomStandingContact * (1.0f / supcomStandingContact.Length2D());
+		const float into = tryForce.x * n.x + tryForce.z * n.z;
+		if (into < 0.0f) {
+			tryForce.x -= n.x * into;
+			tryForce.z -= n.z * into;
+		}
+	}
 	float maxPushForceSq = maxSpeed*maxSpeed*modInfo.maxCollisionPushMultiplier;
 	if (tryForce.SqLength() > maxPushForceSq)
 		(tryForce.Normalize()) *= maxSpeed;
