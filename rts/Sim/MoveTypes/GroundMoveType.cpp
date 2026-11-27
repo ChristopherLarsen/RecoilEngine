@@ -2934,7 +2934,9 @@ void CGroundMoveType::HandleUnitCollisions(
 		// of the heading) that is not in the crowd at the mover's own goal. STANDING_GOAL_CROWD 12 squares: PLACEHOLDER (mechanism value)
 		static const bool standingAheadOn = SupComSimSwitch::Get("SupComStandingAhead", true);
 		const float3 toCollidee = (collidee->pos - collider->pos).SafeNormalize2D();
-		const bool standingAhead = (!standingAheadOn || (toCollidee.dot(flatFrontDir) > 0.5f && collidee->pos.SqDistance2D(goalPos) > Square(12.0f * SQUARE_SIZE)));
+		// pathing fix 11 (L11654 PTH-006-E: the mover lining up at the held gap turned off the 60 degrees and the contact flickered): an
+		// actual overlap needs no heading test, the margin does; the goal crowd is excluded for both
+		const bool standingAhead = (!standingAheadOn || ((isCollision || toCollidee.dot(flatFrontDir) > 0.5f) && collidee->pos.SqDistance2D(goalPos) > Square(12.0f * SQUARE_SIZE)));
 		const bool standingNear = (collideeMobile && !collidee->IsMoving() && collidee->moveType->progressState != AMoveType::Active && standingAhead
 			&& (isCollision || (standingMarginOn && static_cast<float3>(separationVect).SqLength2D() < Square(colliderParams.y + collideeParams.y + SQUARE_SIZE * 0.5f))));
 		if (standingNear)
