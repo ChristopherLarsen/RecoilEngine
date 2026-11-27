@@ -264,7 +264,7 @@ void CWorldDrawer::GenerateIBLTextures() const
 	{
 		SCOPED_TIMER("Draw::World::UpdateReflTex");
 		SCOPED_GL_DEBUGGROUP("Draw::World::UpdateReflTex");
-		cubeMapHandler.UpdateReflectionTexture();
+		if (!SupComZoomLevel::ReflTexOff()) cubeMapHandler.UpdateReflectionTexture(); // DRAW-ZOOM-MAP: kept cubemap past the level
 	}
 
 	SCOPED_GL_DEBUGGROUP("Draw::World::UpdateMisc");

@@ -21,6 +21,9 @@ CONFIG(int, SupComShadowMaxLevel).defaultValue(7).minimumValue(-1).maximumValue(
 CONFIG(int, SupComDecalMaxLevel).defaultValue(7).minimumValue(-1).maximumValue(7).description(
 	"Kardashev: ground decals (scars, tracks, building plates, Lua decals) are drawn only at zoom level L0..this value "
 	"(7 = always). Presentation only.");
+CONFIG(int, SupComReflTexMaxLevel).defaultValue(7).minimumValue(-1).maximumValue(7).description(
+	"Kardashev: the reflection cubemap ($reflection, model and map specular) is re-rendered only at zoom level L0..this value "
+	"(7 = always); above it the last cubemap is kept. Presentation only.");
 
 namespace SupComZoomLevel {
 	// split points L0/L1 .. L6/L7 in elmos; the same values as LuaUI/lib/zoomlevel.lua. Index 3 is icon_zoom (no hysteresis).
@@ -34,6 +37,7 @@ namespace SupComZoomLevel {
 	static bool started = false;
 	static int shadowMax = MAX_LEVEL;
 	static int decalMax = MAX_LEVEL;
+	static int reflMax = MAX_LEVEL;
 
 	void Init() { skipMask = unsigned(configHandler->GetInt("SupComZoomSkip")); started = false; curLevel = 0; }
 
@@ -52,6 +56,7 @@ namespace SupComZoomLevel {
 	void Update() {
 		shadowMax = configHandler->GetInt("SupComShadowMaxLevel");
 		decalMax = configHandler->GetInt("SupComDecalMaxLevel");
+		reflMax = configHandler->GetInt("SupComReflTexMaxLevel");
 		const float d = camHandler->GetCurrentController().GetSupComDist();
 		const float3 cp = camera->GetPos();
 		curDist = (d >= 0.0f) ? d : (cp.y - CGround::GetHeightReal(cp.x, cp.z, false));
@@ -77,4 +82,5 @@ namespace SupComZoomLevel {
 	bool Skip(Pass p) { return (skipMask & p) != 0 && curLevel >= SKIP_FROM; }
 	bool ShadowsOff() { return curLevel > shadowMax; }
 	bool DecalsOff() { return curLevel > decalMax; }
+	bool ReflTexOff() { return curLevel > reflMax; }
 }

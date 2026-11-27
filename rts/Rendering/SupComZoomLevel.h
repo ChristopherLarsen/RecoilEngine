@@ -26,4 +26,5 @@ namespace SupComZoomLevel {
 	// Spring.SetConfigInt takes effect on the next frame.
 	bool  ShadowsOff();            // the whole shadow-map pass (terrain, models, projectiles, trees, Lua)
 	bool  DecalsOff();             // ground decals: scars, tracks, building plates, Lua decals
+	bool  ReflTexOff();            // the per-frame reflection cubemap update (SupComReflTexMaxLevel): the last cubemap is kept
 }
