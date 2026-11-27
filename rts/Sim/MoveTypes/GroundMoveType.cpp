@@ -2929,9 +2929,15 @@ void CGroundMoveType::HandleUnitCollisions(
 		// contact counts as contact, so the mover's step loses its inward part before it overlaps, and no separation push from it
 		// moves the mover off. Switch SupComStandingMargin, default 1
 		static const bool standingMarginOn = SupComSimSwitch::Get("SupComStandingMargin", true);
-		const bool standingNear = (collideeMobile && !collidee->IsMoving() && collidee->moveType->progressState != AMoveType::Active
+		// pathing fix 10 (L11628/L11630: fix 9 broke PTH-004-A and MOV-018-F, and PTH-002-J/PTH-004-B stayed red: movers no longer slid
+		// between ring engineers or into a crowd of arrived units): the standing rule is for a unit straight ahead (within 60 degrees
+		// of the heading) that is not in the crowd at the mover's own goal. STANDING_GOAL_CROWD 12 squares: PLACEHOLDER (mechanism value)
+		static const bool standingAheadOn = SupComSimSwitch::Get("SupComStandingAhead", true);
+		const float3 toCollidee = (collidee->pos - collider->pos).SafeNormalize2D();
+		const bool standingAhead = (!standingAheadOn || (toCollidee.dot(flatFrontDir) > 0.5f && collidee->pos.SqDistance2D(goalPos) > Square(12.0f * SQUARE_SIZE)));
+		const bool standingNear = (collideeMobile && !collidee->IsMoving() && collidee->moveType->progressState != AMoveType::Active && standingAhead
 			&& (isCollision || (standingMarginOn && static_cast<float3>(separationVect).SqLength2D() < Square(colliderParams.y + collideeParams.y + SQUARE_SIZE * 0.5f))));
-		if (standingNear && !isCollision)
+		if (standingNear)
 			supcomStandingContact += (collider->pos - collidee->pos).SafeNormalize2D(); // supcom: MOV-007 R1 (SupComGroundMoveType)
 
 		// check for separation
@@ -3004,8 +3010,6 @@ void CGroundMoveType::HandleUnitCollisions(
 		pushCollidee = pushCollidee && !collidee->moveType->HoldsAgainstPush();   // supcom: SupComGoRound (an idle unit is never displaced)
 
 		const bool isStatic = (!collideeMobile && !collideeUD->IsAirUnit()) || (!pushCollider && !pushCollidee);
-		if (isCollision && collideeMobile && !collidee->IsMoving() && collidee->moveType->progressState != AMoveType::Active)
-			supcomStandingContact += (collider->pos - collidee->pos).SafeNormalize2D(); // supcom: MOV-007 R1 (SupComGroundMoveType)
 
 		if (isCollision && isStatic) {
 			// building (always axis-aligned, possibly has a yardmap)
