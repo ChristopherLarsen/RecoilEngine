@@ -1660,7 +1660,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 					// pathing fix 15 (L11764 PTH-006-E seed 3: the mover slid along the wall face to one side of the unit in the gap, the
 					// line-up brought it back across the path line and it slid out to the other side, about every 400 frames): the side of
 					// the slide round a standing unit is kept for the goal; a slide to the other side is refused. Switch
-					// SupComStandingSlideOnce, default 1 (PLACEHOLDER mechanism: no released value names it)
+					// SupComStandingSlideOnce, default 1. PTH-008 v1 R1, R2, R6 (G0-PTHSLIDE [pass_side]: side_switches 0 in every case, the side
+					// follows the start offset): the side chosen at first contact is kept, never switched
 					if (!blocked && StandingSlideOnceOn()) {
 						if (!scSlideGoal.same(goalPos)) { scSlideGoal = goalPos; scSlideSide = 0; }
 						const float side = moveRequest.z * n.x - moveRequest.x * n.z;
