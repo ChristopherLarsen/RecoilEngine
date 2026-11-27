@@ -119,6 +119,13 @@ out Data {
 };
 out float gl_ClipDistance[3];
 
+// KT1 hook: model tint (game-build: wreck darkening in the engine's own pass). The per-object uniforms (ModelUniformData,
+// 128 bytes = 8 vec4, binding 1; set from Lua with gl.SetUnitBufferUniforms / gl.SetFeatureBufferUniforms). userDefined[12..14]
+// is an rgb multiplier on the final colour when userDefined[15] > 0.5; otherwise the model draws untinted.
+struct KT1ModelUniforms { vec4 v[8]; };
+layout(std140, binding = 1) readonly buffer KT1ModelUniformBuffer { KT1ModelUniforms kt1Uni[]; };
+flat out vec3 kt1Tint;
+
 #line 1122
 
 void TransformPlayerCam(vec4 worldPos) {
@@ -360,6 +367,7 @@ void main(void)
 	gl_ClipDistance[1] = dot(modelPos, clipPlane1); //lower construction clip plane
 	gl_ClipDistance[2] = dot(worldPos, clipPlane2); //water clip plane
 
+	{ vec4 t = kt1Uni[instData.y].v[7]; kt1Tint = (t.w > 0.5) ? t.rgb : vec3(1.0); } // KT1 hook: model tint
 	uint paletteIndex = instData.z & 0x07FFu; // mask 11 bits: 0..254 = team, 256..2047 = custom
 	teamCol = teamColor[paletteIndex];
 	teamCol.a = teamColorAlpha;

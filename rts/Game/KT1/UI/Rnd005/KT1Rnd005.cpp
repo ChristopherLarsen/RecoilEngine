@@ -6,6 +6,9 @@
 // Spring.KT1.Draw    (R12)  SetCutoff(name, v) / GetCutoff(name): named draw cut-offs in the camera measure (camera distance in elmos);
 //                           "unit_text" defaults to 80 (the parity value), nearer than the health-bar cut-off. CameraMeasure(): the
 //                           camera's distance to the ground point at the screen centre (elmos), the measure the cut-offs are read in.
+//                           ModelTint(): 12, the first of the four per-object user uniforms (12..15) the GL4 model shaders read as a
+//                           tint: gl.SetFeatureBufferUniforms(id, {r, g, b, 1}, 12) darkens that feature in the engine's own pass;
+//                           {1, 1, 1, 0} clears it (ModelVertProgGL4.glsl, "KT1 hook: model tint").
 // Spring.KT1.Decals  (R13)  SetFade(f) / GetFade(): the fade fraction, default 0.25 at game start: a Lua decal with a cut-off (user data 0 y)
 //                           starts fading at f x its cut-off and is not drawn at the cut-off (GroundDecalsVertProg.glsl, uniform cutFade).
 //                           SetCutoff(decalID, v): that decal's own cut-off. GetDrawnAlpha(decalID, measure): the alpha the shader
@@ -149,8 +152,10 @@ public:
 
 class DrawRule : public Rule {
 public:
-	DrawRule() : Rule({"Draw", 1, false, "(RND-005 R12 cut-offs)", true}) {}
+	DrawRule() : Rule({"Draw", 2, false, "(RND-005 R12 cut-offs)", true}) {}
+	static int LModelTint(lua_State* L) { lua_pushinteger(L, 12); return 1; }
 	void PushLua(lua_State* L) override {
+		LuaPushRawNamedCFunc(L, "ModelTint", LModelTint);
 		LuaPushRawNamedCFunc(L, "SetCutoff", LSetCutoff);
 		LuaPushRawNamedCFunc(L, "GetCutoff", LGetCutoff);
 		LuaPushRawNamedCFunc(L, "CameraMeasure", LCameraMeasure);

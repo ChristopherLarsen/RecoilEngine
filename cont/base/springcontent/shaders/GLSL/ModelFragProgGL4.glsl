@@ -61,6 +61,7 @@ uniform int shadingMode = 0; //NORMAL_SHADING
 
 uniform vec4 alphaCtrl = vec4(0.0, 0.0, 0.0, 1.0); //always pass
 uniform vec4 colorMult = vec4(1.0);
+flat in vec3 kt1Tint; // KT1 hook: model tint (ModelVertProgGL4.glsl)
 uniform vec4 nanoColor = vec4(0.0);
 
 bool AlphaDiscard(float a) {
@@ -135,7 +136,7 @@ void main(void)
 	#if (DEFERRED_MODE == 1)
 		vec4 diffColor = colorMult * vec4(mix(texColor1.rgb, nanoColor.rgb, nanoColor.a), alpha);
 		fragColor[GBUFFER_NORMTEX_IDX] = vec4(SNORM2NORM(worldNormal), 1.0);
-		fragColor[GBUFFER_DIFFTEX_IDX] = diffColor;
+		fragColor[GBUFFER_DIFFTEX_IDX] = vec4(diffColor.rgb * kt1Tint, diffColor.a); // KT1 hook: model tint
 		fragColor[GBUFFER_SPECTEX_IDX] = vec4(texColor2.rgb, alpha);
 		fragColor[GBUFFER_EMITTEX_IDX] = vec4(0.0, 0.0, 0.0, 0.0);
 		fragColor[GBUFFER_MISCTEX_IDX] = vec4(0.0, 0.0, 0.0, 0.0);
@@ -144,5 +145,6 @@ void main(void)
 		fragColor.rgb = mix(fragColor.rgb ,  nanoColor.rgb, nanoColor.a * int(shadingMode == 0));
 		fragColor.a   = alpha;
 		fragColor *= colorMult;
+		fragColor.rgb *= kt1Tint; // KT1 hook: model tint: the final colour (after fog), as a multiply pass over the drawn model gives
 	#endif
 }
