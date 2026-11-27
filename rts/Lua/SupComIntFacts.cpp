@@ -58,6 +58,7 @@ namespace {
 		float fe = 0, ce = 0, fnx = 0, fnz = 0, cnx = 0, cnz = 0, FB = 16, CB = 4, VS = 128, SS = 1024, MU = 8;
 		float cell = 0, rf = 0, ri = 0, lagE = 0, lagL = 0, reF = 1, hk = 0, hclamp = 0, landedH = 0, landedV = 1;
 		bool rc = false, unfinished = false, ok = false;
+		bool wbChg = false;                       // the sources write-back (dr, stamps) only when a value changed (SIM-CUTS-RANKED §12)
 		int sensors = 0;                          // 0 off (Lua does the sensor kinds), 1 on, 2 shadow (computed, nothing written)
 		bool waterSeesSub = false;
 		float sensCell[4] = {0, 0, 0, 0};         // I.cell per kind (map cells x MU)
@@ -83,6 +84,7 @@ namespace {
 		bool placed = false;                  // this file wrote it into the kind's index (never in shadow)
 		bool trail = false;                   // radar: a leaving point is placed ("radar_leave")
 		float tlx = 0, tlz = 0, tr2 = 0, tce = 0;
+		bool wbOk = false, wbHas = false; float wbDr = 0; int wbSt = 0;   // what the write-back last put in sources[u][kind] (wbChg)
 	};
 
 	struct Src {
@@ -101,11 +103,13 @@ namespace {
 		Sens sens[NSENS];
 		bool anySens = false;
 		bool upOff = false; float scale = 1.0f;   // Lua answers (upkeep unpaid; FieldScale), sent on change
+		bool wbOk = false, wbHas = false; float wbDr = 0; int wbSt = 0;   // what the write-back last put in sources[u][kind] (wbChg)
 	};
 	std::map<int, Src> srcs;                  // ordered: the sweep frees in id order
 	std::unordered_set<int> builtC;           // F.built
 
 	bool Synced(lua_State* L) { return CLuaHandle::GetHandleSynced(L); }
+	void WbForget(Src& s) { s.wbOk = false; for (int k = 0; k < NSENS; ++k) s.sens[k].wbOk = false; }
 
 	inline float Floor(float v) { return math::floor(v); }
 	inline float Mod(float a, float b) { return a - math::floor(a / b) * b; }            // luai_nummod
@@ -140,6 +144,7 @@ namespace {
 	int Init(lua_State* L) {
 		if (!Synced(L)) return 0;
 		luaL_checktype(L, 1, LUA_TTABLE);
+		for (auto& p : srcs) WbForget(p.second);                                // new numbers or modes: write everything again
 		cfg.fe = NumField(L, 1, "fe", 0); cfg.ce = NumField(L, 1, "ce", 0);
 		cfg.fnx = NumField(L, 1, "fnx", 0); cfg.fnz = NumField(L, 1, "fnz", 0);
 		cfg.cnx = NumField(L, 1, "cnx", 0); cfg.cnz = NumField(L, 1, "cnz", 0);
@@ -149,7 +154,7 @@ namespace {
 		cfg.lagE = NumField(L, 1, "lagE", 0); cfg.lagL = NumField(L, 1, "lagL", 0); cfg.reF = NumField(L, 1, "reF", 1);
 		cfg.hk = NumField(L, 1, "hk", 0); cfg.hclamp = NumField(L, 1, "hclamp", 0);
 		cfg.landedH = NumField(L, 1, "landedH", 0); cfg.landedV = NumField(L, 1, "landedV", 1);
-		cfg.rc = BoolField(L, 1, "rc"); cfg.unfinished = BoolField(L, 1, "unfinished");
+		cfg.rc = BoolField(L, 1, "rc"); cfg.wbChg = BoolField(L, 1, "wbChg"); cfg.unfinished = BoolField(L, 1, "unfinished");
 		DefFlags(L, 1, "air", defAir);
 		DefFlags(L, 1, "lua", defLua);
 		DefFlags(L, 1, "cloak", defCloak);
@@ -193,6 +198,7 @@ namespace {
 			return 0;
 		}
 		Src& s = srcs[u];
+		WbForget(s);                                                           // sources[u] may be a new table now
 		s.hasV = lua_isnumber(L, 2); s.vr = s.hasV ? (float)lua_tonumber(L, 2) : 0.0f;
 		s.hasW = lua_isnumber(L, 3); s.wr = s.hasW ? (float)lua_tonumber(L, 3) : 0.0f;
 		s.nv = lua_toboolean(L, 4);
@@ -225,7 +231,7 @@ namespace {
 
 	int Reset(lua_State* L) {
 		if (!Synced(L)) return 0;
-		for (auto& p : srcs) { FreeCircle(p.second, p.first, lastShadow); FreeAllSens(p.second, p.first); }
+		for (auto& p : srcs) { FreeCircle(p.second, p.first, lastShadow); FreeAllSens(p.second, p.first); WbForget(p.second); }
 		return 0;
 	}
 
@@ -495,7 +501,8 @@ namespace {
 						c.sda = a; c.mark = stamp;
 					}
 					// the source table's radius in use (cases read it), as Lua writes it
-					if (sensOn && !shadow) {
+					if (sensOn && !shadow && !(cfg.wbChg && c.wbOk && c.wbHas == c.hasDr && c.wbDr == c.dr && c.wbSt == c.stamps)) {
+						c.wbOk = true; c.wbHas = c.hasDr; c.wbDr = c.dr; c.wbSt = c.stamps;
 						lua_rawgeti(L, R_sources, u);
 						if (lua_istable(L, -1)) {
 							lua_getfield(L, -1, SENS_NAME[k]);
@@ -555,7 +562,8 @@ namespace {
 				}
 			}
 			// the source table's radius in use (cases read it), as Lua writes it
-			if (!shadow) {
+			if (!shadow && !(cfg.wbChg && s.wbOk && s.wbHas == s.hasDr && s.wbDr == s.dr && s.wbSt == s.stamps)) {
+				s.wbOk = true; s.wbHas = s.hasDr; s.wbDr = s.dr; s.wbSt = s.stamps;
 				lua_rawgeti(L, R_sources, u);
 				if (lua_istable(L, -1)) {
 					lua_getfield(L, -1, "vision");
