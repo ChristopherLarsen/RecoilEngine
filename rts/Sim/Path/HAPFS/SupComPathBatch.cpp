@@ -4,7 +4,9 @@
 
 #include "System/SupComSimSwitch.h"
 #include "System/Threading/ThreadPool.h"
+#include "System/Threading/SupComThreading.h"
 
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <unordered_map>
@@ -37,10 +39,12 @@ namespace SupComPathBatch {
 		}
 
 		// main thread only (Active() is false elsewhere)
-		std::unordered_map<Key, HAPFS::CPathCache::CacheItem, KeyHash> items;
-		bool active = false;
+		// one per lane (SupComThreading.h, PathLanes); lane L's only while lane L runs, on that lane's thread
+		std::unordered_map<Key, HAPFS::CPathCache::CacheItem, KeyHash> items[SupComThreading::PATH_LANES];
+		std::atomic<bool> active{false};
 		int on = -1;
-		unsigned int hits = 0, misses = 0, requests = 0;
+		std::atomic<unsigned int> hits{0}, misses{0}, requests{0};
+		int Lane() { return SupComThreading::pathLane; }
 	}
 
 	bool On() {
@@ -50,14 +54,14 @@ namespace SupComPathBatch {
 	}
 
 	bool Active() {
-		return active && ThreadPool::GetThreadNum() == 0;
+		return active.load(std::memory_order_relaxed) && Lane() >= 0;
 	}
 
 	Scope::Scope(): active(On()) {
 		if (!active)
 			return;
-		items.clear();
-		hits = misses = requests = 0;
+		for (auto& m: items) m.clear();
+		hits = 0; misses = 0; requests = 0;
 		SupComPathBatch::active = true;
 	}
 
@@ -65,12 +69,13 @@ namespace SupComPathBatch {
 		if (!active)
 			return;
 		SupComPathBatch::active = false;
-		items.clear();
+		for (auto& m: items) m.clear();
 	}
 
 	const HAPFS::CPathCache::CacheItem* Find(unsigned int blockSize, int2 strtBlock, int2 goalBlock, float goalRadius, int pathType, bool synced) {
-		const auto it = items.find(MakeKey(blockSize, strtBlock, goalBlock, goalRadius, pathType, synced));
-		if (it == items.end()) {
+		auto& lane = items[Lane()];
+		const auto it = lane.find(MakeKey(blockSize, strtBlock, goalBlock, goalRadius, pathType, synced));
+		if (it == lane.end()) {
 			++misses;
 			return nullptr;
 		}
@@ -86,7 +91,7 @@ namespace SupComPathBatch {
 		ci.goalBlock = goalBlock;
 		ci.goalRadius = goalRadius;
 		ci.pathType = pathType;
-		items.emplace(MakeKey(blockSize, strtBlock, goalBlock, goalRadius, pathType, synced), std::move(ci));
+		items[Lane()].emplace(MakeKey(blockSize, strtBlock, goalBlock, goalRadius, pathType, synced), std::move(ci));
 	}
 
 	void Counts(unsigned int& h, unsigned int& m, unsigned int& r) { h = hits; m = misses; r = requests; }

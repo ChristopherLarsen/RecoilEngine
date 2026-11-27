@@ -91,7 +91,7 @@ CPathManager::CPathManager()
 void CPathManager::InitStatic()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	pathFinderGroups = ThreadPool::GetNumThreads();
+	pathFinderGroups = std::max(ThreadPool::GetNumThreads(), SupComThreading::PATH_LANES); // supcom: PathLanes keeps PATH_LANES groups
 
 	LOG("TK CPathManager::InitStatic: %d threads available", pathFinderGroups);
 
@@ -304,7 +304,8 @@ IPath::SearchResult CPathManager::ArrangePath(
 	constexpr bool useConstraints[] = {false, false, false};
 	constexpr bool allowRawSearch[] = {false, false, false};
 
-	const int currentThread = ThreadPool::GetThreadNum(); // thread ids start at 1.
+	// supcom (SupComThreading.h, PathLanes): inside a batch lane the lane's finder group, else the thread's
+	const int currentThread = (SupComThreading::pathLane >= 0) ? SupComThreading::pathLane : ThreadPool::GetThreadNum(); // thread ids start at 1.
 
 	IPathFinder* ownPathFinders[] =	{ pathFinders[currentThread*PATH_ALL_LEVELS + PATH_LOW_RES]
 									, pathFinders[currentThread*PATH_ALL_LEVELS + PATH_MED_RES]
@@ -586,7 +587,7 @@ void CPathManager::LowRes2MaxRes(MultiPath& multiPath, const float3& startPos, c
 	// If this is the final improvement of the path, then use the original goal.
 	const auto& pfd = (lowResPath.path.empty()) ? multiPath.peDef : rangedGoalDef;
 
-	auto maxResPF = &maxResPFs[ThreadPool::GetThreadNum()];
+	auto maxResPF = &maxResPFs[(SupComThreading::pathLane >= 0) ? SupComThreading::pathLane : ThreadPool::GetThreadNum()]; // supcom: PathLanes
 
 	const IPath::SearchResult result = maxResPF->GetPath(*multiPath.moveDef, pfd, owner, startPos, maxResPath, MAX_SEARCHED_NODES_ON_REFINE);
 
