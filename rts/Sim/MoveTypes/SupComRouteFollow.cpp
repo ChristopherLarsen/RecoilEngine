@@ -104,6 +104,7 @@ static constexpr int DETOUR_HALF = 24;
 // aim while later points remain (R4: then a new route is requested; L11858 PTH-005-A circled its reached aim point for 4000 frames, no
 // later point reachable in a straight line). Switch SupComRouteKeepTail, default 1.
 static bool RouteKeepTailOn() { static const bool on = SupComSimSwitch::Get("SupComRouteKeepTail", true); return on; }
+static bool RouteStartFreeOn() { static const bool on = SupComSimSwitch::Get("SupComRouteStartFree", true); return on; }
 static bool RouteCellCentresOn() { static const bool on = SupComSimSwitch::Get("SupComRouteCellCentres", true); return on; }
 static void RouteCellCentres(std::vector<float3>& pts)
 {
@@ -249,7 +250,24 @@ bool CSupComGroundMoveType::RouteLineClear(const float3& a, const float3& b) con
 	// terrain and structures: the path finder's own straight-line test (MoveDef::DoRawSearch, as the stock follower's waypoint
 	// skip uses), so a route the path finder made is never judged unreachable by a stricter sweep (L11095: a replacement route
 	// every frame, none of its points steerable)
-	if (!md->DoRawSearch(owner, md, a, b, 0, true, true, false, nullptr, nullptr, nullptr, thread))
+	// a unit whose footprint is blocked where it stands (a structure placed on it, PTH-003-F; a new unit in its factory, MOV-018-F)
+	// tests the line from the first point along it where the footprint is free: what it overlaps at the start does not block (as
+	// for idle units below). The raw search from a blocked square fails for every line, so the unit never got an aim point and
+	// ended as stuck (L11858 PTH-003-F: 6 searches, "stuck, no aim point"). Switch SupComRouteStartFree, default 1.
+	float3 from = a;
+	if (RouteStartFreeOn() && FootprintBlocked(a)) {
+		const float3 d0 = (b - a) * XZVector;
+		const int steps0 = std::max(1, int(math::ceil(d0.Length2D() / (SQUARE_SIZE * 0.5f))));
+		int k = 1;
+		for (; k <= steps0; k++) {
+			if (!FootprintBlocked(a + d0 * (float(k) / steps0)))
+				break;
+		}
+		if (k > steps0)
+			return false;
+		from = a + d0 * (float(k) / steps0);
+	}
+	if (!md->DoRawSearch(owner, md, from, b, 0, true, true, false, nullptr, nullptr, nullptr, thread))
 		return false;
 	if (!routeUnitsBlock)
 		return true;
