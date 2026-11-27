@@ -37,6 +37,7 @@
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
+#include "Game/KT1/KT1Config.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/Models/3DModel.hpp"
 #include "Sim/Misc/QuadField.h"
@@ -55,10 +56,10 @@ public:
 	OwnPass() : Rule({"OwnPass", 1, true, "LuaRules/Gadgets/mov_own_pass.lua", false}) {}
 
 	void LoadConfig(const LuaTable& cfg) override {
-		slice = std::max(1, cfg.GetInt("slice", 3));
+		slice = KT1::ConfigFrames(cfg, "slice_s", "slice", 3);
 		ahead = cfg.GetFloat("ahead", 24.0f);
 		margin = cfg.GetFloat("search_margin", 64.0f);
-		idleSpeed = cfg.GetFloat("idle_speed", 0.05f);
+		idleSpeed = KT1::ConfigPerFrame30(cfg, "idle_speed", 0.05f);
 	}
 
 	void Start() override {

@@ -40,6 +40,7 @@
 #include "Game/KT1/KT1Registry.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
+#include "Game/KT1/KT1Config.h"
 #include "Lua/LuaUtils.h"
 #include "Map/Ground.h"
 #include "Sim/Misc/GlobalConstants.h"
@@ -66,7 +67,7 @@ public:
 	void LoadConfig(const LuaTable& cfg) override {
 		climbAbove = cfg.GetFloat("climb_above", 4.0f);
 		gaugeStep = cfg.GetFloat("gauge_step", 0.005f);
-		lowEvery = std::max(1, cfg.GetInt("low_every", 5));
+		lowEvery = KT1::ConfigFrames(cfg, "low_every_s", "low_every", 5);
 		lowDefault = cfg.GetFloat("low_fraction", 0.19f);
 	}
 
