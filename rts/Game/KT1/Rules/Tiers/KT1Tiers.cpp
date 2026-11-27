@@ -86,6 +86,7 @@ public:
 		periodSeconds = cfg.GetFloat("far_period_s", 0.5f);
 		marginElmos = cfg.GetFloat("margin_elmos", 80.0f);
 		cellElmos = std::max(64.0f, cfg.GetFloat("cell_elmos", 512.0f));
+		checkEvery = std::max(1, cfg.GetInt("check_every_frames", 1));
 	}
 
 	void Start() override {
@@ -93,8 +94,9 @@ public:
 		grid.Init(mapDims.mapx * SQUARE_SIZE, mapDims.mapy * SQUARE_SIZE, cellElmos);
 		Tiers::asleep.assign(unitHandler.MaxUnits(), 0);
 		snaps.assign(unitHandler.MaxUnits(), Snap{});
+		eligible.assign(unitHandler.MaxUnits(), nullptr);
 		Tiers::on = true;
-		LOG("[KT1] Tiers: period %d frames, margin %.0f elmos, cell %.0f", period, marginElmos, cellElmos);
+		LOG("[KT1] Tiers: period %d frames, margin %.0f elmos, cell %.0f, check every %d frames", period, marginElmos, cellElmos, checkEvery);
 	}
 
 	void GameFrame(int frame) override {
@@ -107,15 +109,27 @@ public:
 			for (int b = 0; b < nAlly && b < 64; ++b)
 				if (!teamHandler.Ally(a, b)) enemyMask[a] |= (1ull << b);
 
-		grid.Clear();
-		for (const CUnit* u : units)
-			if (!u->isDead) grid.Add(u->pos.x, u->pos.z, u->allyteam);
+		// check_every_frames N > 1 (KT1 hook: tiers-every): the grid is rebuilt every Nth frame and each unit's facts are read on its
+		// own frame of the N ((frame + id) % N == 0); between checks a unit keeps its verdict (for this unit object only) and is
+		// still woken on its visit frames and by LiveWake in Asleep(). The far test is at most N-1 frames old.
+		const bool every = (checkEvery > 1);
+		if (!every || frame % checkEvery == 0) {
+			grid.Clear();
+			for (const CUnit* u : units)
+				if (!u->isDead) grid.Add(u->pos.x, u->pos.z, u->allyteam);
+		}
 
 		const int next = frame;   // the rule runs before the unit update of the same frame
 		nAsleep = nIdleNear = 0;
 		nTotal = static_cast<int>(units.size());
 		for (const CUnit* u : units) {
 			const unsigned id = u->id;
+			if (every && ((frame + (int)id) % checkEvery) != 0) {
+				const bool sleep = (eligible[id] == u) && !TiersCore::Visit(next, id, period);
+				Tiers::asleep[id] = sleep;
+				nAsleep += sleep;
+				continue;
+			}
 			Snap& s = snaps[id];
 
 			TiersCore::Facts f;
@@ -131,6 +145,7 @@ public:
 				nIdleNear += !f.far;
 			}
 			const bool sleep = TiersCore::Decide(f, next, id, period);
+			eligible[id] = (f.idle && !f.changed && f.far) ? u : nullptr;
 			Tiers::asleep[id] = sleep;
 			nAsleep += sleep;
 		}
@@ -175,6 +190,8 @@ private:
 	TiersCore::Grid grid;
 	std::vector<uint64_t> enemyMask;
 	std::vector<Snap> snaps;
+	std::vector<const CUnit*> eligible;   // check_every_frames > 1: the unit judged idle, unchanged and far at its last check
+	int checkEvery = 1;
 };
 
 } // namespace
