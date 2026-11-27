@@ -246,6 +246,8 @@ private:
 	int scHandoverFrames = 0;    ///< frames left of the engine's own ground movement after such a block
 	float3 scBlockPos;           ///< where the last step was refused (SupComBlockMemory)
 	float3 scPushBack;           ///< the push back of the last blocked step (MOV-021 R1), applied alone on the next frame
+	float3 scSlideGoal;          ///< the goal the slide side below belongs to (pathing fix 15)
+	int scSlideSide = 0;         ///< side of the last slide round a standing unit for that goal: 1, -1, or 0 for none yet
 	float scPushLen = 0.0f;      ///< length of last frame's collision push, after the cap (MOV-021 R4 pushed state)
 	float3 scHandoverFrom;       ///< where that handover began
 	int scYieldFrames = 0;       ///< consecutive frames in contact with the same idle unit in front

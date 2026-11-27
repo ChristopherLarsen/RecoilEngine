@@ -84,6 +84,8 @@ CR_REG_METADATA(CSupComGroundMoveType, (
 	CR_MEMBER(scHandoverFrames),
 	CR_MEMBER(scPushLen),
 	CR_MEMBER(scPushBack),
+	CR_MEMBER(scSlideGoal),
+	CR_MEMBER(scSlideSide),
 	CR_MEMBER(scBlockPos),
 	CR_MEMBER(scHandoverFrom),
 	CR_MEMBER(scYieldFrames),
@@ -171,6 +173,7 @@ static bool PushBackStructOnlyOn() { static const bool on = SupComSimSwitch::Get
 // MOV-007 v2 R1, space occupied by a unit is blocked. A unit in contact with a standing unit (last collision pass) is refused a step
 // towards it; a step away from it or along it is taken (MOV-021 R2: it can leave). Switch SupComStandingBlocks, default 1
 static bool StandingKeepHalfOn() { static const bool on = SupComSimSwitch::Get("SupComStandingKeepHalf", true); return on; }
+static bool StandingSlideOnceOn() { static const bool on = SupComSimSwitch::Get("SupComStandingSlideOnce", true); return on; }
 static bool StandingBlocksOn() { static const bool on = SupComSimSwitch::Get("SupComStandingBlocks", true); return on; }
 static bool BlockMemoryOn() { static const bool on = SupComSimSwitch::Get("SupComBlockMemory", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
@@ -1654,6 +1657,21 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 					if (!blocked && StandingKeepHalfOn() && goalLen > 0.0f
 							&& (moveRequest.x * toGoal.x + moveRequest.z * toGoal.z) / goalLen < -0.1f * moveRequest.Length2D())
 						blocked = true;
+					// pathing fix 15 (L11764 PTH-006-E seed 3: the mover slid along the wall face to one side of the unit in the gap, the
+					// line-up brought it back across the path line and it slid out to the other side, about every 400 frames): the side of
+					// the slide round a standing unit is kept for the goal; a slide to the other side is refused. Switch
+					// SupComStandingSlideOnce, default 1 (PLACEHOLDER mechanism: no released value names it)
+					if (!blocked && StandingSlideOnceOn()) {
+						if (!scSlideGoal.same(goalPos)) { scSlideGoal = goalPos; scSlideSide = 0; }
+						const float side = moveRequest.z * n.x - moveRequest.x * n.z;
+						const int sideSign = (side > 0.1f * moveRequest.Length2D())? 1: ((side < -0.1f * moveRequest.Length2D())? -1: 0);
+						if (sideSign != 0) {
+							if (scSlideSide != 0 && sideSign != scSlideSide)
+								blocked = true;
+							else
+								scSlideSide = sideSign;
+						}
+					}
 				}
 			}
 
