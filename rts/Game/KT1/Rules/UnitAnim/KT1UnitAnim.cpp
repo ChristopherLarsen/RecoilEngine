@@ -3,8 +3,8 @@
 // pm/loco.lua Tick, pm/aim.lua Tick) for the units it can take, and the piece polls of pm/aim.lua AimWeapon (ANM-001, ANM-002,
 // CMB-002). The scripts stay: they register the unit, keep every call-in, and run the whole Lua path when the rule is off.
 //
-// Replaces:   the Loop thread of scripts/pm/anim.lua for "engine units" (ground treads, wheels, legs or fixed; body static, level,
-//             follow_terrain or bank; no work, link, unpack, charge or tilt); the poll of pm/aim.lua AimWeapon for those units
+// Replaces:   the Loop thread of scripts/pm/anim.lua for "engine units" (ground treads, wheels, legs or fixed, and rotor or jet aircraft;
+//             body static, level, follow_terrain or bank; no work, link, unpack, charge or tilt); the poll of pm/aim.lua AimWeapon for those units
 // Switch:     mod option kt1_unitanim (default off)
 // Config:     gamedata/kt1/unitanim.lua
 //               idle_ticks   still ticks before an idle unit backs off (DESIGN 2)
@@ -18,7 +18,7 @@
 // Timer:      KT1::UnitAnim
 // Lua:        Spring.KT1.UnitAnim.Add(unitID, spec) -> true | Remove(unitID) | Wake(unitID) | Aimed(unitID, w)
 //             Spring.KT1.UnitAnim.AimWait(unitID, w, heading, pitch) -> frames to sleep, 0 = ready
-//             Spring.KT1.UnitAnim.State(unitID) -> probes | Events() -> { unitID, x, y, z, ... } dust | Config()
+//             Spring.KT1.UnitAnim.State(unitID) -> probes | Events() -> { unitID, x, y, z, ... } dust (a negated unitID: rotor downwash) | Config()
 // Rule, each frame, over registered unit ids in ascending order: a unit whose wake frame is due ticks as the Lua Loop did (Sense, cycle,
 // body, aim rest, dust), then sleeps as the Lua did (the pm tick length, the idle back-off, the first tick staggered by id).
 // Determinism: ascending ids over a sorted list; float maths (the engine Lua number is float) in the Lua's expression order, cast to float at Turn/Move as the Lua
@@ -56,7 +56,10 @@ float LuaMod(float a, float b) { return a - math::floor(a / b) * b; }   // Lua's
 float Rad(float d) { return d * math::DEG_TO_RAD; }                         // math.rad
 float Deg(float r) { return r / math::DEG_TO_RAD; }                         // math.deg
 
-enum Loco { L_FIXED, L_TREADS, L_WHEELS, L_LEGS };
+enum Loco { L_FIXED, L_TREADS, L_WHEELS, L_LEGS, L_ROTOR, L_JET };
+// trail kinds (pm/loco.lua Trails): a bit each, in the order the descriptor lists them is irrelevant (a set)
+enum Trail { T_DUST = 1, T_TREADS = 2, T_FEET = 4, T_CONTRAIL = 8, T_EXHAUST = 16, T_GLOW = 32 };
+constexpr int N_TRAIL = 6;
 enum Body { B_STATIC, B_TERRAIN, B_BANK };
 
 struct Weapon {
@@ -71,6 +74,12 @@ struct Unit {
 	CUnit* owner = nullptr;
 	int loco = L_FIXED, body = B_STATIC;
 	bool spin = false, dust = false, quiet = false, canIdle = true;
+	bool air = false, pfwd = false, wings = false;   // air: the unit can fly (pm/anim.lua landedOnly idle; layer "air" above 3 elmos)
+	int trails = 0, trailOn = 0;                     // kinds the descriptor lists; kinds active at the last tick (probe trail.active)
+	std::vector<int> rotors, jets;
+	std::vector<float> rotSpun, jetSpun; std::vector<char> rotSet, jetSet;   // loco.lua SpinTo: the last target per piece
+	int wingL = -1, wingR = -1;
+	float vmax = 0, washAgl = 0;
 	int base = -1;
 	std::vector<int> wheels, legs, feet;
 	std::vector<float> wside, wang, legOff, legAng;
@@ -80,8 +89,10 @@ struct Unit {
 	int lastFrame = 0, wakeAt = 0, idleTicks = 0, wakeTick = 0;
 	bool first = true, sensed = false, sleeping = false, rollSentSet = false;
 	float px = 0, py = 0, pz = 0, hd = 0, vs = 0, speed = 0, turn = 0, gh = 0, dt = 0.1f, t = 0;
-	bool ghSet = false, land = true;
-	float phase = 0, cycle = 0, rate = 0, sl = 0, sr = 0, pitch = 0, roll = 0, rollSent = 0, pitchSent = 0, trailT = -1e9f;
+	bool ghSet = false, land = true, inAir = false;
+	float vsPrev = 0, acc = 0, agl = 0, liftSpin = 0;
+	float trailTk[N_TRAIL] = {-1e9f, -1e9f, -1e9f, -1e9f, -1e9f, -1e9f};
+	float phase = 0, cycle = 0, rate = 0, sl = 0, sr = 0, pitch = 0, roll = 0, rollSent = 0, pitchSent = 0;
 	bool tiltSet = false; float tiltX = 0, tiltZ = 0, tiltH = 0, tiltP = 0, tiltR = 0;
 };
 
@@ -148,7 +159,9 @@ private:
 		// sleep (anim.lua Loop tail)
 		float ms = U.quiet ? 1000.0f : (float)tickMs;
 		if (U.canIdle && ms > 100) {
-			if (math::fabs(U.vs) <= 0.3f && math::fabs(U.turn) <= 0.05f && AimIdle(U) && !u->beingBuilt) ++U.idleTicks; else U.idleTicks = 0;
+			if (math::fabs(U.vs) <= 0.3f && math::fabs(U.turn) <= 0.05f && AimIdle(U) && !u->beingBuilt
+				&& (!U.air || (U.land && U.agl <= 1 && U.liftSpin < 0.02f && math::fabs(U.pitch) < 0.05f && math::fabs(U.roll) < 0.05f)))   // an aircraft idles landed, spun down
+				++U.idleTicks; else U.idleTicks = 0;
 			if (U.idleTicks >= idleTicksN) {
 				ms = std::min(8000.0f, std::max(2000.0f, 2.0f * unitCount));
 				U.sleeping = true;
@@ -172,12 +185,17 @@ private:
 		const float dx = x - U.px, dz = z - U.pz;
 		const float dist = math::sqrt(dx * dx + dz * dz);
 		const float along = dx * math::sin(hd) + dz * math::cos(hd);
+		const float vsPrev = U.vs;
+		U.vsPrev = vsPrev;
 		U.vs = (along >= 0 ? dist : -dist) / dt;
 		U.speed = dist / dt;
 		U.turn = Wrap(hd - U.hd) / dt;
+		U.acc = (U.vs - vsPrev) / dt;
 		U.px = x; U.py = y; U.pz = z; U.hd = hd;
 		if (!U.ghSet || dx != 0 || dz != 0) { U.gh = (float)CGround::GetHeightReal((float)x, (float)z, true); U.ghSet = true; }
-		U.land = U.gh >= 0;
+		U.agl = y - U.gh;
+		U.inAir = U.air && U.agl > 3;                // anim.lua Sense: canFly and agl > 3 is "air", else gh >= 0 is "land"
+		U.land = !U.inAir && U.gh >= 0;
 	}
 
 	void GroundTilt(Unit& U, float& p, float& r) {
@@ -193,6 +211,14 @@ private:
 			p = Deg(math::atan(up)); r = Deg(math::atan(-right));
 		}
 		U.tiltSet = true; U.tiltX = U.px; U.tiltZ = U.pz; U.tiltH = U.hd; U.tiltP = p; U.tiltR = r;
+	}
+
+	// loco.lua SpinTo: a Spin only when the target moved by SPIN_EPS (0.5 rad/s), or to stop
+	static void SpinTo(CUnitScript* S, int p, int axis, float speed, float acc, float& last, char& set) {
+		if (p < 0) return;
+		if (set && math::fabs(last - speed) < 0.5f && (speed != 0 || last == 0)) return;
+		if (speed == 0) S->StopSpin(p, axis, acc); else S->Spin(p, axis, speed, acc);
+		last = speed; set = 1;
 	}
 
 	// pm/loco.lua Tick, the parts an engine unit has (Turn(p, axis, dest, speed) in Lua is S->Turn(p, axis, speed, dest))
@@ -245,6 +271,10 @@ private:
 			tr = (U.turn > 0 ? -1 : 1) * U.cap * share;
 			if (math::fabs(U.turn) < 0.01f) tr = 0;
 		}
+		if (U.pfwd && U.loco == L_ROTOR) {                // nose down while speeding up
+			const float pit = (U.acc > 0.5f) ? -std::min(U.cap > 0 ? U.cap : 10.0f, U.acc * 1.2f) : 0.0f;
+			tp = tp + pit;
+		}
 		const float k = std::min(1.0f, dt / 0.25f);
 		U.pitch = U.pitch + (tp - U.pitch) * k;
 		U.roll = U.roll + (tr - U.roll) * k;
@@ -255,17 +285,47 @@ private:
 				S->Turn(U.base, 0, 6.0f, (float)(-Rad(U.pitch)));
 			}
 		}
-		// dust (loco.lua Trails, land only)
-		if (U.dust && U.land) {
-			if (moving) U.trailT = U.t;
-			const bool on = U.t - U.trailT < 1.0f;
-			if (moving) {
-				++U.wakeTick;
-				if (on && U.wakeTick % wakeEvery == 0 && events.size() + 4 <= MAX_EVENTS) {
+		// rotor and jet aircraft (loco.lua R6; tilt-rotor units stay with the Lua)
+		if (U.loco == L_ROTOR || U.loco == L_JET) {
+			const bool up = U.inAir || U.agl > 1;
+			const float target = up ? 1.0f : 0.0f;
+			U.liftSpin = U.liftSpin + (target - U.liftSpin) * std::min(1.0f, dt / (up ? 0.4f : 1.5f));
+			for (size_t i = 0; i < U.rotors.size(); ++i)
+				SpinTo(S, U.rotors[i], 1, U.liftSpin > 0.02f ? 38 * U.liftSpin : 0.0f, U.liftSpin > 0.02f ? 8.0f : 6.0f, U.rotSpun[i], U.rotSet[i]);
+			for (size_t i = 0; i < U.jets.size(); ++i)
+				SpinTo(S, U.jets[i], 2, moving ? 60.0f : 8.0f, 20.0f, U.jetSpun[i], U.jetSet[i]);
+			if (U.wings && up) {
+				const float a = Rad(28) * math::sin(U.t * (moving ? 9 : 6));
+				S->Turn(U.wingL, 2, 8.0f, (float)a);
+				S->Turn(U.wingR, 2, 8.0f, (float)(-a));
+			}
+		}
+		// trails (loco.lua Trails): the active kinds, then dust and rotor downwash every wake_every moving ticks
+		int on = 0;
+		for (int b = 0; b < N_TRAIL; ++b) {
+			const int kind = 1 << b;
+			if (!(U.trails & kind)) continue;
+			bool ok = false;
+			if (kind == T_DUST || kind == T_TREADS || kind == T_FEET) ok = U.land;
+			else if (kind == T_CONTRAIL) ok = U.inAir && U.speed > 0.5f * std::max(U.vmax, 10.0f);
+			else ok = U.inAir;   // exhaust, thruster_glow
+			if (ok) {
+				if (moving) U.trailTk[b] = U.t;
+				if (U.t - U.trailTk[b] < 1.0f) on |= kind;
+			}
+		}
+		U.trailOn = on;
+		if (moving) {
+			++U.wakeTick;
+			if (U.wakeTick % wakeEvery == 0) {
+				if ((on & T_DUST) && events.size() + 4 <= MAX_EVENTS) {
 					events.push_back(U.owner->id); events.push_back(U.px); events.push_back(U.gh); events.push_back(U.pz);
 				}
+				if (U.loco == L_ROTOR && U.inAir && U.agl < U.washAgl && events.size() + 4 <= MAX_EVENTS) {   // downwash: the id negated
+					events.push_back(-U.owner->id); events.push_back(U.px); events.push_back(U.gh); events.push_back(U.pz);
+				}
 			}
-		} else if (moving) ++U.wakeTick;
+		}
 	}
 
 	// pm/aim.lua Tick: the rest pose (R9)
@@ -352,12 +412,20 @@ private:
 		Unit& U = r->units[id];
 		U = Unit();
 		U.owner = u;
-		static const char* LOCO[] = {"fixed", "treads", "wheels", "legs"};
+		static const char* LOCO[] = {"fixed", "treads", "wheels", "legs", "rotor", "jet"};
 		static const char* BODY[] = {"static", "follow_terrain", "bank"};
-		U.loco = Str(L, 2, "loco", LOCO, 4, L_FIXED);
+		U.loco = Str(L, 2, "loco", LOCO, 6, L_FIXED);
 		U.body = Str(L, 2, "body", BODY, 3, B_STATIC);
 		U.spin = Flag(L, 2, "spin"); U.dust = Flag(L, 2, "dust"); U.quiet = Flag(L, 2, "quiet");
-		U.canIdle = U.body != B_BANK;
+		U.air = Flag(L, 2, "air"); U.pfwd = Flag(L, 2, "pfwd"); U.wings = Flag(L, 2, "wings");
+		U.canIdle = U.air || U.body != B_BANK;       // anim.lua: a banking body idles only on an aircraft
+		U.trails = (int)Num(L, 2, "trail", 0);
+		if (U.dust) U.trails |= T_DUST;             // an older script sends only the dust flag
+		U.vmax = Num(L, 2, "vmax", 0); U.washAgl = Num(L, 2, "wash_agl", 0);
+		U.wingL = (int)Num(L, 2, "wing_l", 0) - 1; U.wingR = (int)Num(L, 2, "wing_r", 0) - 1;
+		Pieces(L, 2, "rotors", U.rotors); Pieces(L, 2, "jets", U.jets);
+		U.rotSpun.assign(U.rotors.size(), 0); U.rotSet.assign(U.rotors.size(), 0);
+		U.jetSpun.assign(U.jets.size(), 0); U.jetSet.assign(U.jets.size(), 0);
 		U.base = (int)Num(L, 2, "base", 0) - 1;
 		Pieces(L, 2, "wheels", U.wheels); Pieces(L, 2, "legs", U.legs); Pieces(L, 2, "feet", U.feet);
 		List(L, 2, "wside", U.wside, 0); List(L, 2, "leg_off", U.legOff, 0);
@@ -477,6 +545,8 @@ private:
 		lua_pushnumber(L, U->turn);  lua_setfield(L, -2, "turn");
 		lua_pushboolean(L, U->sleeping); lua_setfield(L, -2, "idle");
 		lua_pushnumber(L, U->idleTicks); lua_setfield(L, -2, "idle_ticks");
+		lua_pushnumber(L, U->trailOn);   lua_setfield(L, -2, "trail");
+		lua_pushnumber(L, U->liftSpin);  lua_setfield(L, -2, "lift_spin");
 		return 1;
 	}
 	static int LEvents(lua_State* L) {
@@ -499,6 +569,7 @@ private:
 		lua_pushnumber(L, r->spinRate);   lua_setfield(L, -2, "spin_rate");
 		lua_pushnumber(L, r->fullUnits);  lua_setfield(L, -2, "full_units");
 		lua_pushnumber(L, r->maxMs);      lua_setfield(L, -2, "max_ms");
+		lua_pushboolean(L, 1);            lua_setfield(L, -2, "air");   // rotor and jet units (2026-11-27)
 		return 1;
 	}
 
@@ -509,7 +580,7 @@ private:
 	int tickMs = 100, unitCount = 0;
 	std::vector<Unit> units;      // per unit id
 	std::vector<int> ids;         // registered ids, ascending
-	std::vector<float> events;   // dust: unitID, x, ground height, z
+	std::vector<float> events;   // unitID (negated: rotor downwash, else dust), x, ground height, z
 };
 
 } // namespace
