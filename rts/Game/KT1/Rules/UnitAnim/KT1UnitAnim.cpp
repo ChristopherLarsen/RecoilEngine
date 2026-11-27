@@ -288,6 +288,7 @@ private:
 	void WakeUnit(Unit& U) {
 		if (!U.sleeping) return;
 		U.sleeping = false; U.idleTicks = 0;
+		U.first = true;   // the new Lua Loop thread starts with first = true: its first sleep is staggered by id again
 		CUnit* u = U.owner;
 		if (u != nullptr && u->script != nullptr) Tick(U, u, gs->frameNum);
 		else U.wakeAt = gs->frameNum;
