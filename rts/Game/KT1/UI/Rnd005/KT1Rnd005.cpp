@@ -193,6 +193,7 @@ public:
 		LuaPushRawNamedCFunc(L, "GetCutoff", LGetCutoff);
 		LuaPushRawNamedCFunc(L, "CameraMeasure", LCameraMeasure);
 		LuaPushRawNamedCFunc(L, "SetPlainShadow", LSetPlainShadow);
+		LuaPushNamedBool(L, "UnitMaskBeforeMaterial", true);   // the unit draw mask is tested before the Lua material bins
 		LuaPushRawNamedCFunc(L, "GetPlainShadow", LGetPlainShadow);
 	}
 };

@@ -213,10 +213,10 @@ bool CUnitDrawer::ShouldDrawOpaqueUnit(CUnit* u, uint8_t thisPassMask)
 	if (thisPassMask == DrawFlags::SO_OPAQUE_FLAG && !u->HasDrawFlag(DrawFlags::SO_OPAQUE_FLAG))
 		return false;
 
-	if (LuaObjectDrawer::AddOpaqueMaterialObject(u, LUAOBJ_UNIT))
+	if ((u->engineDrawMask & thisPassMask) != thisPassMask) // supcom: masked units stop before the Lua material bins (as features)
 		return false;
 
-	if ((u->engineDrawMask & thisPassMask) != thisPassMask)
+	if (LuaObjectDrawer::AddOpaqueMaterialObject(u, LUAOBJ_UNIT))
 		return false;
 
 	return true;
@@ -246,10 +246,10 @@ bool CUnitDrawer::ShouldDrawAlphaUnit(CUnit* u, uint8_t thisPassMask)
 	if (thisPassMask == DrawFlags::SO_ALPHAF_FLAG && !u->HasDrawFlag(DrawFlags::SO_ALPHAF_FLAG))
 		return false;
 
-	if (LuaObjectDrawer::AddAlphaMaterialObject(u, LUAOBJ_UNIT))
+	if ((u->engineDrawMask & thisPassMask) != thisPassMask) // supcom: masked units stop before the Lua material bins (as features)
 		return false;
 
-	if ((u->engineDrawMask & thisPassMask) != thisPassMask)
+	if (LuaObjectDrawer::AddAlphaMaterialObject(u, LUAOBJ_UNIT))
 		return false;
 
 	return true;
@@ -270,10 +270,10 @@ bool CUnitDrawer::ShouldDrawUnitShadow(CUnit* u)
 	if (KT1PlainShadow::Is(u->unitDef->id))
 		return ((u->engineDrawMask & thisPassMask) == thisPassMask);
 
-	if (LuaObjectDrawer::AddShadowMaterialObject(u, LUAOBJ_UNIT))
+	if ((u->engineDrawMask & thisPassMask) != thisPassMask) // supcom: masked units stop before the Lua material bins (as features)
 		return false;
 
-	if ((u->engineDrawMask & thisPassMask) != thisPassMask)
+	if (LuaObjectDrawer::AddShadowMaterialObject(u, LUAOBJ_UNIT))
 		return false;
 
 	return true;
