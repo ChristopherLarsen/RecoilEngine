@@ -13,6 +13,8 @@
 #include "PathLog.h"
 #include "PathMemPool.h"
 #include "PathSearch.h"
+#include "SupComPathBatch.h"
+#include <optional>
 #include "Registry.h"
 #include "Map/MapInfo.h"
 #include "Sim/Misc/ModInfo.h"
@@ -510,10 +512,21 @@ CPathManager::MultiPath CPathManager::IssuePathRequest(
 		return newPath;
 	}
 
+	// supcom (PERF-REVIEW-F P1a): the two parts of a request timed on the main thread (engine timers, "debug 1")
+	static TimerNameRegistrar tnrArrange("Sim::PathRequests::Arrange");
+	static TimerNameRegistrar tnrRefine("Sim::PathRequests::Refine");
+	const bool mainThread = (ThreadPool::GetThreadNum() == 0);
+	std::optional<ScopedTimer> arrangeTimer;
+	if (mainThread)
+		arrangeTimer.emplace(hashString("Sim::PathRequests::Arrange"));
 	const IPath::SearchResult result = ArrangePath(&newPath, moveDef, startPos, goalPos, caller);
+	arrangeTimer.reset();
 	if (result != IPath::Error) {
 		if (newPath.maxResPath.path.empty()) {
 			if (result != IPath::CantGetCloser) {
+				std::optional<ScopedTimer> refineTimer;
+				if (mainThread)
+					refineTimer.emplace(hashString("Sim::PathRequests::Refine"));
 				LowRes2MaxRes(newPath, startPos, caller, synced);
 			} else {
 				// add one dummy waypoint so that the calling MoveType
@@ -857,7 +870,18 @@ void CPathManager::Update()
 			// 		, entt::to_integral(entities[idx]), pathSearch.pathId, newPath.searchResult
 			// 		, (int)newPath.maxResPath.path.size());
 		};
-		SupComThreading::ForPathRequests(pathSearchView.size(), pathSearchFn); // supcom: SupComThreading.h, PathRequestsSerial
+		{
+			// supcom (SupComPathBatch.h): a serial batch shares its coarse searches
+			std::optional<SupComPathBatch::Scope> batchScope;
+			if (SupComThreading::PathRequestsSerial() && pathSearchView.size() > 1)
+				batchScope.emplace();
+			SupComThreading::ForPathRequests(pathSearchView.size(), pathSearchFn); // supcom: SupComThreading.h, PathRequestsSerial
+			if (batchScope && batchScope->active && pathSearchView.size() >= 64) {
+				unsigned int h, m, r;
+				SupComPathBatch::Counts(h, m, r);
+				LOG("[PathBatch] frame %d: %d requests, coarse searches shared %u, searched %u", gs->frameNum, int(pathSearchView.size()), h, m);
+			}
+		}
 
 		// Clear out the search entities.
 		for ( entt::entity entity : pathSearchView ) { registry.destroy(entity); }

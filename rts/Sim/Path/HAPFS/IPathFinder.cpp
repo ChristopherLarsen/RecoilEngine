@@ -8,6 +8,7 @@
 #include "System/Log/ILog.h"
 #include "System/TimeProfiler.h"
 #include "System/Threading/SupComThreading.h"
+#include "SupComPathBatch.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -155,6 +156,15 @@ IPath::SearchResult IPathFinder::GetPath(
 		return ci.result;
 	}
 
+	// supcom (SupComPathBatch.h, PathBatchCache): an earlier request of this frame's serial batch with the same key
+	const bool batch = (BLOCK_SIZE != 1) && SupComPathBatch::Active();
+	if (batch) {
+		if (const CPathCache::CacheItem* bi = SupComPathBatch::Find(BLOCK_SIZE, mStartBlock, goalBlock, pfDef.sqGoalRadius, moveDef.pathType, pfDef.synced)) {
+			path = bi->path;
+			return bi->result;
+		}
+	}
+
 	// start up a new search
 	const IPath::SearchResult result = InitSearch(moveDef, pfDef, owner);
 
@@ -167,6 +177,8 @@ IPath::SearchResult IPathFinder::GetPath(
 		// supcom hook (SupComThreading.h, PathCacheMainThreadOnly): only the main thread adds to the shared cache
 		if ((!SupComThreading::PathCacheMainThreadOnly() || ThreadPool::GetThreadNum() == 0) && !ThreadPool::IsInMultiThreadedSection())
 			AddCache(&path, result, mStartBlock, goalBlock, pfDef.sqGoalRadius, moveDef.pathType, pfDef.synced);
+		if (batch)
+			SupComPathBatch::Add(BLOCK_SIZE, path, result, mStartBlock, goalBlock, pfDef.sqGoalRadius, moveDef.pathType, pfDef.synced);
 		// else{
 		// 	if (debugLoggingActive == ThreadPool::GetThreadNum()){
 		// 	if (ci.path.path.size() != path.path.size())
