@@ -13,8 +13,12 @@
 #include "Sim/Units/UnitHandler.h"
 #include "Map/ReadMap.h"
 #include "System/SpringMath.h"
+#include "System/SupComSimSwitch.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstdlib>
+#include <functional>
 #include <vector>
 
 
@@ -221,6 +225,13 @@ static void CreatePathMetatable(lua_State* L)
  * A flood fill of the squares the unit's move class can stand on (terrain speed above zero, no structure under its
  * footprint), from the unit's square, stopping at the goal's square or after maxSquares squares. Moving units do not
  * block. For PTH-003 R1: an order to an unreachable goal ends at the reachable point nearest the goal.
+ * supcom (PERF-REVIEW-F fix 4, 2026-11-26): the fill is best-first, the square nearest the goal (squared distance, then
+ * the lower square index) expanded next, so a goal across open ground is reached after about as many squares as it is
+ * far, not after the whole disc round the unit (a breadth-first fill of 65536 squares reaches 129.5 squares out: every
+ * farther goal was "undecided", at about 4 ms a call). The same squares are reachable (same steps, same corner rule), so
+ * "false" (the whole region filled) is unchanged; its nearest point is the nearest square, ties to the one nearest the unit. A
+ * capped fill ("nil") stops at other squares than before. Mod option "reachfillbestfirst" (SupComSimSwitch), default on;
+ * "0": the breadth-first fill as before.
  *
  * @function Spring.GetUnitReachablePoint
  * @param unitID integer
@@ -240,6 +251,7 @@ struct ReachableFillBuffers {
 	std::vector<std::uint32_t> memoGen;
 	std::vector<std::uint8_t> memoVal;
 	std::vector<int> queue;
+	std::vector<std::pair<std::int64_t, int>> heap;   // best-first: (squared distance to the goal, square index), a min-heap
 	std::uint32_t gen = 0;
 
 	std::uint32_t Next(size_t size) {
@@ -250,6 +262,7 @@ struct ReachableFillBuffers {
 			gen = 1;
 		}
 		queue.clear();
+		heap.clear();
 		return gen;
 	}
 };
@@ -325,6 +338,105 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 		}
 		return (fb.memoVal[i] != 0);
 	};
+
+	if (SupComSimSwitch::Get("ReachFillBestFirst", true)) {
+		using Item = std::pair<std::int64_t, int>;
+		const auto distSq = [&](int x, int z) { return std::int64_t(x - gsx) * (x - gsx) + std::int64_t(z - gsz) * (z - gsz); };
+		std::vector<Item>& heap = fb.heap;
+		const int start = ssz * W + ssx;
+
+		heap.push_back({distSq(ssx, ssz), start});
+		fb.seenGen[start] = gen;
+
+		// ties (squares as near the goal): the one nearest the unit, as the breadth-first fill found it first (its rings
+		// grow from the unit: steps, then the straight distance, then the lower index). PTH-003-B: round a square lake
+		// the lower index alone took the far shore, and the unit drove round to it (5.51 cells off, order 3 s late)
+		const auto stepsFromStart = [&](int x, int z) { return std::max(std::abs(x - ssx), std::abs(z - ssz)); };
+		const auto sqFromStart = [&](int x, int z) { return std::int64_t(x - ssx) * (x - ssx) + std::int64_t(z - ssz) * (z - ssz); };
+		int best = start;
+		std::int64_t bestSq = distSq(ssx, ssz);
+		int bestSteps = 0;
+		std::int64_t bestStartSq = 0;
+		bool reached = (ssx == gsx && ssz == gsz);
+		bool limited = false;
+		int pushed = 1;
+		int expanded = 0;
+
+		while (!heap.empty() && !reached) {
+			if (expanded >= maxSquares) {
+				limited = true;
+				break;
+			}
+
+			std::pop_heap(heap.begin(), heap.end(), std::greater<Item>());
+			const int ci = heap.back().second;
+			heap.pop_back();
+			expanded++;
+
+			const int cx = ci % W;
+			const int cz = ci / W;
+
+			for (int dz = -1; dz <= 1 && !reached; dz++) {
+				for (int dx = -1; dx <= 1; dx++) {
+					if (dx == 0 && dz == 0)
+						continue;
+
+					const int nx = cx + dx;
+					const int nz = cz + dz;
+
+					if (nx < 0 || nz < 0 || nx >= W || nz >= H)
+						continue;
+
+					const int ni = nz * W + nx;
+
+					if (fb.seenGen[ni] == gen)
+						continue;
+					// the breadth-first fill's corner rule (below): a refused diagonal leaves the square unseen
+					if (dx != 0 && dz != 0 && (!standable(cx + dx, cz) || !standable(cx, cz + dz)))
+						continue;
+
+					fb.seenGen[ni] = gen;
+
+					if (!standable(nx, nz))
+						continue;
+
+					const std::int64_t dSq = distSq(nx, nz);
+
+					heap.push_back({dSq, ni});
+					std::push_heap(heap.begin(), heap.end(), std::greater<Item>());
+					pushed++;
+
+					if (dSq <= bestSq) {
+						const int st = stepsFromStart(nx, nz);
+						const std::int64_t ss = sqFromStart(nx, nz);
+
+						if (dSq < bestSq || st < bestSteps || (st == bestSteps && (ss < bestStartSq || (ss == bestStartSq && ni < best)))) {
+							bestSq = dSq;
+							best = ni;
+							bestSteps = st;
+							bestStartSq = ss;
+						}
+					}
+					if (nx == gsx && nz == gsz) {
+						reached = true;
+						break;
+					}
+				}
+			}
+		}
+
+		if (reached)
+			lua_pushboolean(L, true);
+		else if (limited)
+			lua_pushnil(L);
+		else
+			lua_pushboolean(L, false);
+
+		lua_pushnumber(L, ((best % W) - (fx >> 1) + fx * 0.5f) * SQUARE_SIZE);
+		lua_pushnumber(L, ((best / W) - (fz >> 1) + fz * 0.5f) * SQUARE_SIZE);
+		lua_pushnumber(L, pushed);
+		return 4;
+	}
 
 	std::vector<int>& queue = fb.queue;
 	queue.push_back(ssz * W + ssx);
