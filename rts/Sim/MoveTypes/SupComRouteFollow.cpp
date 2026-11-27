@@ -93,6 +93,21 @@ namespace {
 static bool RouteDetourOn() { static const bool on = SupComSimSwitch::Get("SupComRouteDetour", true); return on; }
 static constexpr int DETOUR_HALF = 24;
 
+// route points are cell centres (PTH-007 implementation freedom, route representation; the reference route is a list of cells and a
+// unit aims at a cell's centre): the engine path finder gives a square by its corner, half a square off the line of a unit standing
+// on a square centre, so the first aim (R2: the next route point, no straight-line condition) turned the unit off its line and back
+// (L11857 MOV-003-A: braking from 18 map units, speed rising again after it). Switch SupComRouteCellCentres, default 1.
+static bool RouteCellCentresOn() { static const bool on = SupComSimSwitch::Get("SupComRouteCellCentres", true); return on; }
+static void RouteCellCentres(std::vector<float3>& pts)
+{
+	if (!RouteCellCentresOn())
+		return;
+	for (float3& p: pts) {
+		p.x = (math::floor(p.x / SQUARE_SIZE) + 0.5f) * SQUARE_SIZE;
+		p.z = (math::floor(p.z / SQUARE_SIZE) + 0.5f) * SQUARE_SIZE;
+	}
+}
+
 bool CSupComGroundMoveType::RouteFollowOn()
 {
 	static const bool on = SupComSimSwitch::Get("SupComRouteFollow", true);
@@ -271,6 +286,7 @@ void CSupComGroundMoveType::RouteLoad(unsigned int id)
 {
 	std::vector<int> starts;
 	pathManager->GetPathWayPoints(id, rfPts, starts);
+	RouteCellCentres(rfPts);
 	rfPathID = id;
 	rfNext = 0;
 	rfAimIdx = -1;
@@ -320,6 +336,7 @@ unsigned int CSupComGroundMoveType::RouteSearch(std::vector<float3>& pts, bool f
 
 	std::vector<int> starts;
 	pathManager->GetPathWayPoints(id, pts, starts);
+	RouteCellCentres(pts);
 
 	// a route none of whose points takes the unit anywhere is no route
 	bool anywhere = false;
@@ -490,6 +507,7 @@ bool CSupComGroundMoveType::RouteChooseAim(bool stuck)
 		std::vector<float3> pts;
 		std::vector<int> starts;
 		pathManager->GetPathWayPoints(pathID, pts, starts);
+		RouteCellCentres(pts);
 		if (!pts.empty() && !(rfScriptPos > 0)) {
 			int best = 0;
 			float bd = std::numeric_limits<float>::max();
