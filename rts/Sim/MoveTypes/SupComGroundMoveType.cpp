@@ -161,6 +161,15 @@ static bool PushFromMoversOn() { static const bool on = SupComSimSwitch::Get("Su
 // stays put, so a mover at a held gap comes to rest instead of rocking back and forth (switch SupComPushBackOnce, default 1)
 static bool TerrainNoPushBackOn() { static const bool on = SupComSimSwitch::Get("SupComTerrainNoPushBack", true); return on; }
 static bool PushBackOnceOn() { static const bool on = SupComSimSwitch::Get("SupComPushBackOnce", true); return on; }
+// pathing fix 7 (L11551: MOV-007-D still -0.42 on the next step, PTH-004-F/PTH-006-E movers at a held gap never still): a step refused
+// by a unit gets no MOV-021 R1 push back either: MOV-007 v2 case D (a parked unit in the way, removed after the first blocked step)
+// restarts at v_restart on the next step, and contact between units is MOV-021 R3 separation (R1: no push back for a unit already
+// being pushed). The R1 push back is for a structure (MOV-021-A). Switch SupComPushBackStructOnly, default 1
+static bool PushBackStructOnlyOn() { static const bool on = SupComSimSwitch::Get("SupComPushBackStructOnly", true); return on; }
+// pathing fix 7 (L11551 PTH-002-D: a mover went through the footprint of a standing enemy in a one-cell gap and reached the goal):
+// MOV-007 v2 R1, space occupied by a unit is blocked. A unit in contact with a standing unit (last collision pass) is refused a step
+// towards it; a step away from it or along it is taken (MOV-021 R2: it can leave). Switch SupComStandingBlocks, default 1
+static bool StandingBlocksOn() { static const bool on = SupComSimSwitch::Get("SupComStandingBlocks", true); return on; }
 static bool BlockMemoryOn() { static const bool on = SupComSimSwitch::Get("SupComBlockMemory", true); return on; }
 CONFIG(bool, SupComCornerLog).defaultValue(false).description("supcom: log the corner speed check once a second per unit (diagnosis)");
 static bool CornerLog() { static const bool on = configHandler->GetBool("SupComCornerLog"); return on; }
@@ -1610,6 +1619,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				}
 			}
 
+			if (!blocked && StandingBlocksOn() && supcomStandingContact.SqLength2D() > 0.0f && moveRequest.dot(supcomStandingContact) < 0.0f)
+				blocked = true;
+
 			if (!blocked) {
 				float3 resultantMove;
 				UpdatePos(owner, moveRequest, resultantMove, ThreadPool::GetThreadNum());
@@ -1652,7 +1664,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			// changes position by less than one step at top speed and never into blocked squares
 			const bool byTerrainStep = FootprintBlocked(owner->pos + moveRequest);
 			const bool pressedSamePlace = (BlockMemoryOn() && scBlockedFrames > 0 && owner->pos.SqDistance2D(scBlockPos) < Square(SQUARE_SIZE));
-			if (SupComPushCap::On() && !stop && scPushLen <= 0.0f && !(TerrainNoPushBackOn() && byTerrainStep) && !(PushBackOnceOn() && pressedSamePlace)) {
+			if (SupComPushCap::On() && !stop && scPushLen <= 0.0f && !(TerrainNoPushBackOn() && byTerrainStep) && !(PushBackOnceOn() && pressedSamePlace) && !(PushBackStructOnlyOn() && !byStructure)) {
 				const float len = std::sqrt(moveRequest.x * moveRequest.x + moveRequest.z * moveRequest.z);
 				if (len > 0.0f) {
 					const float3 back = float3(-moveRequest.x / len, 0.0f, -moveRequest.z / len) * (SupComPushCap::PushBackFrac() * maxSpeed);

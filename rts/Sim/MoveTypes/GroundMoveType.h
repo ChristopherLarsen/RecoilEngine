@@ -284,6 +284,7 @@ private:
 
 	float3 forceFromMovingCollidees;
 	float3 forceFromStaticCollidees;
+	float3 supcomStandingContact; // supcom: sum of directions away from standing units in contact, last collision pass (MOV-007 R1, SupComGroundMoveType)
 	float3 supcomPushFromMovers; // supcom: the part of forceFromMovingCollidees from collidees that are moving (MOV-021 R4, per frame)
 	float3 resultantForces;
 

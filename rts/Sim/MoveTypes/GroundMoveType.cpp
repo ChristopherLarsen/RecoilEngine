@@ -2582,6 +2582,7 @@ void CGroundMoveType::HandleObjectCollisions()
 	forceFromMovingCollidees = ZeroVector;
 	forceFromStaticCollidees = ZeroVector;
 	supcomPushFromMovers = ZeroVector;
+	supcomStandingContact = ZeroVector;
 
 	// NOTE:
 	//   use the collider's MoveDef footprint as radius since it is
@@ -2981,6 +2982,9 @@ void CGroundMoveType::HandleUnitCollisions(
 		pushCollidee = pushCollidee && !collidee->moveType->HoldsAgainstPush();   // supcom: SupComGoRound (an idle unit is never displaced)
 
 		const bool isStatic = (!collideeMobile && !collideeUD->IsAirUnit()) || (!pushCollider && !pushCollidee);
+		if (isCollision && collideeMobile && !collidee->IsMoving() && collidee->moveType->progressState != AMoveType::Active)
+			supcomStandingContact += (collider->pos - collidee->pos).SafeNormalize2D(); // supcom: MOV-007 R1 (SupComGroundMoveType)
+
 		if (isCollision && isStatic) {
 			// building (always axis-aligned, possibly has a yardmap)
 			// or semi-static collidee that should be handled as such
