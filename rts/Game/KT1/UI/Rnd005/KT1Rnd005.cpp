@@ -13,6 +13,7 @@
 //                           starts fading at f x its cut-off and is not drawn at the cut-off (GroundDecalsVertProg.glsl, uniform cutFade).
 //                           SetCutoff(decalID, v): that decal's own cut-off. GetDrawnAlpha(decalID, measure): the alpha the shader
 //                           draws it with at that camera measure (its alpha x the cut-off fade), computed on the CPU with the shader's formula.
+//                           SetHidden(b) / GetHidden(): the zoom gate (owner 2026-11-27); while hidden the ground decal pass is skipped.
 //
 // Determinism: draw only; no sim state is read or written. Writes come from unsynced Lua only.
 
@@ -129,6 +130,19 @@ int LDecalSetCutoff(lua_State* L)
 	return 1;
 }
 
+int LSetHidden(lua_State* L)
+{
+	if (CLuaHandle::GetHandleSynced(L)) return 0;
+	SupComDecalCut::hidden = luaL_checkboolean(L, 1);
+	return 0;
+}
+
+int LGetHidden(lua_State* L)
+{
+	lua_pushboolean(L, SupComDecalCut::hidden);
+	return 1;
+}
+
 int LGetDrawnAlpha(lua_State* L)
 {
 	const IGroundDecalDrawer* gdd = groundDecals;
@@ -165,12 +179,14 @@ public:
 class DecalsRule : public Rule {
 public:
 	DecalsRule() : Rule({"Decals", 1, false, "(RND-005 R13 decal fade)", true}) {}
-	void Start() override { SupComDecalCut::fade = SupComDecalCut::DEFAULT_FADE; }   // set at game start
+	void Start() override { SupComDecalCut::fade = SupComDecalCut::DEFAULT_FADE; SupComDecalCut::hidden = false; }   // set at game start
 	void PushLua(lua_State* L) override {
 		LuaPushRawNamedCFunc(L, "SetFade", LSetFade);
 		LuaPushRawNamedCFunc(L, "GetFade", LGetFade);
 		LuaPushRawNamedCFunc(L, "SetCutoff", LDecalSetCutoff);
 		LuaPushRawNamedCFunc(L, "GetDrawnAlpha", LGetDrawnAlpha);
+		LuaPushRawNamedCFunc(L, "SetHidden", LSetHidden);
+		LuaPushRawNamedCFunc(L, "GetHidden", LGetHidden);
 	}
 };
 
