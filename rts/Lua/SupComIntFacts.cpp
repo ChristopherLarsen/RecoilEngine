@@ -309,7 +309,7 @@ namespace {
 	}
 
 	int Run(lua_State* L) {
-		ScopedTimer tR(hashString("SupComIntFacts::Run"));                       // perf split (perf-facts-timers)
+		static TimerNameRegistrar nR("SupComIntFacts::Run"); ScopedTimer tR(hashString("SupComIntFacts::Run"));                       // perf split (perf-facts-timers)
 		if (!Synced(L)) return 0;
 		luaL_checktype(L, 1, LUA_TTABLE);
 		luaL_checktype(L, 2, LUA_TTABLE);
@@ -388,7 +388,7 @@ namespace {
 				x = opx; z = opz; y = opy; hasX = true;
 				if (!hasPy) return luaL_error(L, "SupComIntFactsRun: py missing for a skipped unit");
 			} else if (unit != nullptr) {
-				ScopedTimer tU(hashString("SupComIntFacts::unit"));               // perf split (perf-facts-timers)
+				static TimerNameRegistrar nU("SupComIntFacts::unit"); ScopedTimer tU(hashString("SupComIntFacts::unit"));               // perf split (perf-facts-timers)
 				x = unit->pos.x; y = unit->pos.y; z = unit->pos.z; hasX = true;
 				fl = 0;
 				if (unit->GetTransporter() != nullptr) fl |= 1;
@@ -461,7 +461,7 @@ namespace {
 			const bool carried = fl >= 0 ? (fl & 1) != 0 : unit->GetTransporter() != nullptr;
 			// the sensor kinds (F.SrcLua's loop, the four kinds only), before vision as their own records
 			if (cfg.sensors != 0 && s.anySens) {
-				ScopedTimer tS(hashString("SupComIntFacts::sens"));               // perf split (perf-facts-timers)
+				static TimerNameRegistrar nS("SupComIntFacts::sens"); ScopedTimer tS(hashString("SupComIntFacts::sens"));               // perf split (perf-facts-timers)
 				const bool sShadow = shadow || cfg.sensors == 2;
 				const bool on = (!((size_t)d < defOnOff.size() && defOnOff[d]) || (fl >= 0 ? (fl & 2) != 0 : unit->activated)) && !s.upOff;
 				for (int k = 0; k < NSENS; ++k) {
@@ -514,7 +514,7 @@ namespace {
 				if (sensOn) { SetTrueOrNil(L, W_nv, u, true); SetNil(L, W_calm, u); }
 				continue;
 			}
-			ScopedTimer tV(hashString("SupComIntFacts::vision"));                    // perf split (perf-facts-timers)
+			static TimerNameRegistrar nV("SupComIntFacts::vision"); ScopedTimer tV(hashString("SupComIntFacts::vision"));                    // perf split (perf-facts-timers)
 			const bool liveV = !carried && (built || cfg.unfinished);
 			float r = s.vr;
 			if (air) {
