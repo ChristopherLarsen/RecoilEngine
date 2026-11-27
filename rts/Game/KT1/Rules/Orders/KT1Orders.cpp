@@ -18,6 +18,8 @@
 //             Spring.KT1.Orders.Busy(true)   -> { u, cmdID, opts, tag, count, ... }  (v2: 5 per unit; count the queue length)
 //             Spring.KT1.Orders.FrontChanged() -> { unitID, ... }  ascending: units whose front command (id or tag) changed,
 //                                                            or whose queue emptied, or that became busy, since the last call
+//             Spring.KT1.Orders.BusyDelta()  -> { u, cmdID, opts, tag, count, ... }  (v3: Busy(true)'s rows only for units whose
+//                                                            front changed since the last call, or new; count 0: queue emptied)
 //             Spring.KT1.Orders.Config() -> {}
 // Queue:      the queue GetUnitCurrentCommand and GetUnitCommandCount read: a factory's newUnitCommands, else commandQue.
 // Determinism: ids in ascending order; no float, no clock, no hash order.
@@ -43,7 +45,7 @@ namespace {
 
 class Orders : public Rule {
 public:
-	Orders() : Rule({"Orders", 2, true, "LuaRules/Gadgets/ord_orders.lua (TrackMoves walk, 8-frame safety net)", false}) {}
+	Orders() : Rule({"Orders", 3, true, "LuaRules/Gadgets/ord_orders.lua (TrackMoves walk, 8-frame safety net)", false}) {}
 
 	void Start() override {
 		const int n = unitDefHandler->NumUnitDefs();
@@ -58,6 +60,7 @@ public:
 		LuaPushRawNamedCFunc(L, "Movers", LMovers);
 		LuaPushRawNamedCFunc(L, "Busy", LBusy);
 		LuaPushRawNamedCFunc(L, "FrontChanged", LFrontChanged);
+		LuaPushRawNamedCFunc(L, "BusyDelta", LBusyDelta);
 		LuaPushRawNamedCFunc(L, "Config", LConfig);
 	}
 
@@ -159,6 +162,37 @@ private:
 		for (size_t i = 0; i < ids.size(); ++i) { lua_pushnumber(L, ids[i]); lua_rawseti(L, -2, (int)i + 1); }
 		return 1;
 	}
+	// v3: Busy(true)'s row (u, cmdID, opts, tag, count) only for the units whose front (busy, id, tag) changed since the last
+	// BusyDelta call, or that are new since it; count 0 for a unit whose queue emptied. Its own state (FrontChanged's is apart).
+	static int LBusyDelta(lua_State* L) {
+		Orders* o = Self();
+		if (o == nullptr || !o->Enabled() || !CLuaHandle::GetHandleSynced(L)) return 0;
+		const unsigned int call = ++o->dcalls;
+		std::vector<const CUnit*>& us = o->units;
+		us.clear();
+		for (const CUnit* u : unitHandler.GetActiveUnits()) {
+			if (u->id < 0) continue;
+			if ((size_t)u->id >= o->dfronts.size()) o->dfronts.resize(u->id + 1);
+			Front& f = o->dfronts[u->id];
+			const CCommandQueue& q = Queue(u);
+			const bool busy = !q.empty();
+			const int cid = busy ? q.front().GetID() : 0;
+			const unsigned int tag = busy ? q.front().GetTag() : 0;
+			const bool fresh = (f.seen != call - 1);
+			if (fresh ? busy : (busy != f.busy || (busy && (cid != f.id || tag != f.tag)))) us.push_back(u);
+			f.busy = busy; f.id = cid; f.tag = tag; f.seen = call;
+		}
+		std::sort(us.begin(), us.end(), [](const CUnit* a, const CUnit* b) { return a->id < b->id; });
+		lua_createtable(L, (int)us.size() * 5, 0);
+		int i = 0;
+		for (const CUnit* u : us) {
+			const CCommandQueue& q = Queue(u);
+			if (q.empty()) { Put(L, i, u->id); Put(L, i, 0); Put(L, i, 0); Put(L, i, 0); Put(L, i, 0); continue; }
+			const Command& c = q.front();
+			Put(L, i, u->id); Put(L, i, c.GetID()); Put(L, i, c.GetOpts()); Put(L, i, c.GetTag()); Put(L, i, (double)q.size());
+		}
+		return 1;
+	}
 	static int LConfig(lua_State* L) {
 		lua_newtable(L);
 		return 1;
@@ -169,6 +203,8 @@ private:
 	std::vector<const CUnit*> units;   // reused unit list (packed rows)
 	std::vector<Front> fronts;  // FrontChanged state, by unit id
 	unsigned int calls = 0;     // FrontChanged calls
+	std::vector<Front> dfronts; // BusyDelta state, by unit id
+	unsigned int dcalls = 0;    // BusyDelta calls
 };
 
 } // namespace
