@@ -2924,6 +2924,16 @@ void CGroundMoveType::HandleUnitCollisions(
 		const int collisionFunc = (allowSAT && (forceSAT || (collideeMobile && collideeMD->CalcFootPrintAxisStretchFactor() > 0.1f)));
 		const bool isCollision = (checkCollisionFuncs[collisionFunc](separationVect, collider, collidee, colliderMD, collideeMD));
 
+		// supcom: pathing fix 9 (L11611 PTH-002-J, PTH-004-B/F, PTH-006-E: a mover at a standing unit rocked, stepping into contact,
+		// bounced or separated out, stepping in again): a standing unit (not moving, no active move order) within half a square of
+		// contact counts as contact, so the mover's step loses its inward part before it overlaps, and no separation push from it
+		// moves the mover off. Switch SupComStandingMargin, default 1
+		static const bool standingMarginOn = SupComSimSwitch::Get("SupComStandingMargin", true);
+		const bool standingNear = (collideeMobile && !collidee->IsMoving() && collidee->moveType->progressState != AMoveType::Active
+			&& (isCollision || (standingMarginOn && static_cast<float3>(separationVect).SqLength2D() < Square(colliderParams.y + collideeParams.y + SQUARE_SIZE * 0.5f))));
+		if (standingNear && !isCollision)
+			supcomStandingContact += (collider->pos - collidee->pos).SafeNormalize2D(); // supcom: MOV-007 R1 (SupComGroundMoveType)
+
 		// check for separation
 		float separationDist = 0.f;
 		if (!isCollision && collideeMobile) {
@@ -3022,7 +3032,7 @@ void CGroundMoveType::HandleUnitCollisions(
 				forceFromMovingCollidees += push;
 				if (collidee->IsMoving())
 					supcomPushFromMovers += push; // supcom: MOV-021 R4 (SupComGroundMoveType)
-			} else {
+			} else if (!(standingMarginOn && standingNear)) {
 				// push units away from each other though they are not colliding.
 				const float3 colliderParams2 = {colliderParams.x, colliderParams.y + separationDist * 0.5f, colliderParams.z};
 				const float2 collideeParams2 = {collidee->speed.w, collDist + separationDist * 0.5f};
