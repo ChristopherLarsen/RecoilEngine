@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <vector>
 
@@ -228,7 +229,7 @@ static void CreatePathMetatable(lua_State* L)
  * the lower square index) expanded next, so a goal across open ground is reached after about as many squares as it is
  * far, not after the whole disc round the unit (a breadth-first fill of 65536 squares reaches 129.5 squares out: every
  * farther goal was "undecided", at about 4 ms a call). The same squares are reachable (same steps, same corner rule), so
- * "false" (the whole region filled) is unchanged; its nearest point is the nearest square, ties to the lower index. A
+ * "false" (the whole region filled) is unchanged; its nearest point is the nearest square, ties to the one nearest the unit. A
  * capped fill ("nil") stops at other squares than before. Mod option "reachfillbestfirst" (SupComSimSwitch), default on;
  * "0": the breadth-first fill as before.
  *
@@ -347,8 +348,15 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 		heap.push_back({distSq(ssx, ssz), start});
 		fb.seenGen[start] = gen;
 
+		// ties (squares as near the goal): the one nearest the unit, as the breadth-first fill found it first (its rings
+		// grow from the unit: steps, then the straight distance, then the lower index). PTH-003-B: round a square lake
+		// the lower index alone took the far shore, and the unit drove round to it (5.51 cells off, order 3 s late)
+		const auto stepsFromStart = [&](int x, int z) { return std::max(std::abs(x - ssx), std::abs(z - ssz)); };
+		const auto sqFromStart = [&](int x, int z) { return std::int64_t(x - ssx) * (x - ssx) + std::int64_t(z - ssz) * (z - ssz); };
 		int best = start;
 		std::int64_t bestSq = distSq(ssx, ssz);
+		int bestSteps = 0;
+		std::int64_t bestStartSq = 0;
 		bool reached = (ssx == gsx && ssz == gsz);
 		bool limited = false;
 		int pushed = 1;
@@ -398,9 +406,16 @@ int LuaPathFinder::GetUnitReachablePoint(lua_State* L)
 					std::push_heap(heap.begin(), heap.end(), std::greater<Item>());
 					pushed++;
 
-					if (dSq < bestSq || (dSq == bestSq && ni < best)) {
-						bestSq = dSq;
-						best = ni;
+					if (dSq <= bestSq) {
+						const int st = stepsFromStart(nx, nz);
+						const std::int64_t ss = sqFromStart(nx, nz);
+
+						if (dSq < bestSq || st < bestSteps || (st == bestSteps && (ss < bestStartSq || (ss == bestStartSq && ni < best)))) {
+							bestSq = dSq;
+							best = ni;
+							bestSteps = st;
+							bestStartSq = ss;
+						}
 					}
 					if (nx == gsx && nz == gsz) {
 						reached = true;
