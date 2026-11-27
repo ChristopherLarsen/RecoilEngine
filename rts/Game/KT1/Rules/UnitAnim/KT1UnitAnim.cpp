@@ -99,11 +99,16 @@ public:
 		maxMs = cfg.GetInt("max_ms", 500);
 	}
 
+	// Without Lua driving (an older game), the rule ticks here with its own count. With Run (pm framework 2026-11-27), the ticks run
+	// where the Lua Loop threads would wake (the unit script framework's GameFrame) with the Lua's own tick length and unit count.
 	void GameFrame(int frame) override {
-		if (ids.empty()) return;
+		if (luaDriven || ids.empty()) return;
 		const int n = (int)unitHandler.GetActiveUnits().size();
 		tickMs = (n <= fullUnits) ? 100 : std::min(maxMs, (int)std::floor(100.0f * n / fullUnits));
 		unitCount = n;
+		TickDue(frame);
+	}
+	void TickDue(int frame) {
 		for (size_t i = 0; i < ids.size(); ) {
 			const int id = ids[i];
 			Unit& U = units[id];
@@ -120,6 +125,7 @@ public:
 		LuaPushRawNamedCFunc(L, "Remove", LRemove);
 		LuaPushRawNamedCFunc(L, "Wake", LWake);
 		LuaPushRawNamedCFunc(L, "Start", LStart);
+		LuaPushRawNamedCFunc(L, "Run", LRun);
 		LuaPushRawNamedCFunc(L, "Aimed", LAimed);
 		LuaPushRawNamedCFunc(L, "AimWait", LAimWait);
 		LuaPushRawNamedCFunc(L, "State", LState);
@@ -402,6 +408,16 @@ private:
 		r->Tick(*U, U->owner, gs->frameNum);
 		return 0;
 	}
+	// GG.pmTick's ms and n, from the unit script framework's GameFrame: the due ticks now
+	static int LRun(lua_State* L) {
+		UnitAnim* r = Synced(L);
+		if (r == nullptr) return 0;
+		r->luaDriven = true;
+		r->tickMs = (int)luaL_checknumber(L, 1);
+		r->unitCount = (int)luaL_checknumber(L, 2);
+		if (!r->ids.empty()) r->TickDue(gs->frameNum);
+		return 0;
+	}
 	static int LWake(lua_State* L) {
 		UnitAnim* r = Synced(L);
 		if (r == nullptr) return 0;
@@ -484,6 +500,7 @@ private:
 		return 1;
 	}
 
+	bool luaDriven = false;
 	int idleTicksN = 2, restDelay = 90, wakeEvery = 3, fullUnits = 250, maxMs = 500;
 	float restRate = 1.5f;
 	float rollEps = 0.05f, spinRate = 0.6f;
