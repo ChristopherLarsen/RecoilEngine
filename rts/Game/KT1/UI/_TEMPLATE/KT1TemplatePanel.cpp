@@ -5,26 +5,29 @@
 //      Test/<System>; rename TemplatePanel to <System>;
 //   2. in sources.cmake use kt1_system(NAMES <System> SOURCES KT1<System>.cpp);
 //   3. give KT1_REGISTER_SYSTEM the next free order of the interface range (KT1Register.h);
-//   4. add the option fragment gamedata/kt1/options/<system>.lua and write docs/engine/rules/<system>.md.
+//   4. in the game add data/kt1/<system>.json and the option fragment gamedata/kt1/options/<system>.lua, and write
+//      docs/engine/rules/<system>.md.
 // The panel keeps a model and rebuilds it only when its input changes. Putting the model on screen is the native
 // interface host's job (U01, RmlUi data models): this template has no picture. A click leaves a panel as an order sent
 // as a net command, never as a write to the sim.
 //
 // Replaces:   <widget>.lua, which calls KT1.StandDown(widget, "TemplatePanel", handler)
 // Switch:     mod option kt1_templatepanel = 0 (default) / 1 / check. Unsynced.
-// Config:     gamedata/kt1/templatepanel.lua (KT1TemplatePanelConfig.h has the keys, defaults and labels)
+// Config:     data/kt1/templatepanel.json (TemplatePanelConfig.h has the keys, defaults and labels). Read again when the
+//             file changes: ConfigReloaded drops the model. A system that replaces a .lua config adds LoadConfig,
+//             which only sets values (KT1Rule.h)
 // Reads:      DrawView and FrameFacts only. No Sim/ include; no pointer kept.
 // Updates:    Screen phase, when the selection's change counter moved
 // Check:      check mode rebuilds every frame and counts frames whose rows differ from the kept model's
 // Timer:      KT1::TemplatePanel
 // Doc:        game-build docs/engine/rules/<system>.md
 
-#include "KT1TemplatePanelConfig.h"
+#include "TemplatePanelConfig.h"
 
 #include "Game/KT1/Core/_TEMPLATE/TemplatePanelCore.h"
+#include "Game/KT1/Data/Config.h"
 #include "Game/KT1/Host/DrawPhases.h"
 #include "Game/KT1/KT1Register.h"
-#include "Lua/LuaParser.h"
 #include "System/Log/ILog.h"
 
 namespace KT1 {
@@ -38,7 +41,11 @@ public:
 	TemplatePanel() : Rule({NAME, 1, false, "<the widget it replaces>", false, true}) {}
 
 	// Rule
-	void LoadConfig(const LuaTable& cfg) override { config.max_rows = cfg.GetInt("max_rows", config.max_rows); }
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		return Data::ParseInto(text, strictness, config);
+	}
+	void ConfigValues(Data::Values& v) const override { v.Add("max_rows", config.maxRows); }
+	void ConfigReloaded() override { ready = false; }
 	void Start() override { DrawPhases::Add(this); }
 
 	// DrawSystem
@@ -49,8 +56,8 @@ public:
 
 	void Draw(const DrawContext& ctx) override {
 		if (!ready) {
-			model.Init(ctx.view.UnitCapacity(), config.max_rows);
-			fresh.Init(ctx.view.UnitCapacity(), config.max_rows);
+			model.Init(ctx.view.UnitCapacity(), config.maxRows);
+			fresh.Init(ctx.view.UnitCapacity(), config.maxRows);
 			ready = true;
 		}
 		const uint32_t changes = ctx.facts.SelectionChanges();

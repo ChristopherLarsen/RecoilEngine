@@ -5,12 +5,18 @@
 //      Test/<System>; rename TemplateRule to <System>;
 //   2. in sources.cmake use kt1_system(NAMES <System> SOURCES KT1<System>.cpp);
 //   3. give KT1_REGISTER_SYSTEM the next free order of the system's phase (KT1Register.h);
-//   4. add the option fragment gamedata/kt1/options/<system>.lua and write docs/engine/rules/<system>.md;
+//   4. in the game add data/kt1/<system>.json and the option fragment gamedata/kt1/options/<system>.lua, and write
+//      docs/engine/rules/<system>.md;
 //   5. python -I tools/engine/core_tests.py, then python -I tools/engine/kt1_lint.py --fork <tree>.
 //
 // Replaces:   LuaRules/Gadgets/<gadget>.lua (it runs when this rule is off or in check mode; it calls KT1.StandDown)
 // Switch:     mod option kt1_templaterule = 0 (default) / 1 / check
-// Config:     gamedata/kt1/templaterule.lua (KT1TemplateRuleConfig.h has the keys, defaults and labels)
+// Config:     data/kt1/templaterule.json (TemplateRuleConfig.h has the keys, defaults and labels). ReadConfig only sets
+//             the struct: the loader may call it for a rule that is off. A system that replaces a .lua config adds
+//             LoadConfig, which also only sets values (KT1Rule.h)
+// Setup:      Start(), the first sim step, enabled rules only: state, phases, sync columns, and the units that exist
+//             already (they raise no event). Nothing is set up in a config reader
+// Unit data:  kt1 = { templaterule = { <key> = ... } } in a unit def, read per def in Start (KT1UnitData.h); none here
 // Phases:     FrameStart  tracks units from the events
 //             AfterUnits  visits the units due this step
 //             FrameEnd    publishes Snapshot<Core::Template::Dot>
@@ -30,11 +36,12 @@
 // Determinism: due ids ascending (DueWheel); events in raise order; float maths in Core in the Lua's order.
 // Doc:        game-build docs/engine/rules/<system>.md
 
-#include "KT1TemplateRuleConfig.h"
+#include "TemplateRuleConfig.h"
 
 #include "Game/KT1/Core/Common/Rate.h"
 #include "Game/KT1/Core/_TEMPLATE/TemplateRuleCore.h"
 #include "Game/KT1/Core/_TEMPLATE/TemplateSnapshot.h"
+#include "Game/KT1/Data/Config.h"
 #include "Game/KT1/Host/Check.h"
 #include "Game/KT1/Host/Phases.h"
 #include "Game/KT1/Host/Snapshot.h"
@@ -42,7 +49,6 @@
 #include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Lua/LuaHandle.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Units/Unit.h"
@@ -63,13 +69,21 @@ public:
 	// the last two: on by default (no), honours the check-mode contract (yes)
 	TemplateRule() : Rule({NAME, 1, true, "LuaRules/Gadgets/<gadget>.lua", false, true}) {}
 
-	// game setup, only for an enabled rule: read the config, size the state, register phases and synced columns
-	void LoadConfig(const LuaTable& cfg) override {
-		config.period_s = cfg.GetFloat("period_s", config.period_s);
-		config.gain = cfg.GetFloat("gain", config.gain);
-		config.cap = cfg.GetFloat("cap", config.cap);
-		params = {Core::Rate::Every(config.period_s), config.gain, config.cap};
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		return Data::ParseInto(text, strictness, config);
+	}
+
+	void ConfigValues(Data::Values& v) const override {
+		v.Add("period_s", config.periodS);
+		v.Add("gain", config.gain);
+		v.Add("cap", config.cap);
+	}
+
+	// before this step's FrameStart: make the sim units from the config, size the state, register phases and synced columns
+	void Start() override {
+		params = {Core::Rate::Every(config.periodS), config.gain, config.cap};
 		state.Init(MAX_UNITS, params);
+		AdoptUnits();
 		RegisterPhases();
 		SyncState::Add(NAME, "charge", state.units.index, state.charge);
 		SyncState::Add(NAME, "due", state.units.index, state.dueStep);
@@ -80,6 +94,15 @@ public:
 	void PushLua(lua_State* L) override { LuaPushRawNamedCFunc(L, "Charge", LCharge); }
 
 private:
+	// units made before this rule subscribed (start units, a loaded game) raise no event: take the finished ones, id
+	// ascending
+	void AdoptUnits() {
+		for (int id = 0; id < static_cast<int>(unitHandler.MaxUnits()); ++id) {
+			const CUnit* u = unitHandler.GetUnit(id);
+			if (u != nullptr && !u->beingBuilt) state.Add(id, params);
+		}
+	}
+
 	void RegisterPhases() {
 		const auto mask = MaskOf(EventType::UnitFinished) | MaskOf(EventType::UnitDestroyed);
 		Phases::Add(NAME, Phase::FrameStart, 0, mask, [this](const SimContext& c) { Track(c); });
