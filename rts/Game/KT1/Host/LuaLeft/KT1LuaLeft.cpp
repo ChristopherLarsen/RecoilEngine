@@ -48,7 +48,7 @@ namespace {
 	int periodSteps = 0;
 
 	// seconds of game time as sim steps (becomes Core::Rate::Every with F02)
-	int StepsFor(float seconds) { return std::max(1, int(seconds * GAME_SPEED + 0.5f)); }
+	int StepsFor(float seconds) { return std::max(1, int(seconds * GAME_SPEED + 0.5f)); }   // DESIGN: to the nearest step
 
 	int64_t NowNs() { return spring_gettime().toNanoSecsi(); }
 

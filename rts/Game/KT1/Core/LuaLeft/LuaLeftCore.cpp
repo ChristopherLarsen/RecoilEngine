@@ -11,7 +11,7 @@
 namespace KT1 { namespace LuaLeft {
 
 namespace {
-	constexpr double NS_PER_MS = 1000000;     // DESIGN: unit conversion (an integer literal: the engine reads bare reals as float)
+	constexpr float NS_PER_MS = 1000000;      // DESIGN: unit conversion
 	constexpr uint32_t HASH_MIX = 31u;        // DESIGN: any odd multiplier, spreads one name over the states
 
 	// Per-unit call-ins whose name does not start with "Unit" (DESIGN: the unit is among the first arguments).
@@ -31,12 +31,13 @@ namespace {
 		return std::strncmp(stored, name, NAME_LEN - 1) == 0;
 	}
 
-	double PerFrameMs(int64_t ns, int frames) { return (frames > 0) ? (ns / NS_PER_MS) / frames : 0.0; }
-	double PerFrame(uint64_t n, int frames) { return (frames > 0) ? double(n) / frames : 0.0; }
+	float PerFrameMs(int64_t ns, int frames) { return (frames > 0) ? (float(ns) / NS_PER_MS) / frames : 0; }
+	float PerFrame(uint64_t n, int frames) { return (frames > 0) ? float(n) / frames : 0; }
 }
 
 bool IsPerUnitCallIn(const char* name) {
-	if (std::strncmp(name, "Unit", 4) == 0 && std::isupper(static_cast<unsigned char>(name[4])))
+	constexpr size_t PREFIX = sizeof("Unit") - 1;
+	if (std::strncmp(name, "Unit", PREFIX) == 0 && std::isupper(static_cast<unsigned char>(name[PREFIX])))
 		return true;
 	for (const char* n : PER_UNIT)
 		if (std::strcmp(name, n) == 0) return true;
@@ -72,11 +73,13 @@ int Meter::Row(int state, uint32_t hash, const char* callIn) {
 	return rowCount++;
 }
 
+// KT1 hot
 void Meter::Push(int row, Side side, bool gc, int64_t nowNs) {
 	if (depth == MAX_DEPTH) { ++overflow; ++acc.lostCalls; return; }
 	stack[depth++] = Frame{row, side, gc, nowNs, 0};
 }
 
+// KT1 hot
 void Meter::Enter(int row, Side side, int64_t nowNs, int step) {
 	++acc.calls[side];
 	if (row < 0) {
@@ -88,8 +91,10 @@ void Meter::Enter(int row, Side side, int64_t nowNs, int step) {
 	Push(row, side, false, nowNs);
 }
 
+// KT1 hot
 void Meter::EnterGc(Side side, int64_t nowNs) { Push(-1, side, true, nowNs); }
 
+// KT1 hot
 void Meter::Leave(int64_t nowNs) {
 	if (overflow > 0) { --overflow; return; }
 	if (depth == 0) return;

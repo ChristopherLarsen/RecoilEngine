@@ -25,7 +25,7 @@ inline constexpr int MAX_ALLOCS = 64;    // Lua contexts whose allocation counte
 inline constexpr int NAME_LEN   = 64;    // LuaHashString holds 63 characters
 
 struct Config {
-	double reportPeriodS = 10.0;   // DESIGN: perf_sprof's window (ten seconds of game time)
+	float reportPeriodS = 10;      // DESIGN: perf_sprof's window (ten seconds of game time)
 };
 
 struct TopRow {
@@ -65,9 +65,9 @@ public:
 	int Row(int state, uint32_t hash, const char* callIn);      // find or add; -1 when full or state < 0
 
 	// ----- calls -----
-	void Enter(int row, Side side, int64_t nowNs, int step);    // KT1 hot; row -1: counted in the side total only
-	void EnterGc(Side side, int64_t nowNs);                     // KT1 hot
-	void Leave(int64_t nowNs);                                  // KT1 hot; closes the latest Enter or EnterGc
+	void Enter(int row, Side side, int64_t nowNs, int step);    // row -1: counted in the side total only
+	void EnterGc(Side side, int64_t nowNs);
+	void Leave(int64_t nowNs);                                  // closes the latest Enter or EnterGc
 	bool Idle() const { return depth == 0 && overflow == 0; }
 
 	// ----- sampled values -----
