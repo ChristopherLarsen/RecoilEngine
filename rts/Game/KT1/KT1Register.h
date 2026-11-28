@@ -24,11 +24,12 @@ namespace KT1 {
 	void RegisterSystem(const char* name, int order, MakeRuleFn make);
 }
 
+// Used inside namespace KT1 (where every system's .cpp already is); the generated file declares and calls
+// KT1::RegisterSystem_<Name>().
 #define KT1_REGISTER_SYSTEM(Name, Order, Type) \
-	namespace KT1 { \
-		void RegisterSystem_##Name() { \
-			RegisterSystem(#Name, Order, []() -> std::unique_ptr<Rule> { return std::make_unique<Type>(); }); \
-		} \
+	void RegisterSystem_##Name(); \
+	void RegisterSystem_##Name() { \
+		RegisterSystem(#Name, Order, []() -> std::unique_ptr<Rule> { return std::make_unique<Type>(); }); \
 	}
 
 #endif
