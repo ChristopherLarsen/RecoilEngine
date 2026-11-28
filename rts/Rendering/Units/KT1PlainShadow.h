@@ -12,6 +12,9 @@
 
 namespace KT1PlainShadow {
 	inline std::vector<uint8_t> defs;
+	// the unit draw mask is tested before the Lua material bins (opaque, alpha, shadow), as for features; off: stock order
+	// (Spring.KT1.Draw.SetUnitMaskBeforeMaterial; default off, reset at game start)
+	inline bool maskFirst = false;
 	inline bool Is(int defID) { return defID >= 0 && defID < static_cast<int>(defs.size()) && defs[defID] != 0; }
 	inline void Set(int defID, bool v) {
 		if (defID < 0) return;

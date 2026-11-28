@@ -11,6 +11,8 @@
 //                           {1, 1, 1, 0} clears it (ModelVertProgGL4.glsl, "KT1 hook: model tint").
 //                           SetPlainShadow(unitDefID, b) / GetPlainShadow(unitDefID): that type's shadow is drawn by the instanced pass in
 //                           plain form (no alpha discard, no slope bias, polygon offset 1,1) instead of through its Lua shadow material.
+//                           SetUnitMaskBeforeMaterial(b) / GetUnitMaskBeforeMaterial(): test the unit draw mask before the Lua material
+//                           bins (opaque, alpha, shadow), as features do; default off (stock order), reset at game start.
 // Spring.KT1.Decals  (R13)  SetFade(f) / GetFade(): the fade fraction, default 0.25 at game start: a Lua decal with a cut-off (user data 0 y)
 //                           starts fading at f x its cut-off and is not drawn at the cut-off (GroundDecalsVertProg.glsl, uniform cutFade).
 //                           SetCutoff(decalID, v): that decal's own cut-off. GetDrawnAlpha(decalID, measure): the alpha the shader
@@ -162,6 +164,19 @@ int LGetPlainShadow(lua_State* L)
 	return 1;
 }
 
+int LSetUnitMaskBeforeMaterial(lua_State* L)
+{
+	if (CLuaHandle::GetHandleSynced(L)) return 0;
+	KT1PlainShadow::maskFirst = luaL_checkboolean(L, 1);
+	return 0;
+}
+
+int LGetUnitMaskBeforeMaterial(lua_State* L)
+{
+	lua_pushboolean(L, KT1PlainShadow::maskFirst);
+	return 1;
+}
+
 int LGetDrawnAlpha(lua_State* L)
 {
 	const IGroundDecalDrawer* gdd = groundDecals;
@@ -186,6 +201,7 @@ public:
 class DrawRule : public Rule {
 public:
 	DrawRule() : Rule({"Draw", 2, false, "(RND-005 R12 cut-offs)", true}) {}
+	void Start() override { KT1PlainShadow::maskFirst = false; }   // stock order at every game start
 	static int LModelTint(lua_State* L) { lua_pushinteger(L, 12); return 1; }
 	void PushLua(lua_State* L) override {
 		LuaPushRawNamedCFunc(L, "ModelTint", LModelTint);
@@ -193,7 +209,8 @@ public:
 		LuaPushRawNamedCFunc(L, "GetCutoff", LGetCutoff);
 		LuaPushRawNamedCFunc(L, "CameraMeasure", LCameraMeasure);
 		LuaPushRawNamedCFunc(L, "SetPlainShadow", LSetPlainShadow);
-		LuaPushNamedBool(L, "UnitMaskBeforeMaterial", true);   // the unit draw mask is tested before the Lua material bins
+		LuaPushRawNamedCFunc(L, "SetUnitMaskBeforeMaterial", LSetUnitMaskBeforeMaterial);   // default off: stock order
+		LuaPushRawNamedCFunc(L, "GetUnitMaskBeforeMaterial", LGetUnitMaskBeforeMaterial);
 		LuaPushRawNamedCFunc(L, "GetPlainShadow", LGetPlainShadow);
 	}
 };
