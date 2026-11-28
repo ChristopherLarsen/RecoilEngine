@@ -1235,6 +1235,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		owner->SetVelocityAndSpeed(ZeroVector);
 		resultantForces = scPushBack;
 		scPushBack = ZeroVector;
+		ClipCollisionForce(resultantForces); // pathing fix 21 (PTH-004-E): the push back obeys the no-deeper rule of fix 20
 		UpdateTurnRate();
 		return;
 	}
@@ -1276,6 +1277,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				resultantForces = ZeroVector;
 				owner->SetVelocityAndSpeed(ZeroVector);
 			}
+			// pathing fix 21 (PTH-004-E, L11984 seeds 1 and 3: 22 held frames 1.85 elmos deep after fix 20): a slide that starts on
+			// impassable squares may not go deeper or add overlap either (the test above only covers a slide from a clear spot)
+			ClipCollisionForce(resultantForces);
 
 			scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
 			scPhase = PHASE_DRIVE;
@@ -1295,6 +1299,8 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (scBlockedFrames >= BLOCKED_HANDOVER_FRAMES) {
 		if (FootprintBlocked(owner->pos) && progressState == Active) {
 			CGroundMoveType::UpdateUnitPosition();
+			// pathing fix 21 (PTH-004-E): the stock step that is to free the footprint may not take it deeper or add overlap
+			ClipCollisionForce(resultantForces);
 
 			scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
 			scPhase = PHASE_DRIVE;
