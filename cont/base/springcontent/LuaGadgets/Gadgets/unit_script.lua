@@ -359,8 +359,11 @@ function Spring.UnitScript.WaitForScale(piece)
 end
 
 
+-- KT1 SIM-10HZ-PLAN stage 0: one frame in whole ms at the sim rate (33 at 30 Hz as before, 100 at 10 Hz)
+local FRAME_MS = floor(1000 / Game.gameSpeed)
+
 function Spring.UnitScript.Sleep(milliseconds)
-	local n = floor(milliseconds / 33)
+	local n = floor(milliseconds / FRAME_MS)
 	if (n <= 0) then n = 1 end
 	n = n + sp_GetGameFrame()
 	local zzz = sleepers[n]
