@@ -27,9 +27,9 @@ class SimProbeRule : public Rule {
 public:
 	SimProbeRule();
 
-	bool SupportsCheck() const override { return true; }
 	void LoadConfig(const LuaTable& cfg) override;   // game setup: registers phases, validators and synced state
 	void PushLua(lua_State* L) override;             // KT1SimProbeLua.cpp
+	bool CheckMode() const { return SwitchMode() == Mode::Check; }
 
 	Core::SimProbe::State state;
 	// check mode only, until the Lua twin takes them
