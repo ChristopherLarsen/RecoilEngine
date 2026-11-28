@@ -40,6 +40,7 @@
 #include "Sim/Projectiles/WeaponProjectiles/WeaponProjectile.h"
 #include "Sim/Units/CommandAI/Command.h"
 #include "Sim/Units/Unit.h"
+#include "Sim/Units/UnitDef.h"
 #include "Sim/Units/UnitHandler.h"
 #include "Sim/Weapons/WeaponDef.h"
 #include "Sim/Weapons/WeaponDefHandler.h"
