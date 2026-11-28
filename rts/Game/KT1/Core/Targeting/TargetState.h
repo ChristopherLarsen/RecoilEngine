@@ -76,6 +76,8 @@ struct TargetingDefs {
 	std::vector<WeaponTargets> weapons;          // by weapon def id
 	std::vector<UnitTargets> units;              // by unit def id
 	std::vector<std::vector<uint8_t>> ranks;     // [weapon def][unit def]; 0: not a target (BuildRanks)
+	std::vector<uint8_t> gunRanks;               // [unit def]: the command gun's rank, from its own list; 0: none
+	int32_t gunWeaponDef = NONE;                 // the command gun config's weapon def
 	int32_t Rank(int32_t weaponDef, int32_t unitDef) const {
 		if (weaponDef < 0 || static_cast<size_t>(weaponDef) >= ranks.size()) return 0;
 		const std::vector<uint8_t>& row = ranks[weaponDef];
@@ -116,6 +118,11 @@ int32_t FirstScan(const TargetingParams& params, int32_t unit, int32_t weapon, i
 // REQ CMB-004 R4: the first priority group whose classes the def all has, from 1; 0: none
 int32_t ComputeRank(const WeaponTargets& weapon, const UnitTargets& unit);
 void BuildRanks(TargetingDefs& defs);
+// unit_cmd_gun.lua: the command gun's rank of every unit def, the first class of its list the def has (the project's own
+// class names only; unknown names never match)
+void BuildGunRanks(TargetingDefs& defs, const std::vector<ClassName>& priorities);
+// whether the def has the class: "any" and "anything", its own target_classes, then the project's own names
+bool HasClass(const UnitTargets& unit, const std::string& name, bool ownClasses);
 // REQ CMB-018, CMB-019: None when the reach takes a target in this layer
 Refusal LayerCheck(const LayerReach& reach, bool targetAir, Layer layer, float y, float height);
 

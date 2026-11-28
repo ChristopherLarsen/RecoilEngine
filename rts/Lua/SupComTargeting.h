@@ -20,6 +20,28 @@ namespace SupComTargeting {
 	// (MobileCAI::GenerateAttackCmd, AirCAI::AirAutoGenerateTarget) cannot produce an order and is skipped (SIM-RATE-001 R2:
 	// a weapon looks for targets only on its own interval; SIM-CUTS-RANKED R-E, 2026-11-24)
 	bool GunIdle(const CWeapon* w);
+
+	// LUA-FREE S19: the step for a native caller (the KT1 Targeting rule): the same operations as Spring.SupComTgt*.
+	// Weapon numbers are 0-based here, 1-based in Lua; -1 means none.
+	struct WeaponRules {
+		int scan = 1;                  // steps between scans (the Lua ScanFrames)
+		double track = 1.0, rangeMin = 0.0;
+		bool retarget = false, direct = false, air = false, surface = false, under = false, seafloor = false;
+		bool above = false, below = false, noGround = false;
+	};
+	void Init(int mode, double insetElmos, int skipSteps, bool overkill);   // also clears every gun and weapon
+	void SetRules(double insetElmos, int skipSteps, bool overkill);
+	void SetWeapon(int weaponDefID, const WeaponRules& rules);
+	void SetRank(int weaponDefID, int unitDefID, int rank);
+	void AddGun(int unitID, int weaponIndex0, int weaponDefID, int firstScanFrame);
+	void WakeUnit(int unitID, int frame);
+	void UnitGone(int unitID, int nextFrame);
+	void FireStateChanged(int unitID, int frame);
+	void SetFocus(int unitID, int targetID);
+	void SetInflight(int targetID, double damage);
+	int TargetOf(int unitID, int weaponIndex0);
+	int NextScanOf(int unitID, int weaponIndex0);
+	void Stats(int& scans, int& candidates, int& holds);   // since the last call
 }
 
 #endif
