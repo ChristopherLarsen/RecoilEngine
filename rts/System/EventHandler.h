@@ -279,6 +279,7 @@ class CEventHandler
 		void SunChanged();
 
 		void ViewResize();
+		void SupComZoomLevelChanged(int newLevel, int oldLevel);
 
 		// see the DRAW_CALLIN macro for implementations
 		void DrawGenesis();

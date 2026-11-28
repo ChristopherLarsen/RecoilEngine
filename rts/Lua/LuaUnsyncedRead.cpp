@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaUnsyncedRead.h"
+#include "Rendering/SupComZoomLevel.h"
 #include "Game/UI/SupComMiniMapZoom.h"
 
 #include "LuaConfig.h"
@@ -219,6 +220,7 @@ bool LuaUnsyncedRead::PushEntries(lua_State* L)
 
 	REGISTER_LUA_CFUNC(GetCameraNames);
 	REGISTER_LUA_CFUNC(GetCameraState);
+	REGISTER_LUA_CFUNC(SupComGetZoomLevel);
 	REGISTER_LUA_CFUNC(GetCameraPosition);
 	REGISTER_LUA_CFUNC(GetCameraDirection);
 	REGISTER_LUA_CFUNC(GetCameraRotation);
@@ -3003,6 +3005,18 @@ int LuaUnsyncedRead::GetCameraNames(lua_State* L)
  * @return CameraName name
  * @return any ... depends on the current controller mode.
  */
+/*** Kardashev: the shared zoom level L0..L7 and the camera zoom distance (presentation only).
+ * @function Spring.SupComGetZoomLevel
+ * @return integer level
+ * @return number dist
+ */
+int LuaUnsyncedRead::SupComGetZoomLevel(lua_State* L)
+{
+	lua_pushnumber(L, SupComZoomLevel::Get());
+	lua_pushnumber(L, SupComZoomLevel::Dist());
+	return 2;
+}
+
 /***
  * @function Spring.GetCameraState
  * @param useTable true? (Default: `true`) Return a table instead of multiple values.
