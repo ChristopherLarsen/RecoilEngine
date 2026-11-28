@@ -2,6 +2,7 @@
 
 #include "LuaHandle.h"
 #include "SupComCallinBatch.h" // supcom: fight call-in batching
+#include "Game/KT1/Host/LuaLeft/KT1LuaLeft.h" // KT1 hook: LuaLeft
 #include "Game/SupComLocalView.h"
 #include "lua_privileges.h"
 
@@ -364,6 +365,7 @@ int CLuaHandle::RunCallInTraceback(
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
 	if (SupComCib::pending > 0) SupComCib::BeforeCallIn(this); // supcom: queued fight call-ins first
+	KT1::LuaLeft::CallScope luaLeft(this, L, hs); // KT1 hook: LuaLeft
 	// do not signal floating point exceptions in user Lua code
 	ScopedDisableFpuExceptions fe;
 
@@ -4309,6 +4311,7 @@ void CLuaHandle::CollectGarbage(bool forced)
 		return;
 
 	LUA_CALL_IN_CHECK_NAMED(L, (GetLuaContextData(L)->synced)? "Lua::CollectGarbage::Synced": "Lua::CollectGarbage::Unsynced");
+	const KT1::LuaLeft::GcScope luaLeftGc(L); // KT1 hook: LuaLeft
 
 	lua_lock(L_GC);
 	SetHandleRunning(L_GC, true);
