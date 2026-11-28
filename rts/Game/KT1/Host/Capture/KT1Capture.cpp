@@ -270,8 +270,9 @@ namespace Capture {
 				LOG_L(L_ERROR, "[KT1CAPTURE] could not write %s", path.c_str());
 				return;
 			}
-			LOG("[KT1CAPTURE] shot=%s side=%s frame=%d file=%s size=%dx%d", shot.name.c_str(), CaptureCore::SideName(step.side),
-			    gs->frameNum, path.c_str(), w, h);
+			// offset: what this picture was drawn at (the script pins it; the engine own value drifts with the wall clock)
+			LOG("[KT1CAPTURE] shot=%s side=%s frame=%d file=%s size=%dx%d offset=%.6f", shot.name.c_str(),
+			    CaptureCore::SideName(step.side), gs->frameNum, path.c_str(), w, h, globalRendering->timeOffset);
 		}
 
 		void CaptureRule::After() {
