@@ -13,7 +13,7 @@
 namespace KT1 {
 
 namespace {
-constexpr int QUAD_VERTICES = 6;
+constexpr int QUAD_VERTICES = 6;   // DESIGN: two triangles
 constexpr float QUAD[QUAD_VERTICES * 2] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
 
 // the instance attributes of one region, read from `base` bytes into the bound array buffer

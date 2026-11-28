@@ -10,7 +10,10 @@
 //   MiniMap                                  one hook line in MiniMap, with Lua's DrawInMiniMap matrices
 //   FrameEnd                                 one hook line in GlobalRendering::SwapBuffers, once per drawn frame, after
 //                                            everything drawn (also with the interface hidden)
-// With no system added nothing is registered and each hook is one test of a flag: the frame is the stock frame.
+// With no system added (and no sim display events in the engine) nothing is registered and each hook is one test of a
+// flag: the frame is the stock frame.
+//
+// Update also plays the sim's published display events (Host/DisplaySink.h), before any system's Update.
 //
 // A system gets a DrawContext: the DrawView and the FrameFacts, both const, and nothing else of the game. It leaves the
 // GL state as it found it (GL::SubState). In the screen phases the matrices are Lua's (view pixels, y up); in MiniMap
@@ -50,6 +53,7 @@ public:
 
 class DrawPhases {
 public:
+	static void Init();                            // KT1 hook: DrawPhases (CWorldDrawer::InitPost)
 	// a switched-on system adds itself once per game; the host does not own it
 	static void Add(DrawSystem* system);
 

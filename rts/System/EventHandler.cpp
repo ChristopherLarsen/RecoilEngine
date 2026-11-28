@@ -690,6 +690,12 @@ void CEventHandler::SunChanged()
 	ITERATE_EVENTCLIENTLIST_NA(SunChanged);
 }
 
+void CEventHandler::SupComZoomLevelChanged(int newLevel, int oldLevel)
+{
+	ZoneScoped;
+	ITERATE_EVENTCLIENTLIST(SupComZoomLevelChanged, newLevel, oldLevel);
+}
+
 void CEventHandler::ViewResize()
 {
 	ZoneScoped;
