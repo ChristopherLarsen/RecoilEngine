@@ -6,6 +6,7 @@
 #include <RmlUi/Core.h>
 #include "Game.h"
 #include "Game/KT1/KT1Registry.h" // KT1 hook: registry
+#include "Game/KT1/Host/Phases.h" // KT1 hook: SimHost
 #include "Lua/SupComUnitQuery.h"
 #include "Camera.h"
 #include "CameraHandler.h"
@@ -133,9 +134,11 @@
 #include "System/Sound/ISound.h"
 #include "System/Sound/ISoundChannels.h"
 #include "System/Sync/DumpState.h"
+#include "System/Sync/SysHash.h"
 #include "System/TimeProfiler.h"
 #include "System/LoadLock.h"
 #include "Lua/SupComTargeting.h"
+#include "Rendering/SupComZoomLevel.h"
 
 #include "System/Misc/TracyDefs.h"
 #include "Lua/SupComCallinBatch.h" // supcom
@@ -154,6 +157,15 @@ CONFIG(bool, ShowSpeed).defaultValue(false).description("Displays current game s
 CONFIG(int, ShowPlayerInfo).defaultValue(1).headlessValue(0);
 CONFIG(float, GuiOpacity).defaultValue(0.8f).minimumValue(0.0f).maximumValue(1.0f).description("Sets the opacity of the built-in Spring UI. Generally has no effect on LuaUI widgets. Can be set in-game using shift+, to decrease and shift+. to increase.");
 CONFIG(std::string, InputTextGeo).defaultValue("");
+
+CONFIG(int, StepBlend).defaultValue(0).headlessValue(0).minimumValue(0).maximumValue(1).description("KT1: 1 = blend between steps by the measured wall interval between steps, clamped to [0, 1] and never backwards between steps; 0 = engine default");
+
+// KT1 StepBlend 1 (NEW-ENGINE-PLAN Phase 2 item 4): the blend follows a slipping clock.
+// stepIntervalEmaMs is the recent wall time per step, measured per drawn frame from the steps that arrived in it.
+static float kt1StepIntervalEmaMs = 1000.0f / GAME_SPEED;
+static spring_time kt1LastStepWall = spring_notime;
+static constexpr float KT1_STEP_EMA_WEIGHT = 0.25f;
+static constexpr float KT1_STEP_INTERVAL_MAX_S = 2.0f;
 
 CONFIG(int, SmoothTimeOffset).defaultValue(0).headlessValue(0).description("Enables frametimeoffset smoothing, 0 = off (old version), -1 = forced 0.5,  1-20 smooth, recommended = 2-3");
 
@@ -293,6 +305,7 @@ CGame::CGame(const std::string& mapFileName, const std::string& modFileName, ILo
 CGame::~CGame()
 {
 	ENTER_SYNCED_CODE();
+	KT1::FrameCount::Finish("exit"); // KT1 hook: FrameCount
 	LOG("[Game::%s][1]", __func__);
 
 	RmlGui::Shutdown();
@@ -762,6 +775,7 @@ void CGame::PreLoadRendering()
 void CGame::PostLoadRendering() {
 	ZoneScoped;
 	worldDrawer.InitPost();
+	SupComZoomLevel::Init();
 }
 
 
@@ -1282,7 +1296,25 @@ bool CGame::UpdateUnsynced(const spring_time currentTime)
 	globalRendering->drawFrame = std::max(1U, globalRendering->drawFrame + 1);
 	globalRendering->lastFrameStart = currentTime;
 	// Update the interpolation coefficient (globalRendering->timeOffset)
-	if (!gs->paused && !IsSimLagging() && !gs->PreSimFrame() && !videoCapturing->AllowRecord()) {
+	static const bool kt1StepBlend = (configHandler->GetInt("StepBlend") == 1);
+	if (kt1StepBlend && !gs->paused && !gs->PreSimFrame() && !videoCapturing->AllowRecord()) {
+		// Bursts after a hold put several steps in one drawn frame: the interval is shared among them.
+		if (newSimFrame) {
+			const int steps = std::max(1, gs->frameNum - lastSimFrame);
+			if (kt1LastStepWall != spring_notime) {
+				const float ivMs = std::clamp((currentTime - kt1LastStepWall).toMilliSecsf() / steps, 1.0f, KT1_STEP_INTERVAL_MAX_S * 1000.0f);
+				kt1StepIntervalEmaMs += (ivMs - kt1StepIntervalEmaMs) * KT1_STEP_EMA_WEIGHT;
+			}
+			kt1LastStepWall = currentTime;
+		}
+		globalRendering->weightedSpeedFactor = 1.0f / kt1StepIntervalEmaMs;
+		globalRendering->lastTimeOffset = globalRendering->timeOffset;
+		float to = std::clamp((currentTime - lastFrameTime).toMilliSecsf() / kt1StepIntervalEmaMs, 0.0f, 1.0f);
+		// Between steps the drawn time never goes back; during a hold it rises to the held step and stands (SIM-RATE-002 v4 R7).
+		if (!newSimFrame)
+			to = std::max(to, globalRendering->lastTimeOffset);
+		globalRendering->timeOffset = to;
+	} else if (!gs->paused && !IsSimLagging() && !gs->PreSimFrame() && !videoCapturing->AllowRecord()) {
 		globalRendering->weightedSpeedFactor = 0.001f * gu->simFPS;
 		globalRendering->lastTimeOffset = globalRendering->timeOffset;
 		globalRendering->timeOffset = (currentTime - lastFrameTime).toMilliSecsf() * globalRendering->weightedSpeedFactor;
@@ -1451,6 +1483,7 @@ bool CGame::UpdateUnsynced(const spring_time currentTime)
 
 
 bool CGame::Draw() {
+	KT1::FrameCount::DrawFrame(); // KT1 hook: FrameCount
 	const spring_time currentTimePreUpdate = spring_gettime();
 
 	if (UpdateUnsynced(currentTimePreUpdate))
@@ -1516,6 +1549,7 @@ bool CGame::Draw() {
 	//FIXME move both to UpdateUnsynced?
 	CTeamHighlight::Enable(spring_tomsecs(currentTimePreDraw));
 	{
+		SupComZoomLevel::Update(); // before any drawer and draw call-in of this frame
 		minimap->Update();
 
 		// note: neither this call nor DrawWorld can be made conditional on minimap->GetMaximized()
@@ -1717,6 +1751,7 @@ void CGame::SimFrame() {
 	CSyncChecker::NewGameFrame();
 #endif
 	lastFrameTime = spring_gettime();
+	KT1::FrameCount::SimBegin(); // KT1 hook: FrameCount
 	// This is not very ideal, as the timeoffset of each new draw frame is also calculated from this
 	// with a strange side effect: if the timeOffset was a high number, like 0.9, then this will force the next draw frame to have an offset of 0.0x
 	// What this means, is that in the case where we have frames to spare, and and over rendering, then the following can happen at 60hz:
@@ -1785,6 +1820,7 @@ void CGame::SimFrame() {
 			SupComUnitQuery::OnUnitsUpdated(); // supcom: change lists for Spring.GetUnitChanges
 			SupComTargeting::Update(gs->frameNum); // supcom: CMB-004 target choice (unitpass_target), before the Lua GameFrame
 			KT1::Registry::GameFrame(gs->frameNum); // KT1 hook: registry (engine rules, before the Lua GameFrame)
+			KT1::Phases::Run(KT1::Core::SimHost::Phase::FrameStart, gs->frameNum); // KT1 hook: SimHost
 			eventHandler.GameFrame(gs->frameNum);
 		}
 
@@ -1793,6 +1829,7 @@ void CGame::SimFrame() {
 		smoothGround.UpdateSmoothMesh();
 		mapDamage->Update();
 		unitHandler.Update();
+		KT1::Phases::Run(KT1::Core::SimHost::Phase::AfterUnits, gs->frameNum); // KT1 hook: SimHost
 		pathManager->Update();
 		projectileHandler.Update();
 		NanoParticles::system.Update();
@@ -1823,9 +1860,11 @@ void CGame::SimFrame() {
 		playerHandler.GameFrame(gs->frameNum);
 		SupComCib::FrameEnd(); // supcom: hand queued fight call-ins to Lua before the frame ends
 		eventHandler.GameFramePost(gs->frameNum);
+		KT1::Phases::Run(KT1::Core::SimHost::Phase::FrameEnd, gs->frameNum); // KT1 hook: SimHost
 	}
 
 	lastSimFrameTime = spring_gettime();
+	KT1::FrameCount::SimEnd(); // KT1 hook: FrameCount
 	gu->avgSimFrameTime = mix(gu->avgSimFrameTime, (lastSimFrameTime - lastFrameTime).toMilliSecsf(), 0.05f);
 	gu->avgSimFrameTime = std::max(gu->avgSimFrameTime, 0.01f);
 
@@ -1849,6 +1888,7 @@ void CGame::SimFrame() {
 	// useful for desync-debugging (enter instead of -1 start & end frame of the range you want to debug)
 	// supcom: period -1 keeps the one /dumpstate set (1 reset it every frame, so every frame of the range was dumped)
 	DumpState(-1, -1, -1, std::nullopt);
+	KT1::SysHash::Frame(gs->frameNum); // KT1 S3: per-system hashes (off unless SysHashPeriodS > 0)
 
 	ASSERT_SYNCED(gsRNG.GetGenState());
 	LEAVE_SYNCED_CODE();

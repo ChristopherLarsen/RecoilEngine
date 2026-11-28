@@ -88,7 +88,7 @@ public:
 	void LoadConfig(const LuaTable& t) override {
 		periodSeconds = t.GetFloat("far_period_s", 0.5f);
 		marginElmos = t.GetFloat("margin_elmos", 80.0f);
-		cellElmos = std::max(64.0f, t.GetFloat("cell_elmos", 512.0f));
+		cellElmos = std::max(64.0f, t.GetFloat("cell_elmos", 512.0f));   // DESIGN: smallest occupancy grid cell, elmos
 	}
 
 	void ConfigValues(Data::Values& v) const override {
@@ -120,8 +120,8 @@ public:
 
 		// enemy masks per ally team; more than 64 ally teams: every unit counts as near (never sleeps)
 		enemyMask.assign(std::max(nAlly, 1), 0);
-		for (int a = 0; a < nAlly && a < 64; ++a)
-			for (int b = 0; b < nAlly && b < 64; ++b)
+		for (int a = 0; a < nAlly && a < 64; ++a)   // DESIGN: one bit per ally team in a 64-bit mask
+			for (int b = 0; b < nAlly && b < 64; ++b)   // DESIGN: one bit per ally team in a 64-bit mask
 				if (!teamHandler.Ally(a, b)) enemyMask[a] |= (1ull << b);
 
 		grid.Clear();
@@ -144,14 +144,14 @@ public:
 			f.idle = Idle(u);
 			if (f.idle && !f.changed) {
 				const float reach = std::max(u->maxRange, u->unitDef->losRadius) + marginElmos;
-				f.far = (nAlly <= 64) && !grid.EnemyWithin(u->pos.x, u->pos.z, reach, enemyMask[u->allyteam]);
+				f.far = (nAlly <= 64) && !grid.EnemyWithin(u->pos.x, u->pos.z, reach, enemyMask[u->allyteam]);   // DESIGN: one bit per ally team in a 64-bit mask
 				nIdleNear += !f.far;
 			}
 			const bool sleep = TiersCore::Decide(f, next, id, period);
 			Tiers::asleep[id] = sleep;
 			nAsleep += sleep;
 		}
-		if (frame % 300 == 0)
+		if (frame % 300 == 0)   // DESIGN: log period, a frame count (SIM-10HZ stage 0)
 			LOG("[KT1TIERS] f=%d asleep %d idle-near %d of %d", frame, nAsleep, nIdleNear, nTotal);
 	}
 
@@ -187,8 +187,8 @@ private:
 	}
 
 	TiersConfig cfg;
-	float periodSeconds = 0.5f, marginElmos = 80.0f, cellElmos = 512.0f;
-	int period = 15;
+	float periodSeconds = 0.5f, marginElmos = 80.0f, cellElmos = 512.0f;   // DESIGN: fallbacks of gamedata/kt1/tiers.lua
+	int period = 15;   // DESIGN: the period in frames before Start computes it from periodSeconds
 	int nAsleep = 0, nIdleNear = 0, nTotal = 0;
 	TiersCore::Grid grid;
 	std::vector<uint64_t> enemyMask;

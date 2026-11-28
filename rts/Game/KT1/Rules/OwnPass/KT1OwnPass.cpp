@@ -41,6 +41,7 @@
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
+#include "Game/KT1/KT1Config.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/Models/3DModel.hpp"
 #include "Sim/Misc/QuadField.h"
@@ -59,10 +60,10 @@ public:
 	OwnPass() : Rule({"OwnPass", 1, true, "LuaRules/Gadgets/mov_own_pass.lua", false}) {}
 
 	void LoadConfig(const LuaTable& t) override {
-		slice = std::max(1, t.GetInt("slice", 3));
+		slice = KT1::ConfigFrames(t, "slice_s", "slice", 3);
 		ahead = t.GetFloat("ahead", 24.0f);
 		margin = t.GetFloat("search_margin", 64.0f);
-		idleSpeed = t.GetFloat("idle_speed", 0.05f);
+		idleSpeed = KT1::ConfigPerFrame30(t, "idle_speed", 0.05f);
 	}
 
 	void ConfigValues(Data::Values& v) const override {
@@ -92,7 +93,7 @@ public:
 			if (ud == nullptr || !ud->canmove || ud->canfly) continue;
 			ground[d] = 1;
 			mass[d] = ud->mass;
-			const float foot = std::sqrt(float(ud->xsize) * float(ud->xsize) + float(ud->zsize) * float(ud->zsize)) * 4.0f;
+			const float foot = std::sqrt(float(ud->xsize) * float(ud->xsize) + float(ud->zsize) * float(ud->zsize)) * 4.0f;   // DESIGN: footprints count 8-elmo map squares; half a square, in elmos
 			const S3DModel* model = ud->LoadModel();   // the Lua unit def radius is the model radius
 			size[d] = std::max(model != nullptr ? model->radius : 0.0f, foot);   // the engine collides by footprint as well as by radius
 		}
@@ -203,8 +204,8 @@ private:
 	}
 
 	OwnPassConfig cfg;
-	int slice = 3;   // frames
-	float ahead = 24.0f, margin = 64.0f, idleSpeed = 0.05f;
+	int slice = 3;   // DESIGN: fallback of gamedata/kt1/ownpass.lua slice, a frame count (SIM-10HZ stage 0)
+	float ahead = 24.0f, margin = 64.0f, idleSpeed = 0.05f;   // DESIGN: fallbacks of gamedata/kt1/ownpass.lua
 	std::vector<char> ground;             // per def id
 	std::vector<float> mass, size;        // per def id
 	std::vector<CUnit*> owner;            // per unit id: who the state below belongs to (an id is reused)

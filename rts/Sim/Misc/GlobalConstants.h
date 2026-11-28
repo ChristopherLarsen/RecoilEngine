@@ -57,14 +57,14 @@ static constexpr float INV_GAME_SPEED = 1.0f / GAME_SPEED;
  *
  * Defines the interval of SlowUpdate calls in sim-frames.
  */
-static constexpr int UNIT_SLOWUPDATE_RATE = 15;
+static constexpr int UNIT_SLOWUPDATE_RATE = GAME_SPEED / 2; // 0.5 s (15 at 30 Hz); KT1 SIM-10HZ-PLAN stage 0
 
 /**
  * @brief team SlowUpdate rate
  *
  * Defines the interval of CTeam::SlowUpdate calls in sim-frames.
  */
-static constexpr int TEAM_SLOWUPDATE_RATE = 30;
+static constexpr int TEAM_SLOWUPDATE_RATE = GAME_SPEED; // 1 s (30 at 30 Hz); KT1 SIM-10HZ-PLAN stage 0
 
 
 /**

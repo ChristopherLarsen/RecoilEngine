@@ -30,6 +30,7 @@
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
+#include "Game/KT1/KT1Config.h"
 #include "Lua/LuaUtils.h"
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/Units/Unit.h"
@@ -44,7 +45,7 @@ public:
 	Census() : Rule({"Census", 1, true, "LuaRules/Gadgets/kt1_census.lua", false}) {}
 
 	void LoadConfig(const LuaTable& t) override {
-		period = std::max(1, t.GetInt("period", 30));
+		period = KT1::ConfigFrames(t, "period_s", "period", 30);
 		defaultWeight = t.GetInt("default_weight", 1);
 		countUnfinished = t.GetBool("count_unfinished", false);
 	}

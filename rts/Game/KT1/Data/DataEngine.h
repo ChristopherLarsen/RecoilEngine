@@ -37,13 +37,12 @@ template <class T> T Load(const std::string& system) {
 	return value;
 }
 
-// At game start: hands the rule its config and logs the result. Json: its .json text (or "{}" when there is none),
-// remembered for reload. Lua and Check: its .lua table (empty when there is none); a rule that has only a .json file is
-// given that.
+// At game start: hands the rule its config and logs the result. Json: its .json text, remembered for reload. Lua and
+// Check: its .lua table (empty when there is none). A rule that has only the other file is given that one.
 void LoadRule(Rule& rule, Source source, const char* modeName);
 
 // Check: reads both of the rule's files, compares every value (Rule::ConfigValues), logs each difference and leaves the
-// rule holding the Lua values. A rule without a .lua file has nothing to compare.
+// rule holding the Lua values. A rule with only one of the files is not compared (the count of configs says how many were).
 struct ConfigCheck { unsigned compared = 0, diffs = 0, configs = 0; };
 void CheckRule(Rule& rule, ConfigCheck& check);
 // "[KT1CHECK] JsonConfig f=0 n=<values compared> diffs=<k>", then how many configs that covered.

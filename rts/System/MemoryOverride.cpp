@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "MemoryOverride.hpp"
+#include "Game/KT1/Prof/KT1FrameCountAlloc.h" // KT1 hook: FrameCount
 
 #ifdef USE_MIMALLOC
 #include <mimalloc.h>
@@ -182,6 +183,7 @@ void operator delete[](void* p, const std::nothrow_t&) noexcept
 void* operator new(std::size_t n) noexcept(false)
 {
 	void* p = mi_new(n);
+	KT1FrameCountAlloc::Count(n); // KT1 hook: FrameCount
 #ifdef TRACY_ENABLE
 	TracyAlloc(p, n);
 #endif
@@ -191,6 +193,7 @@ void* operator new(std::size_t n) noexcept(false)
 void* operator new[](std::size_t n) noexcept(false)
 {
 	void* p = mi_new(n);
+	KT1FrameCountAlloc::Count(n); // KT1 hook: FrameCount
 #ifdef TRACY_ENABLE
 	TracyAlloc(p, n);
 #endif
@@ -202,6 +205,7 @@ void* operator new(std::size_t n, const std::nothrow_t& tag) noexcept
 {
 	(void)(tag);
 	void* p = mi_new_nothrow(n);
+	KT1FrameCountAlloc::Count(n); // KT1 hook: FrameCount
 #ifdef TRACY_ENABLE
 	TracyAlloc(p, n);
 #endif
@@ -212,6 +216,7 @@ void* operator new[](std::size_t n, const std::nothrow_t& tag) noexcept
 {
 	(void)(tag);
 	void* p = mi_new_nothrow(n);
+	KT1FrameCountAlloc::Count(n); // KT1 hook: FrameCount
 #ifdef TRACY_ENABLE
 	TracyAlloc(p, n);
 #endif
@@ -290,6 +295,7 @@ void operator delete[](void* p, std::align_val_t al, const std::nothrow_t&) noex
 void* operator new(std::size_t n, std::align_val_t al) noexcept(false)
 {
 	void* p = mi_new_aligned(n, static_cast<size_t>(al));
+	KT1FrameCountAlloc::Count(n); // KT1 hook: FrameCount
 #ifdef TRACY_ENABLE
 	TracyAlloc(p, n);
 #endif
@@ -299,6 +305,7 @@ void* operator new(std::size_t n, std::align_val_t al) noexcept(false)
 void* operator new[](std::size_t n, std::align_val_t al) noexcept(false)
 {
 	void* p = mi_new_aligned(n, static_cast<size_t>(al));
+	KT1FrameCountAlloc::Count(n); // KT1 hook: FrameCount
 #ifdef TRACY_ENABLE
 	TracyAlloc(p, n);
 #endif
@@ -308,6 +315,7 @@ void* operator new[](std::size_t n, std::align_val_t al) noexcept(false)
 void* operator new(std::size_t n, std::align_val_t al, const std::nothrow_t&) noexcept
 {
 	void* p = mi_new_aligned_nothrow(n, static_cast<size_t>(al));
+	KT1FrameCountAlloc::Count(n); // KT1 hook: FrameCount
 #ifdef TRACY_ENABLE
 	TracyAlloc(p, n);
 #endif
@@ -317,6 +325,7 @@ void* operator new(std::size_t n, std::align_val_t al, const std::nothrow_t&) no
 void* operator new[](std::size_t n, std::align_val_t al, const std::nothrow_t&) noexcept
 {
 	void* p = mi_new_aligned_nothrow(n, static_cast<size_t>(al));
+	KT1FrameCountAlloc::Count(n); // KT1 hook: FrameCount
 #ifdef TRACY_ENABLE
 	TracyAlloc(p, n);
 #endif

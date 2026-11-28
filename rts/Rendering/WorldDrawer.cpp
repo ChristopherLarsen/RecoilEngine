@@ -3,8 +3,10 @@
 #include "Rendering/GL/myGL.h"
 
 #include "WorldDrawer.h"
+#include "Game/KT1/Host/DrawPhases.h" // KT1 hook: DrawPhases
 #include "Game/KT1/KT1Registry.h" // KT1 hook: registry
 #include "Game/KT1/UI/FarView/KT1FarView.h" // KT1 hook: FarView
+#include "SupComZoomLevel.h"
 #include "Sim/Units/UnitDefHandler.h"
 #include "Sim/Features/FeatureDefHandler.h"
 #include "Sim/Weapons/WeaponDefHandler.h"
@@ -84,6 +86,7 @@ void CWorldDrawer::InitPost() const
 {
 	char buf[512] = {0};
 
+	KT1::DrawPhases::Init(); // KT1 hook: DrawPhases (the sim's display events are played from the first drawn frame)
 	CModelsLock::SetThreadSafety(true);
 	const bool preloadMode = configHandler->GetBool("PreloadModels");
 	{
@@ -176,6 +179,7 @@ void CWorldDrawer::InitPost() const
 
 void CWorldDrawer::Kill()
 {
+	KT1::DrawPhases::Kill(); // KT1 hook: DrawPhases (draw systems release their GL objects)
 	infoTextureHandler = nullptr;
 
 	IWater::KillWater();
@@ -209,9 +213,21 @@ void CWorldDrawer::Kill()
 
 
 
+// supcom (TOP-COSTS-4K item 3, 2026-11-26): a headless engine has no window, so the unit and feature drawers' per-frame work (draw
+// positions, icon states, LOD and visibility bins) is for nothing: at 4K CUnitDrawerBase::Update alone was 6.2 ms a frame. Off in headless (headlessValue false);
+// the rest of the update still runs (Lua object drawer, heightmap copy, ground, projectiles, sky, water). All of it is
+// unsynced: no sim state is read back from it. SupComDrawerUpdates=1 in a headless run restores the old behaviour.
+CONFIG(bool, SupComDrawerUpdates).defaultValue(true).description("supcom: run the unit and feature drawers' per-frame update (off by default in headless engines, where nothing is drawn)");
+
 void CWorldDrawer::Update(bool newSimFrame)
 {
 	SCOPED_TIMER("Update::WorldDrawer");
+
+	// headless: the first call runs in full (it initialises the Lua object drawer, ground, projectile and sky/water state that
+	// the headless Draw path and Lua still touch: skipping it crashed at load, 02ead7ccfe); after that only the unit and feature
+	// drawer updates are skipped, the costly part (CUnitDrawerBase::Update 6.2 of 8.4 ms at 4K).
+	static const bool drawerUpdates = configHandler->GetBool("SupComDrawerUpdates");
+	const bool unitFeatureUpdates = drawerUpdates || numUpdates == 0;
 
 	LuaObjectDrawer::Update(numUpdates == 0);
 	readMap->UpdateDraw(numUpdates == 0);
@@ -224,8 +240,10 @@ void CWorldDrawer::Update(bool newSimFrame)
 	// (it updates unitdrawpos which is used for maximized minimap too)
 	// unitDrawer->Update();
 	// lineDrawer.UpdateLineStipple();
-	CUnitDrawer::UpdateStatic();
-	CFeatureDrawer::UpdateStatic();
+	if (unitFeatureUpdates) {
+		CUnitDrawer::UpdateStatic();
+		CFeatureDrawer::UpdateStatic();
+	}
 	projectileDrawer->UpdateDrawFlags();
 
 	if (newSimFrame) {
@@ -263,7 +281,7 @@ void CWorldDrawer::GenerateIBLTextures() const
 	{
 		SCOPED_TIMER("Draw::World::UpdateReflTex");
 		SCOPED_GL_DEBUGGROUP("Draw::World::UpdateReflTex");
-		cubeMapHandler.UpdateReflectionTexture();
+		if (!SupComZoomLevel::ReflTexOff()) cubeMapHandler.UpdateReflectionTexture(); // DRAW-ZOOM-MAP: kept cubemap past the level
 	}
 
 	SCOPED_GL_DEBUGGROUP("Draw::World::UpdateMisc");
@@ -321,6 +339,7 @@ void CWorldDrawer::Draw() const
 	{
 		SCOPED_TIMER("Draw::World::DrawWorld");
 		SCOPED_GL_DEBUGGROUP("Draw::World::DrawWorld");
+		KT1::DrawPhases::Run(KT1::DrawPhase::World); // KT1 hook: DrawPhases
 		eventHandler.DrawWorld();
 	}
 
@@ -347,13 +366,13 @@ void CWorldDrawer::DrawOpaqueObjects() const
 			eventHandler.DrawPreDecals();
 			SCOPED_TIMER("Draw::World::Decals");
 			SCOPED_GL_DEBUGGROUP("Draw::World::Decals");
-			groundDecals->Draw();
-			projectileDrawer->DrawGroundFlashes();
+			if (!SupComZoomLevel::Skip(SupComZoomLevel::Decals) && !SupComZoomLevel::DecalsOff()) groundDecals->Draw();
+			if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawGroundFlashes();
 		}
 		{
 			SCOPED_TIMER("Draw::World::Foliage");
 			SCOPED_GL_DEBUGGROUP("Draw::World::Foliage");
-			grassDrawer->Draw();
+			if (!SupComZoomLevel::Skip(SupComZoomLevel::Foliage)) grassDrawer->Draw();
 		}
 		smoothHeightMeshDrawer->Draw(1.0f);
 	}
@@ -362,25 +381,26 @@ void CWorldDrawer::DrawOpaqueObjects() const
 	{
 		SCOPED_GL_DEBUGGROUP("Draw::World::Sky");
 		const auto& sky = ISky::GetSky();
-		sky->Draw();
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Sky)) sky->Draw();
 	}
 
 	{
 		SCOPED_GL_DEBUGGROUP("Draw::World::SelectedUnits");
 		selectedUnitsHandler.Draw();
 	}
+	KT1::DrawPhases::Run(KT1::DrawPhase::WorldPreUnit); // KT1 hook: DrawPhases
 	eventHandler.DrawWorldPreUnit();
 
 	{
 		SCOPED_TIMER("Draw::World::Models::Opaque");
 		SCOPED_GL_DEBUGGROUP("Draw::World::Models::Opaque");
-		unitDrawer->Draw(false);
-		featureDrawer->Draw(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Units)) unitDrawer->Draw(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Features)) featureDrawer->Draw(false);
 	}
 	{
 		SCOPED_TIMER("Draw::World::Models::Projectiles");
 		SCOPED_GL_DEBUGGROUP("Draw::World::Models::Projectiles");
-		projectileDrawer->DrawOpaque(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawOpaque(false);
 	}
 	{
 		SCOPED_TIMER("Draw::OpaqueObjects::Debug");
@@ -415,15 +435,16 @@ void CWorldDrawer::DrawAlphaObjects() const
 		}
 
 		// draw alpha-objects below water surface (farthest)
-		unitDrawer->DrawAlphaPass(false);
-		featureDrawer->DrawAlphaPass(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Units)) unitDrawer->DrawAlphaPass(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Features)) featureDrawer->DrawAlphaPass(false);
 	}
 	{
 		SCOPED_TIMER("Draw::World::Particles");
 		SCOPED_GL_DEBUGGROUP("Draw::World::Particles");
-		projectileDrawer->DrawAlpha(!hasWaterRendering, true, false, false);
-		NanoParticles::Draw(!hasWaterRendering, true, false, false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawAlpha(!hasWaterRendering, true, false, false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Particles)) NanoParticles::Draw(!hasWaterRendering, true, false, false);
 		KT1::Registry::DrawWorld(!hasWaterRendering); // KT1 hook: registry (unsynced rules draw: Ribbons)
+		KT1::DrawPhases::WorldAlpha(!hasWaterRendering); // KT1 hook: DrawPhases
 
 		if (hasWaterRendering)
 			glDisable(GL_CLIP_PLANE3);
@@ -456,15 +477,16 @@ void CWorldDrawer::DrawAlphaObjects() const
 		glEnable(GL_CLIP_PLANE3);
 
 		// draw alpha-objects above water surface (closest)
-		unitDrawer->DrawAlphaPass(false);
-		featureDrawer->DrawAlphaPass(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Units)) unitDrawer->DrawAlphaPass(false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Features)) featureDrawer->DrawAlphaPass(false);
 	}
 	{
 		SCOPED_TIMER("Draw::World::Particles");
 		SCOPED_GL_DEBUGGROUP("Draw::World::Particles");
-		projectileDrawer->DrawAlpha(true, false, false, false);
-		NanoParticles::Draw(true, false, false, false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawAlpha(true, false, false, false);
+		if (!SupComZoomLevel::Skip(SupComZoomLevel::Particles)) NanoParticles::Draw(true, false, false, false);
 		KT1::Registry::DrawWorld(true); // KT1 hook: registry (unsynced rules draw: Ribbons)
+		KT1::DrawPhases::WorldAlpha(true); // KT1 hook: DrawPhases
 
 		glDisable(GL_CLIP_PLANE3);
 	}

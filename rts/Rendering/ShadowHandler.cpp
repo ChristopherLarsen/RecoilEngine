@@ -2,6 +2,7 @@
 #include <cfloat>
 
 #include "ShadowHandler.h"
+#include "SupComZoomLevel.h"
 #include "Game/Camera.h"
 #include "Game/CameraHandler.h"
 #include "Game/GameVersion.h"
@@ -624,6 +625,8 @@ void CShadowHandler::ResetShadowTexSamplerRaw() const
 }
 
 
+static bool zoomCleared = false; // DRAW-ZOOM-MAP shadow gate: map already cleared while gated
+
 void CShadowHandler::CreateShadows()
 {
 	// NOTE:
@@ -643,6 +646,22 @@ void CShadowHandler::CreateShadows()
 	glEnable(GL_DEPTH_TEST);
 	glClear(GL_DEPTH_BUFFER_BIT);
 
+
+	// DRAW-ZOOM-MAP: above SupComShadowMaxLevel the map is cleared once (depth 1 = lit, colour 1 = no tint) and the
+	// passes are skipped; the depth clear above already empties it, so only the colour clear is added here.
+	if (SupComZoomLevel::ShadowsOff()) {
+		if (!zoomCleared) {
+			EnableColorOutput(true);
+			glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			EnableColorOutput(false);
+			zoomCleared = true;
+		}
+		glShadeModel(GL_SMOOTH);
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		return;
+	}
+	zoomCleared = false;
 
 	//flickers without it. Why?
 	SetShadowCamera(CCameraHandler::GetCamera(CCamera::CAMTYPE_SHADOW));

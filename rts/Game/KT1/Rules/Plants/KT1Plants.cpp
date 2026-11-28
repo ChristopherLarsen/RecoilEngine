@@ -39,6 +39,7 @@
 #include "Game/KT1/Rules/Plants/PlantsConfig.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
+#include "Game/KT1/KT1Config.h"
 #include "Lua/LuaUtils.h"
 #include "Map/Ground.h"
 #include "Sim/Features/Feature.h"
@@ -58,12 +59,12 @@ public:
 	Plants() : Rule({"Plants", 1, true, "LuaRules/Gadgets/mov_trees.lua, map_plants.lua (contact search)", false}) {}
 
 	void LoadConfig(const LuaTable& t) override {
-		treesEvery = std::max(1, t.GetInt("trees_every", 3));
+		treesEvery = KT1::ConfigFrames(t, "trees_every_s", "trees_every", 3);
 		treesReach = t.GetFloat("trees_reach", 0.6f);
-		treesMin = t.GetFloat("trees_min_speed", 0.01f);
-		plantsEvery = std::max(1, t.GetInt("plants_every", 3));
+		treesMin = KT1::ConfigPerFrame30(t, "trees_min_speed", 0.01f);
+		plantsEvery = KT1::ConfigFrames(t, "plants_every_s", "plants_every", 3);
 		plantsMargin = t.GetFloat("plants_margin", 4.0f);
-		plantsMin = t.GetFloat("plants_min_speed", 0.05f);
+		plantsMin = KT1::ConfigPerFrame30(t, "plants_min_speed", 0.05f);
 	}
 
 	void ConfigValues(Data::Values& v) const override {
@@ -102,7 +103,7 @@ public:
 		for (int d = 1; d <= n; ++d) {
 			const UnitDef* ud = unitDefHandler->GetUnitDefByID(d);
 			if (ud == nullptr) continue;
-			const float half = float(std::max(ud->xsize, ud->zsize)) * 4.0f;
+			const float half = float(std::max(ud->xsize, ud->zsize)) * 4.0f;   // DESIGN: footprints count 8-elmo map squares; half a square, in elmos
 			if (!ud->canfly && ud->speed > 0.0f) treeR[d] = half * treesReach;
 			if (ud->canmove && !ud->canfly && !ud->IsBuildingUnit()) plantR[d] = half + plantsMargin;
 		}
@@ -126,7 +127,7 @@ public:
 				&& u->pos.y >= CGround::GetHeightReal(u->pos.x, u->pos.z, true) - 1.0f)
 				Probe(u, treeR[d], 1);
 			if (pSlot && plantR[d] >= 0.0f && u->speed.x * u->speed.x + u->speed.z * u->speed.z >= plantsMin * plantsMin)
-				Probe(u, plantR[d], 2);
+				Probe(u, plantR[d], 2);   // DESIGN: event kind code (1 tree, 2 plant)
 		}
 	}
 
@@ -150,7 +151,7 @@ private:
 		std::sort(hits.begin(), hits.end());
 		std::vector<int>& ev = events[kind - 1];
 		for (int fid : hits) {
-			if (ev.size() + 2 > MAX_EVENTS) return;
+			if (ev.size() + 2 > MAX_EVENTS) return;   // DESIGN: one event is 2 numbers
 			ev.push_back(u->id);
 			ev.push_back(fid);
 		}
@@ -161,7 +162,7 @@ private:
 	static int LEvents(lua_State* L) {
 		Plants* r = Self();
 		const int kind = luaL_checkint(L, 1);
-		if (r == nullptr || !r->Enabled() || !CLuaHandle::GetHandleSynced(L) || kind < 1 || kind > 2) return 0;
+		if (r == nullptr || !r->Enabled() || !CLuaHandle::GetHandleSynced(L) || kind < 1 || kind > 2) return 0;   // DESIGN: event kind codes 1 tree, 2 plant
 		std::vector<int>& ev = r->events[kind - 1];
 		lua_createtable(L, (int)ev.size(), 0);
 		for (size_t i = 0; i < ev.size(); ++i) { lua_pushnumber(L, ev[i]); lua_rawseti(L, -2, (int)i + 1); }
@@ -182,8 +183,8 @@ private:
 	}
 
 	PlantsConfig cfg;
-	int treesEvery = 3, plantsEvery = 3;   // frames
-	float treesReach = 0.6f, treesMin = 0.01f, plantsMargin = 4.0f, plantsMin = 0.05f;
+	int treesEvery = 3, plantsEvery = 3;   // DESIGN: fallbacks of gamedata/kt1/plants.lua, frame counts (SIM-10HZ stage 0)
+	float treesReach = 0.6f, treesMin = 0.01f, plantsMargin = 4.0f, plantsMin = 0.05f;   // DESIGN: fallbacks of gamedata/kt1/plants.lua, except plantsMargin: PLACEHOLDER there (MAP-002 v5)
 	std::vector<char> knock;              // per feature def id
 	std::vector<float> treeR, plantR;     // per unit def id: probe radius, -1 = not probed
 	std::vector<int> hits, ids;           // scratch

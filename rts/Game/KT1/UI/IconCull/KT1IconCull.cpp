@@ -45,18 +45,18 @@ namespace IconCull {
 	}
 
 	bool Check(size_t iconIdx) {
-		if (iconIdx >= empty.size()) { empty.resize(iconIdx + 1, 2); checkedName.resize(iconIdx + 1); }
+		if (iconIdx >= empty.size()) { empty.resize(iconIdx + 1, 2); checkedName.resize(iconIdx + 1); }   // DESIGN: state code in empty[], 2 = not checked yet
 		const std::string& file = icon::iconHandler.GetIconData(iconIdx).GetFileName();
 		bool isEmpty = false;
 		CBitmap bm;
-		if (!file.empty() && bm.Load(file) && bm.channels == 4 && bm.GetDataTypeSize() == 1) {
+		if (!file.empty() && bm.Load(file) && bm.channels == 4 && bm.GetDataTypeSize() == 1) {   // DESIGN: RGBA
 			const uint8_t* p = bm.GetRawMem();
 			const size_t n = (size_t)bm.xsize * bm.ysize;
 			isEmpty = n > 0;
 			for (size_t i = 0; i < n && isEmpty; ++i) isEmpty = p[i * 4 + 3] <= alphaMax;
 		}
 		if (empty[iconIdx] == 1) emptyCount -= 1;
-		if (empty[iconIdx] == 2) checkedCount += 1;
+		if (empty[iconIdx] == 2) checkedCount += 1;   // DESIGN: state code, 2 = not checked yet
 		empty[iconIdx] = isEmpty ? 1 : 0;
 		emptyCount += isEmpty ? 1 : 0;
 		checkedName[iconIdx] = file;
@@ -83,7 +83,7 @@ namespace IconCull {
 
 		void DrawWorld() override {           // once per drawn frame, before Draw::Screen: refresh changed icons, reset the counter
 			for (size_t i = 0; i < empty.size(); ++i) {
-				if (empty[i] == 2) continue;
+				if (empty[i] == 2) continue;   // DESIGN: state code, 2 = not checked yet
 				if (icon::iconHandler.GetIconData(i).GetFileName() != checkedName[i]) Check(i);
 			}
 			lastSkipped = skipped;

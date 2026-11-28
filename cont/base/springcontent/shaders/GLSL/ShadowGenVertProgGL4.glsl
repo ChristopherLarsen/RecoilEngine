@@ -100,6 +100,8 @@ out Data {
 };
 out float gl_ClipDistance[2];
 
+uniform float kt1NoBias = 0.0; // KT1 plain shadows: 1 = no slope bias (the Lua art_shadow form)
+
 void TransformShadowCam(vec4 worldPos, vec3 worldNormal) {
 	vec4 lightVertexPos = shadowView * worldPos;
 	vec3 lightVertexNormal = normalize(mat3(shadowView) * worldNormal);
@@ -108,7 +110,7 @@ void TransformShadowCam(vec4 worldPos, vec3 worldNormal) {
 
 	//use old bias formula from GetShadowPCFRandom(), but this time to write down shadow depth map values
 	const float cb = 1e-5;
-	float bias = cb * clamp(tan(acos(NdotL)), 0.0, 30.0);
+	float bias = (1.0 - kt1NoBias) * cb * clamp(tan(acos(NdotL)), 0.0, 30.0);
 
 	lightVertexPos.xy += vec2(0.5);
 	lightVertexPos.z  += bias;

@@ -150,8 +150,10 @@ void Log(const std::string& system, const Report& report) {
 
 void LoadRule(Rule& rule, Source source, const char* modeName) {
 	std::string text;
-	// a rule written after the .lua configs has only a .json file
-	if (source == Source::Json || (!HasLua(rule.Key()) && ReadText(rule.Key(), text))) return LoadJson(rule, modeName);
+	// The file the setting names, else the other one: a rule written after the .lua configs has only a .json file, and one
+	// not yet converted has only LoadConfig (which may also be where it sets itself up, file or no file).
+	const bool hasJson = ReadText(rule.Key(), text);
+	if (hasJson && (source == Source::Json || !HasLua(rule.Key()))) return LoadJson(rule, modeName);
 	std::string error;
 	const bool ok = ReadLua(rule, error);
 	LOG("[KT1] %s v%d %s, config %s%s%s mode=%s", rule.Info().name, rule.Info().version,
@@ -163,11 +165,11 @@ void CheckRule(Rule& rule, ConfigCheck& check) {
 	const std::string& key = rule.Key();
 	std::string text;
 	const bool hasJson = ReadText(key, text);
-	if (!HasLua(key)) {
-		if (hasJson) LOG("[KT1] JsonConfig: %s has no .lua config; nothing to compare", rule.Info().name);
+	const bool hasLua = HasLua(key);
+	if (!hasLua || !hasJson) {   // one file only (a system not converted, or written after the .lua configs)
+		if (hasLua || hasJson) LOG("[KT1] JsonConfig: %s has only a %s config; nothing to compare", rule.Info().name, hasLua ? ".lua" : ".json");
 		return;
 	}
-	if (!hasJson) return Differs(check, key + ".file", LuaPathFor(key), "absent");
 
 	const Report report = rule.ReadConfig(text, GameStrictness());
 	Log(key, report);

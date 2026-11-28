@@ -255,6 +255,7 @@ class CLuaHandle : public CEventClient
 		) override;
 
 		void ViewResize() override;
+		void SupComZoomLevelChanged(int newLevel, int oldLevel) override;
 
 		void FontsChanged() override;
 

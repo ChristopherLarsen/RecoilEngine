@@ -4,7 +4,7 @@
 # NAMES are the KT1_REGISTER_SYSTEM names its sources define (KT1Register.h). The generated kt1_systems.gen.cpp calls
 # each one, so no shared file lists the systems and a static library cannot drop one.
 
-set(KT1_SOURCES "${CMAKE_CURRENT_LIST_DIR}/KT1Registry.cpp")
+set(KT1_SOURCES "${CMAKE_CURRENT_LIST_DIR}/KT1Registry.cpp" "${CMAKE_CURRENT_LIST_DIR}/Prof/KT1FrameCount.cpp")   # FrameCount (rvf-framecount): not a registered system
 set(KT1_SYSTEM_NAMES "")
 
 function(kt1_system)

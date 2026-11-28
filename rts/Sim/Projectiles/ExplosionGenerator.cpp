@@ -12,6 +12,20 @@
 #include "Game/Camera.h"
 #include "Game/GameHelper.h"
 #include "Game/GlobalUnsynced.h" // guRNG
+#include "Game/CameraHandler.h"
+#include "Game/Camera.h"
+#include "System/Config/ConfigHandler.h"
+
+CONFIG(bool, KardashevCegCull).defaultValue(false).description("Kardashev: CEG elements with a cullDistance are not made past it (view depth). 0 draws every element (captures). Graphics only.");
+CONFIG(float, KardashevCegCullScale).defaultValue(1.0f).minimumValue(0.0f).description("Kardashev: multiplies every CEG cullDistance (detail option, RND-006 R8). 0 = no culling.");
+
+bool CCustomExplosionGenerator::cegCullOn = true;
+float CCustomExplosionGenerator::cegCullScale = 1.0f;
+unsigned int CCustomExplosionGenerator::cegCulled = 0;
+void CCustomExplosionGenerator::ReloadCullConfig() {
+	cegCullOn = configHandler->GetBool("KardashevCegCull");
+	cegCullScale = configHandler->GetFloat("KardashevCegCullScale");
+}
 #include "Lua/LuaParser.h"
 #include "Map/Ground.h"
 #include "Rendering/GroundFlash.h"
@@ -976,6 +990,7 @@ bool CCustomExplosionGenerator::Load(CExplosionGeneratorHandler* handler, const 
 
 		psi.flags = GetFlagsFromTable(spawnTable);
 		psi.count = std::max(0, spawnTable.GetInt("count", 1));
+		psi.cullDistance = spawnTable.GetFloat("cullDistance", 0.0f); // Kardashev: CEG-ZOOM-CULL-SPEC, RND-006 R8
 
 		std::string code;
 		spring::unordered_map<string, string> props;
@@ -1090,12 +1105,30 @@ bool CCustomExplosionGenerator::Explosion(
 		assert(Threading::IsMainThread() || Threading::IsGameLoadThread());
 	}
 
+	// Kardashev (CEG-ZOOM-CULL-SPEC, RND-006 R8): an element with a cullDistance is not made while its spawn point lies deeper in the
+	// player's view than that distance (view depth = along the camera's forward axis). Graphics only: CEG particles are unsynced
+	// projectiles and their spawn code draws only from guRNG, so no synced state depends on it.
+	float cullDepth = -1.0f;
+	float cullScale = 0.0f;
+	if (cegCullOn) {
+		const CCamera* pc = CCameraHandler::GetCamera(CCamera::CAMTYPE_PLAYER);
+		if (pc != nullptr) {
+			cullDepth = (pos - pc->GetPos()).dot(pc->GetForward());
+			cullScale = cegCullScale;
+		}
+	}
+
 	for (int a = 0; a < spawnInfo.size(); a++) {
 		const ProjectileSpawnInfo& psi = spawnInfo[a];
 
 		// spawn projectiles only if at least one bit matches
 		if ((psi.flags & flags) == 0)
 			continue;
+
+		if (psi.cullDistance > 0.0f && cullScale > 0.0f && cullDepth > psi.cullDistance * cullScale) {
+			cegCulled += psi.count;
+			continue;
+		}
 
 		// no new projectiles if we're saturated
 		if (projectileHandler.GetParticleSaturation() > 1.0f)

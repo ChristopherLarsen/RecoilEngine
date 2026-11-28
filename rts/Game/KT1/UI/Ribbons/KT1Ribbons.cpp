@@ -39,6 +39,7 @@
 #include <vector>
 
 #include "Game/Camera.h"
+#include "Sim/Misc/GlobalConstants.h"
 #include "Game/GlobalUnsynced.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
@@ -68,7 +69,7 @@
 namespace KT1 {
 namespace {
 
-constexpr float FPS = 30.0f;     // GAME_SPEED: frames per game second (the follower's FPS)
+constexpr float FPS = float(GAME_SPEED);     // GAME_SPEED: frames per game second (the follower's FPS)
 constexpr int CORE = 0, DASH = 1, THREAD = 2, NSTRIP = 3;
 const char* const STRIP[NSTRIP] = {"core", "dash", "thread"};
 

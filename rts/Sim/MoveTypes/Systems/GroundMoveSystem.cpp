@@ -2,6 +2,7 @@
 
 // #undef NDEBUG
 
+#include "Sim/MoveTypes/SupComMoveTimers.h"
 #include "Game/KT1/Rules/Tiers/KT1Tiers.h" // KT1 hook: Tiers
 #include "GroundMoveSystem.h"
 #include "Sim/MoveTypes/SupComHalfRate.h"
@@ -37,8 +38,14 @@ void GroundMoveSystem::Update() {
     // needed. Though that will be a bigger change.
 	{
 		SCOPED_TIMER("Sim::Unit::MoveType::1::UpdateTraversalPlan");
-		SupComAvoidSnapshot::Take(); // supcom: avoidance reads the pre-pass state (SupComAvoidSnapshot.h)
+		SupComMoveTimers::Begin();
+		{
+			SCOPED_TIMER("Sim::Unit::MoveType::1a::AvoidSnapshot");
+			SupComAvoidSnapshot::Take(); // supcom: avoidance reads the pre-pass state (SupComAvoidSnapshot.h)
+		}
         auto view = Sim::registry.view<GroundMoveType>();
+		{
+		SCOPED_TIMER("Sim::Unit::MoveType::1b::PathSwitch"); // with AvoidPlanSplit on: the new-path check only
         for_mt(0, view.size(), [&view](const int i){
             auto entity = (*view.storage<GroundMoveType>())[i];
             auto unitId = view.get<GroundMoveType>(entity);
@@ -51,16 +58,24 @@ void GroundMoveSystem::Update() {
 			unit->SanityCheck();
             #endif
 
+			if (SupComHalfRate::PlanOffTick(unit)) return; // supcom: idle half rate for the plan (SupComHalfRate.h)
 			moveType->UpdateTraversalPlan();
 		});
+		}
 		// supcom: AvoidPlanSplit, every unit's avoidance, then every unit's speed and heading (SupComAvoidSnapshot.h)
 		if (SupComAvoidSnapshot::PlanSplit()) {
 			for (int part = 2; part <= 3; ++part) {
+				// supcom timers: part 2 is obstacle avoidance, part 3 speed and heading (FollowPath)
+				const spring_time t0 = spring_gettime();
 				for_mt(0, view.size(), [&view, part](const int i) {
 					auto entity = (*view.storage<GroundMoveType>())[i];
 					CUnit* unit = unitHandler.GetUnit(view.get<GroundMoveType>(entity).value);
+					if (unit->supcomPlanSkip) return; // supcom: idle half rate (SupComHalfRate.h)
 					static_cast<CGroundMoveType*>(unit->moveType)->SupComPlanPart(part);
 				});
+				static TimerNameRegistrar tnrAvoid("Sim::Unit::MoveType::1c::Avoidance");
+				static TimerNameRegistrar tnrFollow("Sim::Unit::MoveType::1d::AccelHeadingFollowPath");
+				CTimeProfiler::GetInstance().AddTime((part == 2) ? hashString("Sim::Unit::MoveType::1c::Avoidance") : hashString("Sim::Unit::MoveType::1d::AccelHeadingFollowPath"), t0, spring_gettime() - t0);
 			}
 		}
 	}
@@ -93,6 +108,8 @@ void GroundMoveSystem::Update() {
     }
 	{
         auto view = Sim::registry.view<GroundMoveType>();
+		{
+		SCOPED_TIMER("Sim::Unit::MoveType::2b::UnitPosition");
         for_mt(0, view.size(), [&view](const int i){
             auto entity = (*view.storage<GroundMoveType>())[i];
             auto unitId = view.get<GroundMoveType>(entity);
@@ -103,7 +120,9 @@ void GroundMoveSystem::Update() {
 
 			moveType->UpdateUnitPosition();
 		});
+		}
 
+		SCOPED_TIMER("Sim::Unit::MoveType::2c::PreCollisions");
 		view.each([](GroundMoveType& unitId){
 			CUnit* unit = unitHandler.GetUnit(unitId.value);
 			CGroundMoveType* moveType = static_cast<CGroundMoveType*>(unit->moveType);
@@ -136,6 +155,7 @@ void GroundMoveSystem::Update() {
             assert(moveType != nullptr);
 
             moveType->SetMtJobId(i);
+            if (SupComHalfRate::Asleep(unit)) return; // supcom: SupComMoveSleep, a moving unit's test still finds it (SupComHalfRate.h)
             moveType->UpdateCollisionDetections();
         });
     }
@@ -164,20 +184,22 @@ void GroundMoveSystem::Update() {
         // TODO: the vars are synced and that's what is stopping this being MT'ed.
         // Need an alternative method to support sync values that doesn't stop MT.
         // Same for change heading above as well.
-        SCOPED_TIMER("Sim::Unit::MoveType::5::Update");
+        SCOPED_TIMER("Sim::Unit::MoveType::5::UpdateGround");
         auto view = Sim::registry.view<GroundMoveType>();
         view.each([&view](GroundMoveType& unitId){
             CUnit* unit = unitHandler.GetUnit(unitId.value);
             CGroundMoveType* moveType = static_cast<CGroundMoveType*>(unit->moveType);
             assert(moveType != nullptr);
+            if (unit->supcomPlanSkip) return; // supcom: idle half rate (SupComHalfRate::PlanOffTick)
             if (moveType->Update()) 
-                eventHandler.UnitMoved(unit);
+                { SupComMoveTimers::Section st(SupComMoveTimers::GMovedEvent); eventHandler.UnitMoved(unit); }
 
             #ifndef NDEBUG
             unit->SanityCheck();
             #endif
         });
     }
+	SupComMoveTimers::Flush();
 }
 
 void GroundMoveSystem::Shutdown() {}

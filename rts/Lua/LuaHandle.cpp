@@ -2,6 +2,7 @@
 
 #include "LuaHandle.h"
 #include "SupComCallinBatch.h" // supcom: fight call-in batching
+#include "Game/KT1/Host/LuaLeft/KT1LuaLeft.h" // KT1 hook: LuaLeft
 #include "Game/SupComLocalView.h"
 #include "lua_privileges.h"
 
@@ -364,6 +365,7 @@ int CLuaHandle::RunCallInTraceback(
 ) {
 	RECOIL_DETAILED_TRACY_ZONE;
 	if (SupComCib::pending > 0) SupComCib::BeforeCallIn(this); // supcom: queued fight call-ins first
+	KT1::LuaLeft::CallScope luaLeft(this, L, hs); // KT1 hook: LuaLeft
 	// do not signal floating point exceptions in user Lua code
 	ScopedDisableFpuExceptions fe;
 
@@ -2577,6 +2579,24 @@ void CLuaHandle::Update()
 }
 
 
+/*** Kardashev: the shared zoom level changed (presentation only; unsynced handles only).
+ * @function Callins:SupComZoomLevelChanged
+ * @param newLevel integer 0..7
+ * @param oldLevel integer 0..7
+ */
+void CLuaHandle::SupComZoomLevelChanged(int newLevel, int oldLevel)
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	LUA_CALL_IN_CHECK(L);
+	luaL_checkstack(L, 4, __func__);
+	static const LuaHashString cmdStr(__func__);
+	if (!cmdStr.GetGlobalFunc(L))
+		return;
+	lua_pushnumber(L, newLevel);
+	lua_pushnumber(L, oldLevel);
+	RunCallIn(L, cmdStr, 2, 0);
+}
+
 /*** Called whenever the window is resized.
  *
  * @function Callins:ViewResize
@@ -4309,6 +4329,7 @@ void CLuaHandle::CollectGarbage(bool forced)
 		return;
 
 	LUA_CALL_IN_CHECK_NAMED(L, (GetLuaContextData(L)->synced)? "Lua::CollectGarbage::Synced": "Lua::CollectGarbage::Unsynced");
+	const KT1::LuaLeft::GcScope luaLeftGc(L); // KT1 hook: LuaLeft
 
 	lua_lock(L_GC);
 	SetHandleRunning(L_GC, true);

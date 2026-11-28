@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "Sim/MoveTypes/SupComMoveTimers.h"
 #include "Game/KT1/Rules/Tiers/KT1Tiers.h" // KT1 hook: Tiers
 #include "SupComAirMoveType.h"
 #include "SupComAirRest.h" // supcom
@@ -273,10 +274,12 @@ bool CSupComAirMoveType::Update()
 			// a hovering aircraft leaving the ground climbs past the cruise height first (supcom_air_takeoff_overshoot)
 			takeoffPeak = (!winged && takeoffOvershoot > 0.0f);
 			SetState(AIRCRAFT_FLYING);
+			SupComMoveTimers::Section st(SupComMoveTimers::AFlight);
 			UpdateIdle();
 			UpdateFlight();
 		} break;
 		default: {
+			SupComMoveTimers::Section st(SupComMoveTimers::AFlight);
 			UpdateIdle();
 			UpdateFlight();
 		} break;
@@ -287,6 +290,8 @@ bool CSupComAirMoveType::Update()
 
 	const short oldHeading = owner->heading;
 
+	{
+	SupComMoveTimers::Section st(SupComMoveTimers::AHeading);
 	// with an attack target the combat turn rate limits the turn (MOV-016 v5 R3)
 	if (combatTurnRate > 0.0f && AttackTarget() != nullptr) {
 		const float defTurnRate = turnRate;
@@ -299,7 +304,9 @@ bool CSupComAirMoveType::Update()
 
 	if (winged)
 		UpdateBank(oldHeading);
+	}
 
+	SupComMoveTimers::Section st(SupComMoveTimers::ACollisions);
 	return HandleCollisions(collide);
 }
 

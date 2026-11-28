@@ -188,6 +188,7 @@ public:
 	void CleanupOldThreadProfiles();
 
 	void SetEnabled(bool b) { enabled = b; }
+	bool IsEnabled() const { return enabled.load(std::memory_order_relaxed); } // supcom: SupComMoveTimers
 	void PrintProfilingInfo() const;
 
 	void AddTime(

@@ -34,6 +34,9 @@ public:
 public:
 	int id = -1;
 	int lastFrameResponse = 0;
+	// KT1 pace (SpeedControl 3)
+	int pacePrevResponse = 0;
+	float paceBaselineLagS = 1e9f;
 
 	enum State {
 		UNCONNECTED,

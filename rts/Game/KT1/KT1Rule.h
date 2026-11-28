@@ -41,6 +41,8 @@ namespace KT1 {
 		bool synced;             // a synced rule runs in GameFrame and may change sim state; an unsynced one may not
 		const char* replaces;    // the Lua gadget it replaced ("LuaRules/Gadgets/kt1_census.lua"); that gadget stands down when this is on
 		bool defaultOn;          // the mod option's value when the game does not set it
+		// the rule honours the check-mode contract (KT1Register.h); kt1_<key>=check on a rule without it stops the engine
+		bool checkSafe = false;
 	};
 
 	class Rule {
@@ -59,7 +61,8 @@ namespace KT1 {
 		Mode SwitchMode() const { return mode; }
 		static const char* ModeName(Mode m) { return m == Mode::On ? "on" : (m == Mode::Check ? "check" : "off"); }
 
-		// The .lua config's table (empty when there is no file). Sets every value the rule takes from its config.
+		// The .lua config's table (empty when there is no file). Sets every value the rule takes from its config. A rule that
+		// also has a .json file only sets values here: check calls it twice.
 		virtual void LoadConfig(const LuaTable& cfg) {}
 		// Every value the rule runs on that its config sets, by name: what check compares between the two loaders.
 		virtual void ConfigValues(Data::Values& values) const {}

@@ -1,5 +1,5 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 rule: FarView (version 2: the cartographic look of RND-005 R3/R5/R10, the player's toggle, auto switch by config). Far above the map, the world pass draws only a low-resolution map mesh textured with a pre-baked
+// KT1 rule: FarView (version 3: unit and feature meshes in the far frame, RND-005 v2 R5; version 2: the cartographic look of RND-005 R3/R5/R10, the player's toggle, auto switch by config). Far above the map, the world pass draws only a low-resolution map mesh textured with a pre-baked
 // map image; strategic icons, order lines, selection and Lua overlays are drawn as before (game-build docs/engine/FAR-VIEW-DESIGN.md).
 //
 // Why:        at the PERF-BENCH-4K FAR camera (37,683 elmos) the new pin's far plane (98,304) puts the whole map in view and the full
@@ -45,6 +45,8 @@
 #include "Map/ReadMap.h"
 #include "Rendering/DepthBufferCopy.h"
 #include "Rendering/Env/Particles/ProjectileDrawer.h"
+#include "Rendering/Features/FeatureDrawer.h"
+#include "Rendering/Units/UnitDrawer.h"
 #include "Rendering/GL/SubState.h"
 #include "Rendering/GL/VAO.h"
 #include "Rendering/GL/VBO.h"
@@ -121,7 +123,7 @@ bool farNow = false;       // this frame is drawn far
 int force = -1;            // -1 by height, 0 never, 1 always (tests)
 bool manual = false;       // the player's cartographic toggle (RND-005 R1: a key action and a map option)
 float luaZoom = -1.0f;     // the game camera's zoom, when Lua sets it
-int luaZoomAge = 1000;     // drawn frames since Lua last set it
+int luaZoomAge = 1000;     // drawn frames since Lua last set it; DESIGN: starts as long unset
 float lastHeight = 0.0f;
 uint32_t fogTex = 0;       // the vision widget's fog mask (SetFogTexture); 0 = unfogged
 float fogFactor = 1.0f;
@@ -137,7 +139,7 @@ VAO* vaoP = nullptr;
 GLsizei indexCount = 0;
 uint32_t ownTex = 0;
 spring_time lastRefresh;   // wall time of the last mesh height refresh
-int sinceRefresh = 1 << 20;   // drawn frames since it
+int sinceRefresh = 1 << 20;   // DESIGN: drawn frames since it; starts as due
 int stRefreshes = 0, stFrames = 0;
 double stDrawMs = 0.0;
 
@@ -166,7 +168,7 @@ bool InitGL() {
 	VBO& vbo = *vboP; VBO& ibo = *iboP; VAO& vao = *vaoP;
 	const int n = cfg.grid;
 	std::vector<uint32_t> idx;
-	idx.reserve((size_t)n * n * 6);
+	idx.reserve((size_t)n * n * 6);   // DESIGN: 6 indices per mesh cell
 	for (int z = 0; z < n; ++z) {
 		for (int x = 0; x < n; ++x) {
 			const uint32_t a = z * (n + 1) + x, b = a + 1, c = a + (n + 1), d = c + 1;
@@ -175,7 +177,7 @@ bool InitGL() {
 	}
 	indexCount = (GLsizei)idx.size();
 	vbo.Bind(GL_ARRAY_BUFFER);
-	vbo.New(sizeof(float) * 3 * (n + 1) * (n + 1), GL_DYNAMIC_DRAW, nullptr);
+	vbo.New(sizeof(float) * 3 * (n + 1) * (n + 1), GL_DYNAMIC_DRAW, nullptr);   // DESIGN: 3 floats per vertex
 	vbo.Unbind();
 	ibo.Bind(GL_ELEMENT_ARRAY_BUFFER);
 	ibo.New(sizeof(uint32_t) * idx.size(), GL_STATIC_DRAW, idx.data());
@@ -198,7 +200,7 @@ void RefreshMesh() {
 	const float* hm = readMap->GetCornerHeightMapUnsynced();
 	const int W = mapDims.mapxp1, H = mapDims.mapyp1;
 	std::vector<float> v;
-	v.reserve((size_t)(n + 1) * (n + 1) * 3);
+	v.reserve((size_t)(n + 1) * (n + 1) * 3);   // DESIGN: 3 floats per vertex
 	for (int z = 0; z <= n; ++z) {
 		const int hz = std::min(H - 1, (int)std::lround((float)z * (H - 1) / n));
 		for (int x = 0; x <= n; ++x) {
@@ -218,7 +220,7 @@ void RefreshMesh() {
 
 bool DecideFar() {
 	luaZoomAge += 1;
-	const float h = (luaZoomAge <= 30 && luaZoom >= 0.0f) ? luaZoom : camera->GetPos().y - readMap->GetCurrAvgHeight();
+	const float h = (luaZoomAge <= 30 && luaZoom >= 0.0f) ? luaZoom : camera->GetPos().y - readMap->GetCurrAvgHeight();   // KT1 lint: allow frame-literal a count of drawn frames, not converted here: SIM-10HZ stage 0 (lua-to-engine) converts
 	lastHeight = h;
 	if (force >= 0) return force == 1;
 	if (manual) return true;
@@ -262,27 +264,31 @@ void DrawMesh() {
 	shader->Disable();
 }
 
+int modelsOverride = -1;   // Lua SetModels: -1 config, 0 off, 1 on
+bool models() { return modelsOverride < 0 ? cfg.drawModels : modelsOverride == 1; }
+
 class FarViewRule : public Rule {
 public:
-	FarViewRule() : Rule({"FarView", 2, false, "(engine world pass at full detail)", false}) {}
+	FarViewRule() : Rule({"FarView", 3, false, "(engine world pass at full detail)", false}) {}
 
 	void LoadConfig(const LuaTable& t) override {
 		cfg = FarViewConfig{};   // an absent key reads as the default
 		cfg.switchHeight = t.GetFloat("switch_height", cfg.switchHeight);
-		cfg.hysteresis = std::clamp(t.GetFloat("hysteresis", cfg.hysteresis), 0.0f, 0.5f);
-		cfg.grid = std::clamp(t.GetInt("grid", cfg.grid), 8, 512);
-		cfg.refreshFrames = std::max(1, t.GetInt("refresh_frames", 30));
+		cfg.hysteresis = std::clamp(t.GetFloat("hysteresis", cfg.hysteresis), 0.0f, 0.5f);   // DESIGN: allowed range
+		cfg.grid = std::clamp(t.GetInt("grid", cfg.grid), 8, 512);   // DESIGN: allowed range
+		cfg.refreshFrames = std::max(1, t.GetInt("refresh_frames", 30));   // DESIGN: 30 drawn frames, the .lua config's value
 		cfg.waterLevel = t.GetFloat("water_level", cfg.waterLevel);
 		const LuaTable wc = t.SubTable("water_color");
-		for (int i = 0; i < 4; ++i) cfg.waterColor[i] = wc.GetFloat(i + 1, cfg.waterColor[i]);
+		for (int i = 0; i < 4; ++i) cfg.waterColor[i] = wc.GetFloat(i + 1, cfg.waterColor[i]);   // DESIGN: 4 colour components
 		cfg.brightness = t.GetFloat("brightness", cfg.brightness);
 		cfg.texture = t.GetString("texture", cfg.texture);
 		cfg.carto = t.GetBool("cartographic", cfg.carto);
 		cfg.autoSwitch = t.GetBool("auto_switch", cfg.autoSwitch);
 		const LuaTable rd = t.SubTable("ramp_dark"), rl = t.SubTable("ramp_light");
-		for (int i = 0; i < 3; ++i) { cfg.rampDark[i] = rd.GetFloat(i + 1, cfg.rampDark[i]); cfg.rampLight[i] = rl.GetFloat(i + 1, cfg.rampLight[i]); }
-		cfg.contourStep = std::max(0.001f, t.GetFloat("contour_step", cfg.contourStep));
+		for (int i = 0; i < 3; ++i) { cfg.rampDark[i] = rd.GetFloat(i + 1, cfg.rampDark[i]); cfg.rampLight[i] = rl.GetFloat(i + 1, cfg.rampLight[i]); }   // DESIGN: 3 colour components
+		cfg.contourStep = std::max(0.001f, t.GetFloat("contour_step", cfg.contourStep));   // DESIGN: smallest contour step
 		cfg.edgeGain = t.GetFloat("contour_edge_gain", cfg.edgeGain);
+		cfg.drawModels = t.GetBool("draw_models", cfg.drawModels);
 		cfg.drawFx = t.GetBool("draw_fx", cfg.drawFx);
 		cfg.fxCutoff = t.GetFloat("fx_cutoff", cfg.fxCutoff);
 		cfg.weaponCutoff = t.GetFloat("weapon_cutoff", cfg.weaponCutoff);
@@ -304,6 +310,7 @@ public:
 		v.Add("contour_step", cfg.contourStep);
 		v.Add("contour_edge_gain", cfg.edgeGain);
 		v.Add("draw_fx", cfg.drawFx);
+		v.Add("draw_models", cfg.drawModels);
 		v.Add("fx_cutoff", cfg.fxCutoff);
 		v.Add("weapon_cutoff", cfg.weaponCutoff);
 	}
@@ -330,6 +337,7 @@ public:
 		LuaPushRawNamedCFunc(L, "SetManual", LSetManual);
 		LuaPushRawNamedCFunc(L, "IsFar", LIsFar);
 		LuaPushRawNamedCFunc(L, "SetFogTexture", LSetFogTexture);
+		LuaPushRawNamedCFunc(L, "SetModels", LSetModels);
 	}
 
 private:
@@ -346,6 +354,7 @@ private:
 		LuaPushNamedNumber(L, "refreshes", stRefreshes);
 		LuaPushNamedNumber(L, "drawMs", stDrawMs);
 		LuaPushNamedNumber(L, "frames", stFrames);
+		LuaPushNamedBool(L, "models", models());
 		return 1;
 	}
 	static int LSetZoom(lua_State* L) {
@@ -358,6 +367,11 @@ private:
 		if (CLuaHandle::GetHandleSynced(L)) return 0;
 		fogTex = lua_isnumber(L, 1) ? (uint32_t)lua_tointeger(L, 1) : 0;
 		fogFactor = lua_isnumber(L, 2) ? (float)lua_tonumber(L, 2) : 1.0f;
+		return 0;
+	}
+	static int LSetModels(lua_State* L) {   // A/B and tests: true/false overrides draw_models; nil returns to the config
+		if (CLuaHandle::GetHandleSynced(L)) return 0;
+		modelsOverride = lua_isboolean(L, 1) ? (lua_toboolean(L, 1) ? 1 : 0) : -1;
 		return 0;
 	}
 	static int LIsFar(lua_State* L) { lua_pushboolean(L, farNow); return 1; }
@@ -390,6 +404,15 @@ bool Draw() {
 	selectedUnitsHandler.Draw();
 	eventHandler.DrawWorldPreUnit();
 
+	// RND-005 v2 R5 (version 3 of the rule): unit and feature meshes are drawn in the cartographic frame, as in the full opaque pass
+	// (the engine's own screen-size cull and the per-object tint apply); icons are still forced on by the game's icon widget.
+	const bool drawModels = models();
+	if (drawModels) {
+		SCOPED_TIMER("KT1::FarView::Models");
+		unitDrawer->Draw(false);
+		featureDrawer->Draw(false);
+	}
+
 	// Effects (D-Z3 withdrawn): as the full pass draws them, past their cutoffs culled in ProjectileDrawer (FxCulled).
 	// No water surface is drawn far, so one alpha pass covers above and below the water.
 	if (cfg.drawFx) {
@@ -400,6 +423,14 @@ bool Draw() {
 		glDepthFunc(GL_LEQUAL);
 		projectileDrawer->DrawAlpha(true, true, false, false);
 		KT1::Registry::DrawWorld(true);   // unsynced rules' world draw (Ribbons), as in the full alpha pass
+	}
+
+	if (drawModels) {   // translucent model forms (build and placement ghosts, cloaked units), after the opaque layers as in DrawAlphaObjects
+		SCOPED_TIMER("KT1::FarView::Models");
+		glEnable(GL_BLEND);
+		glDepthFunc(GL_LEQUAL);
+		unitDrawer->DrawAlphaPass(false);
+		featureDrawer->DrawAlphaPass(false);
 	}
 
 	stDrawMs += (spring_gettime() - t0).toMilliSecsf();

@@ -17,7 +17,7 @@ struct FarViewConfig {
 	float hysteresis = 0.05f;       // DESIGN: band below the switch before the full view returns
 	int grid = 128;                 // DESIGN: mesh cells per map side
 	float refreshS = 0.5f;          // DESIGN: seconds between mesh height refreshes while far
-	int refreshFrames = 0;          // DESIGN: not a JSON key: the .lua config's drawn frames between refreshes (0: refreshS)
+	int refreshFrames = 0;          // DESIGN: not a JSON key: the .lua config's drawn frames between refreshes (0: refreshS)   // KT1 lint: allow frame-literal a count of drawn frames
 	float waterLevel = 0.0f;        // DESIGN: the engine's water plane
 	float waterColor[4] = {0.10f, 0.22f, 0.32f, 0.0f};   // DESIGN: tint below water; a = 0 keeps the image's water
 	float brightness = 1.0f;        // DESIGN: multiplier on the baked image
@@ -28,6 +28,7 @@ struct FarViewConfig {
 	float rampLight[3] = {0.80f, 0.80f, 0.68f};   // DESIGN
 	float contourStep = 0.10f;      // DESIGN: contour spacing as a share of the height range
 	float edgeGain = 16.0f;         // DESIGN: sharpness of a contour line
+	bool drawModels = true;         // REQ (RND-005 v2 R5, owner ruling 2026-11-27 "match original"): the cartographic frame draws unit and feature meshes
 	bool drawFx = true;             // DESIGN: projectiles, particles and ground flashes draw in the far view
 	float fxCutoff = -1.0f;         // DESIGN: a value > 0 culls effects past this view depth
 	float weaponCutoff = -1.0f;     // DESIGN: the same for weapon projectiles
@@ -48,6 +49,7 @@ struct FarViewConfig {
 		// the double nearest 0.001, not the engine's float literal: a file may say exactly 0.001
 		s.Field("contour_step", contourStep, Data::AtLeast(static_cast<double>(1) / 1000));
 		s.Field("contour_edge_gain", edgeGain);
+		s.Field("draw_models", drawModels);
 		s.Field("draw_fx", drawFx);
 		s.Field("fx_cutoff", fxCutoff);
 		s.Field("weapon_cutoff", weaponCutoff);
