@@ -25,6 +25,12 @@
 //  9000 -  9999   probes and test systems (F06 Draw/Probe 9000)
 //
 // Switch modes (mod option kt1_<key>): off, on, check. The [KT1] load line ends with mode=<mode> (lf_proof.py reads it).
+// Families (LUA-FREE H01): a system names its family in its fragment, kt1_system(NAMES <Name> FAMILY <family> ...). Mod
+// option kt1_fam_<family> = 0 / 1 / check (gamedata/kt1/options/fam_<family>.lua) is then the switch of every system of
+// the family whose own option is not given; the load line prints family=<family>. kt1_fam_<family>=check stops the
+// engine unless every synced rule of the family declares checkSafe, and leaves its draw rules off
+// (Core/Registry/Switch.h). A family system's own option is type "string" with def "", so start-script writers do not
+// give it by default.
 // Check-mode contract (LUA-FREE §3.2): the Lua is authoritative. The native rule computes into its own shadow columns and
 // reports them through the check helper (F05, Spring.KT1.Check); it writes no engine state, gives no orders, emits no
 // DisplayEvents and answers no Allow call, and its shadow state is not in the sync checksum. A rule declares that it

@@ -7,6 +7,7 @@
 #include "Check.h"
 #include "DisplayEvents.h"
 #include "Fakes.h"
+#include "Game/KT1/Draw/Common/DisplayListen.h"
 #include "Phases.h"
 #include "SimEvents.h"
 #include "SyncState.h"
@@ -16,6 +17,7 @@ namespace KT1 {
 // In the reverse of start order: what the steps filled first, then what the systems registered at game setup.
 void ResetSimHost() {
 	DisplayEvents::Reset();
+	DisplaySink::ResetListeners();
 	Check::Reset();
 	SyncState::Reset();
 	AllowChain::Reset();

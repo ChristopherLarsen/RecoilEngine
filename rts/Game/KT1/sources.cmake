@@ -1,6 +1,8 @@
 # KT1 (LUA-FREE-WORKPACKAGES F01): every KT1 source, collected from one sources.cmake fragment per system folder.
 # Included once by rts/Game/CMakeLists.txt; sets KT1_SOURCES. A system folder adds itself with its own fragment:
-#     kt1_system(NAMES <Name>... SOURCES <file>.cpp... [LIBS <target>...])
+#     kt1_system(NAMES <Name>... [FAMILY <family>] SOURCES <file>.cpp... [LIBS <target>...])
+# FAMILY: the family of every name in the call (LUA-FREE H01): mod option kt1_fam_<family> switches those whose own
+#   option is not given (Core/Registry/Switch.h). Lower case letters and digits.
 # LIBS: engine targets the system's sources link (appended to KT1_LIBRARIES, linked once by rts/Game/CMakeLists.txt).
 #   Only targets the engine build already defines (simdjson::simdjson, fmt::fmt, ...): no package adds a new third-party
 #   library this way; a new library needs the owner's OK (team-builder rule 11) and its own engine change.
@@ -11,11 +13,21 @@
 set(KT1_SOURCES "${CMAKE_CURRENT_LIST_DIR}/KT1Registry.cpp" "${CMAKE_CURRENT_LIST_DIR}/Prof/KT1FrameCount.cpp")   # FrameCount (rvf-framecount): not a registered system
 set(KT1_SYSTEM_NAMES "")
 set(KT1_LIBRARIES "")
+set(KT1_SYSTEM_FAMILIES "")
 
 function(kt1_system)
-	cmake_parse_arguments(KS "" "" "NAMES;SOURCES;LIBS" ${ARGN})
+	cmake_parse_arguments(KS "" "FAMILY" "NAMES;SOURCES;LIBS" ${ARGN})
 	if (NOT KS_NAMES OR NOT KS_SOURCES)
 		message(FATAL_ERROR "kt1_system in ${CMAKE_CURRENT_LIST_FILE}: needs NAMES and SOURCES")
+	endif()
+	if (DEFINED KS_FAMILY)
+		if (NOT KS_FAMILY MATCHES "^[a-z0-9]+$")
+			message(FATAL_ERROR "kt1_system in ${CMAKE_CURRENT_LIST_FILE}: FAMILY ${KS_FAMILY} is not lower case letters and digits")
+		endif()
+		foreach(n IN LISTS KS_NAMES)
+			list(APPEND KT1_SYSTEM_FAMILIES "${n}=${KS_FAMILY}")
+		endforeach()
+		set(KT1_SYSTEM_FAMILIES ${KT1_SYSTEM_FAMILIES} PARENT_SCOPE)
 	endif()
 	set(srcs "")
 	foreach(s IN LISTS KS_SOURCES)
@@ -45,6 +57,12 @@ set(kt1_call "")
 foreach(n IN LISTS kt1_names)
 	string(APPEND kt1_decl "\tvoid RegisterSystem_${n}();\n")
 	string(APPEND kt1_call "\t\tRegisterSystem_${n}();\n")
+endforeach()
+foreach(pair IN LISTS KT1_SYSTEM_FAMILIES)
+	string(REPLACE "=" ";" pair "${pair}")
+	list(GET pair 0 n)
+	list(GET pair 1 family)
+	string(APPEND kt1_call "\t\tSetSystemFamily(\"${n}\", \"${family}\");\n")
 endforeach()
 set(KT1_SYSTEMS_GEN "${CMAKE_BINARY_DIR}/src-generated/engine/kt1_systems.gen.cpp")
 file(CONFIGURE OUTPUT "${KT1_SYSTEMS_GEN}" @ONLY CONTENT

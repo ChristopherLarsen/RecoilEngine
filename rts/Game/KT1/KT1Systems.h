@@ -5,7 +5,9 @@
 #define KT1_SYSTEMS_H
 
 namespace KT1 {
-	void RegisterAllSystems();   // calls RegisterSystem_<Name>() for every kt1_system() fragment entry
+	// calls RegisterSystem_<Name>() for every kt1_system() fragment entry, and SetSystemFamily for those with a FAMILY
+	void RegisterAllSystems();
+	void SetSystemFamily(const char* name, const char* family);
 }
 
 #endif

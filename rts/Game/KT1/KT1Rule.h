@@ -30,6 +30,7 @@
 #include <string>
 #include <string_view>
 
+#include "Core/Registry/Switch.h"
 #include "Data/Check.h"
 #include "Data/Report.h"
 
@@ -60,10 +61,12 @@ namespace KT1 {
 		const std::string& TimerName() const { return timer; }     // "KT1::Census"
 		bool Enabled() const { return enabled; }
 		// the switch as the game set it: off, on, or check (LUA-FREE §3.2: the rule runs and its Lua is not stood down,
-		// so both paths run and the proof compares them). Fixed for the run; Enabled() is what runs now.
-		enum class Mode { Off, On, Check };
+		// so both paths run and the proof compares them). Fixed for the run; Enabled() is what runs now. Set by the rule's
+		// own option, else its family's (Core/Registry/Switch.h).
+		using Mode = Core::Registry::SwitchMode;
 		Mode SwitchMode() const { return mode; }
-		static const char* ModeName(Mode m) { return m == Mode::On ? "on" : (m == Mode::Check ? "check" : "off"); }
+		static const char* ModeName(Mode m) { return Core::Registry::SwitchName(m); }
+		const std::string& Family() const { return family; }       // "orders"; empty: in no family
 
 		// The .lua config's table (empty when there is no file). Sets every value the rule takes from its config. A rule that
 		// also has a .json file only sets values here: check calls it twice.
@@ -83,7 +86,7 @@ namespace KT1 {
 	private:
 		friend class Registry;
 		RuleInfo info;
-		std::string key, option, timer;
+		std::string key, option, timer, family;
 		bool enabled = false;
 		Mode mode = Mode::Off;
 	};

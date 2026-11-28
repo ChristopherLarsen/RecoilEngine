@@ -24,6 +24,11 @@ Core::SimHost::WriteGate writeGate;
 
 void Line(const std::string& s) { LOG("%s", s.c_str()); }
 
+std::string FamilyOf(const std::string& system) {
+	const Rule* r = Registry::Get().Find(system.c_str());
+	return r == nullptr ? std::string() : r->Family();
+}
+
 void Describe(const CheckKey& k, const Check::Value* native, const Check::Value& lua) {
 	if (native == nullptr) {
 		LOG("[KT1CHECK-DIFF] %s %s ids=%d/%d/%d native=none lua=%.9g/%.9g", k.system.c_str(), k.what.c_str(),
@@ -79,12 +84,12 @@ void Check::Add(const char* system, long long compared, long long differed, cons
 void Check::CloseStep(int frame) {
 	pairs.CloseStep(Describe);
 	if (tally.Empty()) return;
-	tally.CloseStep(frame, Line);
+	tally.CloseStep(frame, Line, FamilyOf);
 	if (frame > 0 && frame % Core::Rate::Every(TOTAL_EVERY_S) == 0) Total();
 }
 
 // Answers still waiting for the other side are not counted here: the step is not over.
-void Check::Total() { tally.Totals(Line); }
+void Check::Total() { tally.Totals(Line, FamilyOf); }
 
 void Check::Reset() {
 	pairs.Clear();

@@ -26,6 +26,12 @@ public:
 	static void Log(const char* text);
 	static void DebugLine(const float3& from, const float3& to, float width, float seconds);
 	static void Ping(const float3& pos, const char* label, int playerId);
+	// a family's typed event (Core/Common/DisplayTypes.h)
+	template<class T> static bool Send(const T& payload) {
+		Core::SimHost::DisplayEvent e;
+		e.SetPayload(payload);
+		return Emit(e);
+	}
 
 	static void Publish(int step);   // the step's end (Phases)
 	// Draw side only: drains every published step through the sink, then forgets them.

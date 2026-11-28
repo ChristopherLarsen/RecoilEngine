@@ -1,7 +1,8 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1: the rule registry (game-build docs/engine/rules/INDEX.md). See KT1Rule.h for a rule's life.
 //
-// Switch: mod option kt1_<key> ("1"/"true" on, "0"/"false" off, "check"; unset: the rule's defaultOn). Off: the engine rule
+// Switch: mod option kt1_<key> ("1"/"true" on, "0"/"false" off, "check"; unset: kt1_fam_<family> for a rule of a family,
+// else the rule's defaultOn; Core/Registry/Switch.h). Off: the engine rule
 // does nothing and its Lua gadget runs (the gadget asks Spring.KT1.IsActive("<Name>") and stands down when it is true).
 // Check (LUA-FREE §3.2): the engine rule runs and IsActive is false, so its Lua runs too and a proof compares the two.
 // Config: read once per game when the rule is on, from the file mod option kt1_jsonconfig names (Data/Check.h):
@@ -10,7 +11,8 @@
 // on the Lua values.
 //
 // Lua (every handle, from LuaSyncedRead):
-//   Spring.KT1.Rules()        -> { {name, version, synced, replaces, enabled, option, timer}, ... } in registry order
+//   Spring.KT1.Rules()        -> { {name, version, synced, replaces, enabled, option, family, timer}, ... } in registry
+//                                order ("" family: none)
 //   Spring.KT1.IsActive(name) -> true when the engine rule exists and is on (not in check mode: its Lua keeps running)
 //   Spring.KT1.Enabled(name)  -> true while the engine rule runs (on or check, and not turned off by SetEnabled)
 //   Spring.KT1.Mode(name)     -> "off" | "on" | "check", the switch as the game set it; nil when there is no such rule
@@ -58,10 +60,16 @@ Data::Report Rule::ReadConfig(std::string_view text, Data::Strictness strictness
 namespace {
 	struct Registration { const char* name; int order; MakeRuleFn make; };
 	std::vector<Registration>& Pending() { static std::vector<Registration> v; return v; }
+	struct FamilyEntry { const char* name; const char* family; };
+	std::vector<FamilyEntry>& Families() { static std::vector<FamilyEntry> v; return v; }
 }
 
 void RegisterSystem(const char* name, int order, MakeRuleFn make) {
 	Pending().push_back({name, order, make});
+}
+
+void SetSystemFamily(const char* name, const char* family) {
+	Families().push_back({name, family});
 }
 
 Registry& Registry::Get() {
@@ -84,6 +92,9 @@ Registry& Registry::Get() {
 				std::abort();
 			}
 		}
+		for (const FamilyEntry& f : Families())
+			if (Rule* r = reg.Find(f.name)) r->family = f.family;
+		Families().clear();
 		p.clear();
 	}
 	return reg;
@@ -114,14 +125,26 @@ void Registry::EnsureInit() {
 	const auto source = opts.find("kt1_jsonconfig");
 	configSource = Data::ParseSource(source == opts.end() ? std::string() : std::string(source->second.c_str()));
 	LOG("[KT1] config files: kt1_jsonconfig=%s", Data::SourceName(configSource));
-	Data::ConfigCheck check;
-	for (auto& r : rules) {
-		Rule::Mode mode = r->info.defaultOn ? Rule::Mode::On : Rule::Mode::Off;
-		const auto it = opts.find(r->option);
-		if (it != opts.end()) {
-			const std::string v = Lower(it->second.c_str());
-			mode = (v == "1" || v == "true") ? Rule::Mode::On : (v == "check" ? Rule::Mode::Check : Rule::Mode::Off);
+	const auto value = [&opts](const std::string& option) {
+		const auto it = opts.find(option);
+		return it == opts.end() ? std::string() : std::string(it->second.c_str());
+	};
+	std::vector<Core::Registry::SystemSwitch> switches;
+	for (const auto& r : rules)
+		switches.push_back({r->info.name, r->family, r->info.synced, r->info.checkSafe, r->info.defaultOn});
+	for (const auto& s : switches) {
+		if (s.family.empty()) continue;
+		const std::string familyOption = Core::Registry::FamilyOption(s.family);
+		if (const auto* blocker = Core::Registry::FamilyCheckBlocker(switches, s.family, value(familyOption))) {
+			LOG_L(L_FATAL, "[KT1] %s=check, but the family's synced rule %s does not support check mode (RuleInfo.checkSafe; KT1Register.h)", familyOption.c_str(), blocker->name.c_str());
+			std::abort();
 		}
+	}
+	Data::ConfigCheck check;
+	for (size_t i = 0; i < rules.size(); ++i) {
+		auto& r = rules[i];
+		const std::string familyValue = r->family.empty() ? std::string() : value(Core::Registry::FamilyOption(r->family));
+		const Rule::Mode mode = Core::Registry::Resolve(switches[i], value(r->option), familyValue).mode;
 		if (mode == Rule::Mode::Check && !r->info.checkSafe) {
 			// a proof run that believes it is checking and is not is the worst case: stop, never fall back (KT1Register.h)
 			LOG_L(L_FATAL, "[KT1] %s: %s=check, but the rule does not support check mode (RuleInfo.checkSafe; KT1Register.h)", r->info.name, r->option.c_str());
@@ -135,7 +158,8 @@ void Registry::EnsureInit() {
 		if (on) {
 			Data::LoadRule(*r, configSource, Rule::ModeName(mode));
 		} else {
-			LOG("[KT1] %s v%d off (Lua: %s) mode=off", r->info.name, r->info.version, r->info.replaces);
+			LOG("[KT1] %s v%d off (Lua: %s)%s%s mode=off", r->info.name, r->info.version, r->info.replaces,
+			    r->family.empty() ? "" : " family=", r->family.c_str());
 		}
 		CTimeProfiler::RegisterTimer(r->timer.c_str());   // the rule outlives the profiler's use of the name
 	}
@@ -195,6 +219,7 @@ static int LuaRules(lua_State* L) {
 		lua_pushstring(L, r->Info().replaces);   lua_setfield(L, -2, "replaces");
 		lua_pushboolean(L, r->Enabled());        lua_setfield(L, -2, "enabled");
 		lua_pushstring(L, r->OptionKey().c_str()); lua_setfield(L, -2, "option");
+		lua_pushstring(L, r->Family().c_str());  lua_setfield(L, -2, "family");
 		lua_pushstring(L, r->TimerName().c_str()); lua_setfield(L, -2, "timer");
 		lua_rawseti(L, -2, ++i);
 	}

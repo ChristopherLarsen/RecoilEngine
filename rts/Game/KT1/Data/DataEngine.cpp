@@ -119,8 +119,9 @@ void LoadJson(Rule& rule, const char* modeName) {
 	const Report report = rule.ReadConfig(found ? text : std::string("{}"), GameStrictness());
 	Log(rule.Key(), report);
 	const char* note = !found ? " (none: defaults)" : (report.accepted ? "" : " (rejected: defaults)");
-	LOG("[KT1] %s v%d %s, config %s%s mode=%s", rule.Info().name, rule.Info().version,
-	    rule.Info().synced ? "synced" : "unsynced", PathFor(rule.Key()).c_str(), note, modeName);
+	LOG("[KT1] %s v%d %s, config %s%s%s%s mode=%s", rule.Info().name, rule.Info().version,
+	    rule.Info().synced ? "synced" : "unsynced", PathFor(rule.Key()).c_str(), note,
+	    rule.Family().empty() ? "" : " family=", rule.Family().c_str(), modeName);
 }
 
 void Differs(ConfigCheck& check, const std::string& what, const std::string& lua, const std::string& json) {
@@ -156,9 +157,9 @@ void LoadRule(Rule& rule, Source source, const char* modeName) {
 	if (hasJson && (source == Source::Json || !HasLua(rule.Key()))) return LoadJson(rule, modeName);
 	std::string error;
 	const bool ok = ReadLua(rule, error);
-	LOG("[KT1] %s v%d %s, config %s%s%s mode=%s", rule.Info().name, rule.Info().version,
+	LOG("[KT1] %s v%d %s, config %s%s%s%s%s mode=%s", rule.Info().name, rule.Info().version,
 	    rule.Info().synced ? "synced" : "unsynced", LuaPathFor(rule.Key()).c_str(), ok ? "" : " (none: defaults): ",
-	    error.c_str(), modeName);
+	    error.c_str(), rule.Family().empty() ? "" : " family=", rule.Family().c_str(), modeName);
 }
 
 void CheckRule(Rule& rule, ConfigCheck& check) {

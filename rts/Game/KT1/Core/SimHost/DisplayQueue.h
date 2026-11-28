@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 #include <vector>
 
 namespace KT1::Core::SimHost {
@@ -24,7 +25,8 @@ enum class DisplayKind : uint8_t {
 	Effect,     // id = explosion generator id; a = position; b = direction; value = damage; size = radius; unit = owner
 	Log,        // text
 	DebugLine,  // a, b = ends; size = width; value = lifetime in seconds
-	Ping        // a = position; text = label; unit = player
+	Ping,       // a = position; text = label; unit = player
+	Typed       // a family's own struct (Core/Common/DisplayTypes.h): id = its TYPE; text holds its bytes
 };
 
 constexpr size_t DISPLAY_TEXT = 120;             // DESIGN: longer text is cut, so an event stays a plain value
@@ -47,6 +49,21 @@ struct DisplayEvent {
 			while (n < DISPLAY_TEXT - 1 && s[n] != 0) ++n;
 		if (n > 0) std::memcpy(text, s, n);
 		text[n] = 0;
+	}
+
+	template<class T> void SetPayload(const T& payload) {
+		static_assert(std::is_trivially_copyable_v<T>, "a display event is a plain value");
+		static_assert(sizeof(T) <= DISPLAY_TEXT, "a typed display event fits in DISPLAY_TEXT bytes");
+		kind = DisplayKind::Typed;
+		id = T::TYPE;
+		std::memcpy(text, &payload, sizeof(T));
+	}
+
+	// false: this event is not a T
+	template<class T> bool Payload(T& out) const {
+		if (kind != DisplayKind::Typed || id != T::TYPE) return false;
+		std::memcpy(&out, text, sizeof(T));
+		return true;
 	}
 };
 
