@@ -1,14 +1,19 @@
 # KT1 (LUA-FREE-WORKPACKAGES F01): every KT1 source, collected from one sources.cmake fragment per system folder.
 # Included once by rts/Game/CMakeLists.txt; sets KT1_SOURCES. A system folder adds itself with its own fragment:
-#     kt1_system(NAMES <Name>... SOURCES <file>.cpp...)
+#     kt1_system(NAMES <Name>... SOURCES <file>.cpp... [LIBS <target>...])
+# LIBS: engine targets the system's sources link (appended to KT1_LIBRARIES, linked once by rts/Game/CMakeLists.txt).
+#   Only targets the engine build already defines (simdjson::simdjson, fmt::fmt, ...): no package adds a new third-party
+#   library this way; a new library needs the owner's OK (team-builder rule 11) and its own engine change.
+# A folder that registers no system (Data/) may append to KT1_SOURCES / KT1_LIBRARIES directly.
 # NAMES are the KT1_REGISTER_SYSTEM names its sources define (KT1Register.h). The generated kt1_systems.gen.cpp calls
 # each one, so no shared file lists the systems and a static library cannot drop one.
 
 set(KT1_SOURCES "${CMAKE_CURRENT_LIST_DIR}/KT1Registry.cpp" "${CMAKE_CURRENT_LIST_DIR}/Prof/KT1FrameCount.cpp")   # FrameCount (rvf-framecount): not a registered system
 set(KT1_SYSTEM_NAMES "")
+set(KT1_LIBRARIES "")
 
 function(kt1_system)
-	cmake_parse_arguments(KS "" "" "NAMES;SOURCES" ${ARGN})
+	cmake_parse_arguments(KS "" "" "NAMES;SOURCES;LIBS" ${ARGN})
 	if (NOT KS_NAMES OR NOT KS_SOURCES)
 		message(FATAL_ERROR "kt1_system in ${CMAKE_CURRENT_LIST_FILE}: needs NAMES and SOURCES")
 	endif()
@@ -18,6 +23,7 @@ function(kt1_system)
 	endforeach()
 	set(KT1_SOURCES ${KT1_SOURCES} ${srcs} PARENT_SCOPE)
 	set(KT1_SYSTEM_NAMES ${KT1_SYSTEM_NAMES} ${KS_NAMES} PARENT_SCOPE)
+	set(KT1_LIBRARIES ${KT1_LIBRARIES} ${KS_LIBS} PARENT_SCOPE)
 endfunction()
 
 file(GLOB_RECURSE KT1_FRAGMENTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/*/sources.cmake")
@@ -52,4 +58,10 @@ namespace KT1 {
 }
 ")
 list(APPEND KT1_SOURCES "${KT1_SYSTEMS_GEN}")
+list(REMOVE_DUPLICATES KT1_LIBRARIES)
+foreach(lib IN LISTS KT1_LIBRARIES)
+	if (NOT TARGET ${lib})
+		message(FATAL_ERROR "KT1: a sources.cmake fragment links ${lib}, which is not an engine target (sources.cmake: LIBS)")
+	endif()
+endforeach()
 message(STATUS "KT1: ${kt1_u} systems from ${CMAKE_CURRENT_LIST_DIR}")
