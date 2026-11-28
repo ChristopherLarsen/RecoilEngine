@@ -87,7 +87,10 @@ public:
 	}
 
 private:
-	struct RulesT { bool exact = false, waterSeesSub = false, sonarShips = false; double cell = 0.0; int rate = 1; };
+	// DESIGN: a pair's detection state and the event code Run() returns (rules/intel.md; int_coverage F.NOW): state + ALSO x also
+	static constexpr unsigned char ST_NONE = 0, ST_CONTACT = 1, ST_SEEN = 2;   // DESIGN
+	static constexpr int ALSO = 4;                                              // DESIGN
+	struct RulesT { bool exact = false, waterSeesSub = false, sonarShips = false; float cell = 0.0f; int rate = 1; };
 	struct Def { bool floater = false, jam = false; };
 	struct UnitRec { bool seen = false; int ally = -1; bool cloak = false, fake = false; };   // seen: visited since it was made
 	struct St { unsigned char now = 0; bool also = false, set = false; int frame = -1; };
@@ -123,7 +126,7 @@ private:
 		const int owner = u->allyteam;
 		const int d = u->unitDef->id;
 		const Def df = (d >= 0 && d < (int)defs.size()) ? defs[d] : Def{};
-		const double x = u->pos.x, z = u->pos.z;
+		const float x = u->pos.x, z = u->pos.z;   // float sim maths (LUA-FREE-PLAN r7); SupComIntIndex widens them exactly
 		bool fieldsRead = false, vok = false, rok = false, sok = false;
 		const bool sub = IsSub(u);
 		for (auto& p : armies) {
@@ -136,7 +139,7 @@ private:
 			bool also;
 			St& s = StOf(ar, u->id);
 			if (InGroup(g, owner)) {
-				now = 2; also = true;                              // an ally's unit
+				now = ST_SEEN; also = true;                              // an ally's unit
 			} else {
 				if (!fieldsRead) {                                 // the owner's fields, once per unit
 					const int ol[1] = { owner };
@@ -158,18 +161,18 @@ private:
 				bool seen = SeesAny("omni", gl, gn, x, z)
 					|| (sub && !r.cloak && rules.waterSeesSub && SeesAny("water_vision", gl, gn, x, z));
 				bool contact = (rok && SeesAny("radar", gl, gn, x, z)) || (sok && SeesAny("sonar", gl, gn, x, z));
-				if (!contact && rok && rules.cell > 0.0 && s.set && (s.now == 1 || s.also))
+				if (!contact && rok && rules.cell > 0.0f && s.set && (s.now == ST_CONTACT || s.also))
 					contact = SeesAny("radar_leave", gl, gn, x, z);      // radar's leaving lag
 				if (!seen && vok)
 					seen = SeesAny("vision", gl, gn, x, z);
-				if (!seen && vok && rules.cell > 0.0 && s.set && s.now == 2)
+				if (!seen && vok && rules.cell > 0.0f && s.set && s.now == ST_SEEN)
 					seen = SeesAny("vision_leave", gl, gn, x, z);
-				now = seen ? 2 : (contact ? 1 : 0);
+				now = seen ? ST_SEEN : (contact ? ST_CONTACT : ST_NONE);
 				also = seen && contact;
 			}
 			if (!s.set || s.now != now || s.also != also) {   // a first visit sends every army, none too (Lua sets the LOS mask then)
 				s.now = now; s.also = also; s.frame = f;
-				ev.push_back(u->id); ev.push_back(a); ev.push_back(now + 4 * (also ? 1 : 0));
+				ev.push_back(u->id); ev.push_back(a); ev.push_back(now + ALSO * (also ? 1 : 0));
 			}
 			s.set = true;
 		}
@@ -219,7 +222,7 @@ private:
 		q.exact = Bool(L, 1, "exact");
 		q.waterSeesSub = Bool(L, 1, "water_sees_sub");
 		q.sonarShips = Bool(L, 1, "sonar_ships");
-		lua_getfield(L, 1, "cell"); q.cell = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : 0.0; lua_pop(L, 1);
+		lua_getfield(L, 1, "cell"); q.cell = lua_isnumber(L, -1) ? static_cast<float>(lua_tonumber(L, -1)) : 0.0f; lua_pop(L, 1);
 		lua_getfield(L, 1, "rate"); q.rate = lua_isnumber(L, -1) ? lua_toint(L, -1) : 1; lua_pop(L, 1);
 		return 0;
 	}
