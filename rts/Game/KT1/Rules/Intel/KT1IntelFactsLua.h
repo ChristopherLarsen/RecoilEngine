@@ -4,6 +4,7 @@
 #ifndef KT1_INTEL_FACTS_LUA_H
 #define KT1_INTEL_FACTS_LUA_H
 
+#include <cstring>
 #include <cstdint>
 #include <vector>
 
@@ -52,25 +53,41 @@ inline void Push2(lua_State* L, int t, int& n, float a, float b) {   // DESIGN: 
 // DESIGN: the batch flags fl (SupComIntFactsRun's fin and Lua's F.SrcLua read them): carried, active, being built, cloaked, sub
 constexpr int FL_CARRIED = 1, FL_ACTIVE = 2, FL_BUILDING = 4, FL_CLOAKED = 8, FL_SUB = 16;   // DESIGN
 
-inline int Flags(const CUnit* u) {
+// the unit's move layer (CSupComGroundMoveType): one cast and no string per read
+constexpr int LAYER_NONE = 0, LAYER_SUB = 1, LAYER_WATER = 2;   // DESIGN
+inline int Layer(const CUnit* u) {
+	const auto* gm = dynamic_cast<const CSupComGroundMoveType*>(u->moveType);
+	const char* n = gm != nullptr ? gm->GetLayerName() : nullptr;
+	if (n == nullptr) return LAYER_NONE;
+	if (std::strcmp(n, "sub") == 0) return LAYER_SUB;
+	return std::strcmp(n, "water") == 0 ? LAYER_WATER : LAYER_NONE;
+}
+
+inline int Flags(const CUnit* u, int layer) {
 	int fl = 0;
 	if (u->GetTransporter() != nullptr) fl |= FL_CARRIED;
 	if (u->activated) fl |= FL_ACTIVE;
 	if (u->beingBuilt) fl |= FL_BUILDING;
 	if (u->isCloaked) fl |= FL_CLOAKED;
-	if (const auto* gm = dynamic_cast<const CSupComGroundMoveType*>(u->moveType))
-		if (std::string(gm->GetLayerName()) == "sub") fl |= FL_SUB;
+	if (layer == LAYER_SUB) fl |= FL_SUB;
 	return fl;
 }
 
-inline bool Submerged(const CUnit* unit, float y, int fl) {   // int_coverage's facts loop
-	if (y < 0.0f && (fl & FL_SUB)) return true;
+inline bool Submerged(const CUnit* unit, float y, int layer) {   // int_coverage's facts loop
 	if (!(y < 0.0f)) return false;
-	const auto* gm = dynamic_cast<const CSupComGroundMoveType*>(unit->moveType);
-	const std::string l = gm != nullptr ? gm->GetLayerName() : "";
-	if (l == "sub") return true;
-	if (l == "water") return false;
+	if (layer == LAYER_SUB) return true;
+	if (layer == LAYER_WATER) return false;
 	return y + unit->height < 0.0f;
+}
+
+// Fact(u, "row"), check mode: the rest of the row WriteRow writes (py, vx, vz, vkey, skey, fk, ck, fb, cb), and whether pcloak is written false
+template <typename Row>
+inline int PushRow(lua_State* L, const Row& o, bool cloakFalse) {
+	lua_pushnumber(L, o.py); lua_pushnumber(L, o.px); lua_pushnumber(L, o.pz);
+	lua_pushnumber(L, o.vkey); lua_pushnumber(L, o.skey); lua_pushnumber(L, o.fk); lua_pushnumber(L, o.ck);
+	lua_pushnumber(L, o.fb); lua_pushnumber(L, o.cb);
+	lua_pushboolean(L, cloakFalse);
+	return 10;   // DESIGN: the values above
 }
 
 } // namespace KT1::IntelFactsLua

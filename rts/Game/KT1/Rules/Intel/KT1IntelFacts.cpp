@@ -15,7 +15,7 @@
 // Lua (synced only), Spring.KT1.IntelFacts (each call in full: game-build docs/engine/rules/intel-facts.md):
 //   Init(cfg) -> ok, Source(u, vr, wr, nv, sensors), UnitAnswers(u, upkeepOff, scale), Reset(), Slot(j, u), Fresh(u, on),
 //   Unsettle(u), Run(cand, cn, part, f, stamp, all0, shadow, fin, drop, ev, F, lean) -> nRead, nStill, nShot, nFin, nDrop, nEv,
-//   Fact(u) -> def, owner, sub, landed, px, pz, fcx, fcz, ccx, ccz; Fact(u, "dr", kind) -> dr, stamps (vision: and stf); Fact(u, "built"),
+//   Fact(u) -> def, owner, sub, landed, px, pz, fcx, fcz, ccx, ccz; Fact(u, "dr", kind) -> dr, stamps (vision: and stf); Fact(u, "row") (check); Fact(u, "built"),
 //   Circle(u), SensorCircle(u, kind) (check mode and cases).
 // Determinism: units in the order Lua gives them (ascending slot), per-def and per-unit vectors, no hash order; float maths in
 //             the Lua's order (Core), no FMA contraction.
@@ -23,9 +23,6 @@
 #pragma GCC optimize("fp-contract=off")
 
 #include <climits>
-#include <string>
-#include <vector>
-
 #include "Game/KT1/Core/Intel/IntelFactsCore.h"
 #include "Game/KT1/Rules/Intel/KT1IntelFactsLua.h"
 #include "Game/KT1/KT1Register.h"
@@ -35,10 +32,7 @@
 #include "Lua/SupComIntIndex.h"
 #include "Map/Ground.h"
 #include "Sim/Misc/GlobalConstants.h"
-#include "Sim/MoveTypes/SupComGroundMoveType.h"
-#include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
-#include "Sim/Units/UnitDefHandler.h"
 #include "Sim/Units/UnitHandler.h"
 #include "System/StringHash.h"
 #include "System/TimeProfiler.h"
@@ -295,12 +289,13 @@ private:
 		const bool calm = s.present && s.calm;
 		const C::Row& o = sr.row;
 		if (!all0 && same && !fresh && calm && sr.hasRow && x == o.px && z == o.pz && y == o.py) { n.st += 1; return; }
-		const int fl = Flags(unit);
+		const int layer = Layer(unit);
+		const int fl = Flags(unit, layer);
 		const float gh = CGround::GetHeightReal(x, z, true);
 		C::Row& row = sr.row;
 		C::Cells(cfg.rules.geo, x, z, row);
 		row.py = y; row.def = unit->unitDef->id; row.own = unit->allyteam;
-		row.sub = Submerged(unit, y, fl);
+		row.sub = Submerged(unit, y, layer);
 		const bool air = Flag(cfg.air, row.def);
 		row.landed = air && C::Landed(cfg.rules, y, gh);
 		sr.hasRow = true;
@@ -358,6 +353,7 @@ private:
 
 	Cfg cfg;
 	std::vector<Unit> units;              // per unit id
+	std::vector<int> freshIds;            // the units Fresh(u, true) marked since the last Run (cleared there)
 	std::vector<Src> srcs;                // per unit id
 	std::vector<SlotRec> slots;           // per slot, 1-based as Lua's (slot 0 unused)
 	bool lastShadow = false;
@@ -466,7 +462,9 @@ int IntelFacts::LFresh(lua_State* L) {
 	IntelFacts* r = Self(L);
 	if (r == nullptr) return 0;
 	const int u = luaL_checkint(L, 1);
-	if (r->ValidId(u)) r->units[u].fresh = lua_toboolean(L, 2);
+	if (!r->ValidId(u)) return 0;
+	r->units[u].fresh = lua_toboolean(L, 2);
+	if (r->units[u].fresh) r->freshIds.push_back(u);
 	return 0;
 }
 
@@ -493,7 +491,7 @@ int IntelFacts::LRun(lua_State* L) {
 	r->lean = lua_toboolean(L, 12);
 	lua_settop(L, 11);
 	if (!lua_checkstack(L, C_N + 8)) return luaL_error(L, "KT1.IntelFacts.Run: stack");
-	for (int c = 0; c < C_N; ++c) {                                    // F[name], made when absent (as SupComIntFactsRun's Field)
+	for (int c = 0; c < C_N && !shadow; ++c) {                         // the shadow writes no column                                    // F[name], made when absent (as SupComIntFactsRun's Field)
 		lua_getfield(L, 11, COL_NAME[c]);
 		if (!lua_istable(L, -1)) { lua_pop(L, 1); lua_newtable(L); lua_pushvalue(L, -1); lua_setfield(L, 11, COL_NAME[c]); }
 		r->col[c] = lua_gettop(L);
@@ -509,8 +507,9 @@ int IntelFacts::LRun(lua_State* L) {
 		if (part) { lua_rawgeti(L, 1, ci); i = lua_toint(L, -1); lua_pop(L, 1); }
 		if (i >= 1 && i < (int)r->slots.size()) r->Candidate(i, f, FG, ff, stamp, all0, shadow, L, n);
 	}
-	if (all0 && !shadow) r->Sweep(stamp);
-	for (Unit& un : r->units) un.fresh = false;                       // int_coverage clears F.fresh after the pass
+	if (all0) r->Sweep(stamp);                                         // in shadow too: it frees no index circle there (lastShadow)
+	for (const int u : r->freshIds) if (r->ValidId(u)) r->units[u].fresh = false;   // int_coverage clears F.fresh after the pass
+	r->freshIds.clear();
 	lua_pushnumber(L, n.rd); lua_pushnumber(L, n.st); lua_pushnumber(L, n.sh);
 	lua_pushnumber(L, n.fin); lua_pushnumber(L, n.drop); lua_pushnumber(L, n.ev);
 	return 6;
@@ -524,6 +523,11 @@ int IntelFacts::LFact(lua_State* L) {
 	if (lua_isstring(L, 2)) {
 		const std::string col = lua_tostring(L, 2);
 		if (col == "built") { lua_pushboolean(L, r->units[u].built); return 1; }
+		if (col == "row") {   // check mode: the rest of the row WriteRow writes (py, vx, vz, vkey, skey, fk, ck, fb, cb), pcloak written false
+			const int j = r->units[u].slot;
+			if (j < 1 || j >= (int)r->slots.size() || !r->slots[j].hasRow) return 0;
+			return PushRow(L, r->slots[j].row, !Flag(r->cfg.lua, r->slots[j].row.def));
+		}
 		if (col != "dr") return luaL_error(L, "KT1.IntelFacts.Fact: unknown column %s", col.c_str());
 		const Src& s = r->srcs[u];
 		if (!s.present) return 0;
