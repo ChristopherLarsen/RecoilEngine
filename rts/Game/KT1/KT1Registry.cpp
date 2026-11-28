@@ -37,6 +37,7 @@
 #include "Sim/Misc/GlobalConstants.h"
 #include "System/Log/ILog.h"
 #include "System/StringHash.h"
+#include "System/Sync/SyncedPrimitiveBase.h"
 #include "System/TimeProfiler.h"
 
 namespace KT1 {
@@ -92,7 +93,8 @@ void Registry::Reset() {
 	Registry& reg = Get();
 	ResetSimHost();   // first: its phase functions, validators and sync columns point into the rules
 	reg.rules.clear();
-	reg.built = reg.inited = reg.started = false;
+	reg.built = reg.inited = false;
+	reg.starts.Reset();
 }
 
 Rule* Registry::Find(const char* name) const {
@@ -138,20 +140,30 @@ void Registry::EnsureInit() {
 		CTimeProfiler::RegisterTimer(r->timer.c_str());   // the rule outlives the profiler's use of the name
 	}
 	if (configSource == Data::Source::Check) Data::LogCheck(check);
+	if (configSource == Data::Source::Json) Data::StartReload();   // before any rule's Start
 }
 
-void Registry::EnsureStart() {
+void Registry::Setup() {
+	ENTER_SYNCED_CODE();
+	Get().StartSynced();
+	LEAVE_SYNCED_CODE();
+}
+
+bool Registry::StartSynced() {
 	EnsureInit();
-	if (started || !inited) return;
-	started = true;
-	if (configSource == Data::Source::Json) Data::StartReload();
-	for (auto& r : rules)
-		if (r->enabled) r->Start();
+	return inited && starts.SetupIfNeeded(rules);
+}
+
+void Registry::StartUnsynced() {
+	EnsureInit();
+	if (inited) starts.Unsynced(rules);
 }
 
 void Registry::GameFrame(int frame) {
 	Registry& reg = Get();
-	reg.EnsureStart();
+	// Setup did it; a path that never ran CGame::Load (or a lost hook line) starts them here, the same on every machine
+	if (reg.StartSynced()) LOG_L(L_WARNING, "[KT1] Setup was not called: synced rules start at the first frame");
+	reg.StartUnsynced();   // a headless engine draws nothing
 	for (auto& r : reg.rules) {
 		if (!r->enabled || !r->info.synced) continue;
 		ScopedTimer t(hashString(r->timer.c_str()));
@@ -162,7 +174,7 @@ void Registry::GameFrame(int frame) {
 void Registry::DrawWorld(bool drawAboveWater) {
 	if (!drawAboveWater) return;   // the below-water call of a water pass: the rules draw once, in the last (above-water) pass
 	Registry& reg = Get();
-	reg.EnsureStart();
+	reg.StartUnsynced();
 	for (auto& r : reg.rules) {
 		if (!r->enabled || r->info.synced) continue;
 		ScopedTimer t(hashString(r->timer.c_str()));
