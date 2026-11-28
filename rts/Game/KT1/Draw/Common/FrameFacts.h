@@ -36,7 +36,7 @@ class FrameFacts {
 public:
 	static constexpr int ZOOM_UNKNOWN = -1;
 
-	const CameraFacts& Camera() const { return camera; }
+	const CameraFacts& Camera() const { return camFacts; }
 	int ZoomLevel() const { return zoomLevel; }              // 0 (closest) .. 7 (SupComZoomLevel); ZOOM_UNKNOWN without it
 	float ZoomDist() const { return zoomDist; }              // camera zoom distance, elmos; -1 when unknown
 	int Step() const { return step; }                        // sim step number
@@ -63,7 +63,7 @@ private:
 	void ReadPointer(const DrawView& view);
 	void ReadVisible(const DrawView& view);
 
-	CameraFacts camera;
+	CameraFacts camFacts;   // not "camera": Game/Camera.h defines camera as a macro
 	PointerFacts pointer;
 	SelectionTracker selection;
 	IdBits visibleBits;
