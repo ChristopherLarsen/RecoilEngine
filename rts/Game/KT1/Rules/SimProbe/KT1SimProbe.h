@@ -46,6 +46,10 @@ private:
 	void FrameStart(const SimContext& c);
 	void TryWrites(const SimContext& c, int unitID);
 	void Count(const SimContext& c);
+	bool Traced();
+	void TraceEvent(const Core::SimHost::Event& e);
+	void TraceCommand(int unitID, int commandID);
+	bool traceStarted = false;
 	void Report(int frame);
 
 	int reportEvery = 1;

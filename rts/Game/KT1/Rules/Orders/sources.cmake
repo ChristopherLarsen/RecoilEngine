@@ -16,4 +16,6 @@ list(APPEND KT1_SOURCES
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/Orders/OrdersConfig.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/Orders/OrdersState.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/Orders/QueueHandling.cpp"
-	"${CMAKE_CURRENT_LIST_DIR}/../../Core/Orders/QueueRules.cpp")
+	"${CMAKE_CURRENT_LIST_DIR}/../../Core/Orders/QueueRules.cpp"
+	"${CMAKE_CURRENT_LIST_DIR}/../../Core/Orders/TurnStep.cpp"
+	"${CMAKE_CURRENT_LIST_DIR}/../../Core/Orders/TurnTrace.cpp")

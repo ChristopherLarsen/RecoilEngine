@@ -73,6 +73,14 @@ AssistWant WantedAssist(const Task& task, UnitId unit, UnitId guarded, const Def
 // the guard tops up the guarded unit's shield: full health, finished, and the shield has room
 bool WantsShield(float health, float maxHealth, bool beingBuilt, bool shieldHasRoom);
 
+// The trig the Lua's math.cos, math.sin and math.atan2 call. Core may not include the engine's synced maths and the C
+// library's differs between builds, so the adapter hands the engine's functions in (SpotPoint, PlanWalk).
+struct Trig {
+	float (*cos)(float) = nullptr;
+	float (*sin)(float) = nullptr;
+	float (*atan2)(float y, float x) = nullptr;
+};
+
 // the walk of a builder held out of reach
 struct ReachParams {
 	Step every = 1;
@@ -93,6 +101,7 @@ struct ReachParams {
 	float stepsPerSecond = 0;
 	int32_t spots = 0;
 	int32_t tries = 0;
+	Trig trig;                       // set by the caller after MakeReachParams
 };
 ReachParams MakeReachParams(const OrdersConfig& config);
 

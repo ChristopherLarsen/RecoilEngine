@@ -26,6 +26,7 @@
 #include "Game/KT1/Core/Common/Rate.h"
 #include "Game/KT1/Host/AllowChain.h"
 #include "Game/KT1/Host/DisplayEvents.h"
+#include "Game/KT1/Host/KT1Trace.h"
 #include "Game/KT1/Host/Phases.h"
 #include "Game/KT1/Host/SyncState.h"
 #include "Lua/LuaParser.h"
@@ -67,6 +68,7 @@ void SimProbeRule::RegisterValidators() {
 	AllowChain::AddCommand("SimProbe", 0, [this, saw](const CUnit* u, const ::Command& c, int, bool, bool, Faked) {
 		saw(Veto::Command);
 		if (CheckMode()) {
+			if (Traced()) TraceCommand(u->id, c.GetID());
 			if (commands.size() < MAX_RECORDS) {
 				commands.push_back(u->id);
 				commands.push_back(c.GetID());
@@ -74,7 +76,7 @@ void SimProbeRule::RegisterValidators() {
 				++dropped;
 			}
 		}
-		return denyCommand == 0 || c.GetID() != denyCommand;
+		return Core::SimProbe::Allows(denyCommand, c.GetID());
 	});
 	if (CheckMode()) return;   // the counting validators: the twin answers for the command validator only
 	AllowChain::AddUnitCreation("SimProbe", 0, [saw](const UnitDef*, const CUnit*, const BuildInfo*, bool&, Faked) { saw(Veto::Creation); return true; });
@@ -88,8 +90,11 @@ void SimProbeRule::RegisterValidators() {
 
 void SimProbeRule::FrameStart(const SimContext& c) {
 	int first = -1;
+	const bool traced = c.check && Traced();
+	if (traced) Trace::Input("SimProbe", "frame", {});
 	c.events.ForEachRaised([&](const Event& e) {
 		++seen[static_cast<size_t>(c.phase)];
+		if (traced) TraceEvent(e);
 		state.Apply(e);
 		if (!c.check) return;
 		if (first < 0 && e.type == Core::SimHost::EventType::UnitCreated) first = e.id;
@@ -97,6 +102,34 @@ void SimProbeRule::FrameStart(const SimContext& c) {
 		else ++dropped;
 	});
 	if (first >= 0 && !tried) TryWrites(c, first);
+}
+
+// The trace's inputs (Host/KT1Trace.h), as Test/Trace reads them back to replay this rule's Core. The first call
+// of a recording run writes "init" before anything else.
+bool SimProbeRule::Traced() {
+	if (!Trace::On("SimProbe")) return false;
+	if (traceStarted) return true;
+	traceStarted = true;
+	Core::Trace::Bytes b;
+	b.Put(static_cast<int32_t>(MAX_UNITS));
+	b.Put(static_cast<int32_t>(denyCommand));
+	Trace::Input("SimProbe", "init", b.View());
+	return true;
+}
+
+void SimProbeRule::TraceCommand(int unitID, int commandID) {
+	Core::Trace::Bytes b;
+	b.Put(static_cast<int32_t>(unitID));
+	b.Put(static_cast<int32_t>(commandID));
+	Trace::Input("SimProbe", "command", b.View());
+}
+
+void SimProbeRule::TraceEvent(const Event& e) {
+	Core::Trace::Bytes b;
+	b.Put(static_cast<uint8_t>(e.type));
+	b.Put(e.id);
+	b.Put(e.value);
+	Trace::Input("SimProbe", "event", b.View());
 }
 
 // Check mode only: neither may reach the game (KT1Register.h).

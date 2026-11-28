@@ -2,6 +2,7 @@
 // KT1 Host: check-mode results to the log. See Check.h. Check mode only, so it logs at once, not through DisplayEvents.
 
 #include "Check.h"
+#include "KT1Trace.h"
 
 #include <string>
 
@@ -63,6 +64,8 @@ void Check::Native(const char* system, const char* what, int id1, int id2, int i
 }
 
 void Check::Lua(const char* system, const char* what, int id1, int id2, int id3, const Value& value) {
+	if (Trace::On(system))
+		Trace::Output(system, what, {id1, id2, id3}, {value.v.data(), static_cast<size_t>(value.count)});
 	pairs.Lua(CheckKey{system, what, {id1, id2, id3}}, value, Describe);
 }
 
