@@ -8,7 +8,11 @@
 #include <cstdint>
 #include <string_view>
 
-#include "simdjson.h"
+#if __has_include("simdjson.h")
+#include "simdjson.h"   // the engine-free runner (F03)
+#else
+#include "lib/simdjson/singleheader/simdjson.h"   // the engine build has no include folder for it
+#endif
 
 namespace KT1::CaptureCore {
 	namespace {
