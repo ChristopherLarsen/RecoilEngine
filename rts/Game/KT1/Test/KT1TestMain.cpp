@@ -1,7 +1,8 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // kt1_core_tests: runs every Core test case in id order.
 //   kt1_core_tests [--cases <dir>] [--only <id prefix>] [--from <n>] [--list]
-// Output: "[RUN] <n> <id>" before a case, "[CASE] <id> PASS|FAIL <text>" after it, "[DONE] pass=N fail=N" at the end.
+// Output: "[RUN] <n> <id>" before a case, "[CHECKS] <count>" and "[CASE] <id> PASS|FAIL <text>" after it,
+// "[DONE] pass=N fail=N" at the end.
 // The driver uses [RUN] and [DONE] to fail a case that crashes or hangs and to go on from the next one (--from).
 // Exit 0 all passed, 1 a case failed or the arguments are wrong.
 
@@ -59,9 +60,8 @@ namespace {
 		return s;
 	}
 
-	// A rate pass starts with the sim rate set, any other with it unset, so a conversion nobody set a rate for asserts.
+	// The sim rate is set for a rate pass only and unset after every pass, so a conversion nobody set a rate for asserts.
 	void RunPass(const CaseDef& def, Case& t) {
-		Rate::Clear();
 		if (t.StepsPerSecond() > 0)
 			Rate::SetStepsPerSecond(t.StepsPerSecond());
 
@@ -72,15 +72,17 @@ namespace {
 		} catch (...) {
 			t.Fail("unknown exception");
 		}
+		Rate::Clear();
 	}
 
 	// one pass, or one per step rate; returns the first failing pass's report, empty when all passed
-	std::string Run(const CaseDef& def) {
+	std::string Run(const CaseDef& def, int& checks) {
 		const std::vector<int> rates = def.eachRate ? std::vector<int>(STEP_RATES.begin(), STEP_RATES.end()) : std::vector<int>{0};
 
 		for (const int rate: rates) {
 			Case t(rate);
 			RunPass(def, t);
+			checks += t.Checks();
 			if (t.Failed())
 				return t.Report();
 		}
@@ -138,7 +140,9 @@ int main(int argc, char** argv) {
 		std::printf("[RUN] %zu %s\n", n, def.id.c_str());
 		std::fflush(stdout);
 
-		const std::string failure = Run(def);
+		int checks = 0;
+		const std::string failure = Run(def, checks);
+		std::printf("[CHECKS] %d\n", checks);
 		if (failure.empty()) {
 			++passed;
 			std::printf("[CASE] %s PASS %s\n", def.id.c_str(), OneLine(def.text).c_str());

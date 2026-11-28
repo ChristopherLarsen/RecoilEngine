@@ -377,9 +377,11 @@ KT1_RATE_CASE("COMMON-FIXEDPOOL", "fixed pool: handles, reuse, no steady allocat
 
 KT1_CASE("COMMON-NO-DEFAULT-RATE", "there is no default sim rate: the host must set it") {
 	KT1_CHECK(!Rate::IsSet());
-	Rate::SetStepsPerSecond(30);
-	Rate::Clear();
-	KT1_CHECK(!Rate::IsSet());
+	for (const int rate: KT1::Test::STEP_RATES) {
+		Rate::SetStepsPerSecond(rate);
+		Rate::Clear();
+		KT1_CHECK_MSG(!Rate::IsSet(), "Clear unsets the rate");
+	}
 }
 
 KT1_CASE("COMMON-ALLOC-COUNT", "the allocation counter sees heap use") {
