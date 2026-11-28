@@ -14,6 +14,7 @@
 #include "Game/UnsyncedActionExecutor.h"
 #include "Game/UnsyncedGameCommands.h"
 #include "Lua/LuaParser.h"
+#include "Lua/LuaSyncedRead.h"
 #include "System/EventHandler.h"
 #include "System/FileSystem/FileHandler.h"
 #include "System/FileSystem/VFSModes.h"
@@ -105,6 +106,7 @@ bool HasLua(const std::string& system) { return CFileHandler::FileExists(LuaPath
 bool ReadLua(Rule& rule, std::string& error) {
 	// setup {true}: the parser needs its own Lua state
 	LuaParser parser(LuaPathFor(rule.Key()), SPRING_VFS_MOD_BASE, SPRING_VFS_ZIP, {rule.Info().synced}, {true});
+	AddModOptions(parser);
 	const bool ok = parser.Execute();
 	rule.LoadConfig(parser.GetRoot());   // an invalid root reads every field as its default
 	if (!ok) error = parser.GetErrorLog();
@@ -133,6 +135,12 @@ void Differs(ConfigCheck& check, const std::string& what, const std::string& lua
 
 Strictness GameStrictness() {
 	return CFileHandler::FileExists(PathFor("dev_data"), SPRING_VFS_MOD) ? Strictness::Dev : Strictness::Release;
+}
+
+void AddModOptions(LuaParser& parser) {
+	parser.GetTable("Spring");
+	parser.AddFunc("GetModOptions", LuaSyncedRead::GetModOptions);   // as the engine's modrules parser has it
+	parser.EndTable();
 }
 
 bool ReadText(const std::string& system, std::string& text) {
