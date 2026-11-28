@@ -1,6 +1,6 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 core: the sound cue rows (an EventMap, LUA-FREE H01, FRAME §4.4) and the config of system "soundcues"
-// (data/kt1/sound_events.json). No engine include. Replaces the rules and tunables of LuaRules/Gadgets/snd_events.lua and
+// KT1 core: the sound cue rows (an EventMap, LUA-FREE H01, FRAME §4.4) and the config of system "cues"
+// (data/kt1/cues.json). No engine include. Replaces the rules and tunables of LuaRules/Gadgets/snd_events.lua and
 // its use of LuaUI/lib/snd_gate.lua. Which sound item a cue name plays stays the sound data's (gamedata/sound_events.lua,
 // read by the sound manager).
 //

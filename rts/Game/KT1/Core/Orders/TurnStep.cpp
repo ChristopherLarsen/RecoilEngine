@@ -68,16 +68,31 @@ void Schedule(TurnWork& work, const TurnUnit& unit, const TurnParams& params, St
 	next = NO_STEP;
 }
 
-// the port of the replay: the walk's reads come from the record, its work is not done
+void Apply(State& state, std::span<const TurnEvent> events) {
+	for (const TurnEvent& e: events) {
+		if (e.kind == TurnEventKind::Join)
+			state.turn.Add(e.unit);
+		else
+			state.Forget(e.unit);
+	}
+}
+
+// the port of the replay: the walk's reads come from the record; of its work only the joins and leaves it raised are done
 class RecordPort {
 public:
-	RecordPort(State& state, const TurnInput& in, TurnOutput& out): state(state), in(in), out(out) {}
+	RecordPort(State& state, const TurnInput& in, TurnOutput& out):
+		state(state), in(in), out(out), used(in.units.size(), 0) {}
 
 	const TurnUnit& Read(UnitId unit) {
-		const auto it = std::lower_bound(in.units.begin(), in.units.end(), unit,
-		                                 [](const TurnUnit& u, UnitId id) { return u.unit < id; });
-		if (it != in.units.end() && it->unit == unit)
-			return *it;
+		auto it = std::lower_bound(in.units.begin(), in.units.end(), unit,
+		                           [](const TurnUnit& u, UnitId id) { return u.unit < id; });
+		for (; it != in.units.end() && it->unit == unit; ++it) {
+			uint8_t& seen = used[static_cast<size_t>(it - in.units.begin())];
+			if (seen == 0) {
+				seen = 1;
+				return *it;
+			}
+		}
 		out.missing.push_back(unit);
 		empty = TurnUnit{};
 		empty.unit = unit;
@@ -85,6 +100,7 @@ public:
 	}
 
 	void Act(const TurnUnit& facts, const TurnWork&) {
+		Apply(state, facts.during);
 		if (facts.gone)
 			state.Forget(facts.unit);
 	}
@@ -103,6 +119,7 @@ private:
 	State& state;
 	const TurnInput& in;
 	TurnOutput& out;
+	std::vector<uint8_t> used;   // by record: a visit took it
 	TurnUnit empty;
 };
 
@@ -244,12 +261,7 @@ void RunTurnStep(State& state, TurnParams& params, const TurnInput& in, TurnOutp
 	if (in.hasInit)
 		ApplyTurnInit(in.init, state, params);
 	state.BeginStep();
-	for (const TurnEvent& e: in.events) {
-		if (e.kind == TurnEventKind::Join)
-			state.turn.Add(e.unit);
-		else
-			state.Forget(e.unit);
-	}
+	Apply(state, in.events);
 	ApplySafetyNet(state, params, in.now, in.netUnits);
 	RecordPort port(state, in, out);
 	WalkTurns(state, params, in.now, port);

@@ -8,7 +8,7 @@
 //   2200  AMove        the attack-move tasks (the Lua runs them BEFORE the unit turn)
 //   2300  Orders       the busy-unit turn (it starts new attack-moves), then AMove's group speed caps
 //   2400  OrderRules   repeated queue trims of transferred factories
-// Run order (KT1_REGISTER_SYSTEM): Orders keeps 200; AMove 2100; OrderRules 2200.
+// Run order (KT1_REGISTER_SYSTEM): Orders keeps 200; AMove 2300 (2100 is HullTurn's); OrderRules 2200.
 
 #ifndef KT1_RULES_ORDERS_INTERNAL_H
 #define KT1_RULES_ORDERS_INTERNAL_H
@@ -37,7 +37,7 @@ constexpr int PHASE_PRE_TURN = 2100;     // DESIGN
 constexpr int PHASE_AMOVE = 2200;        // DESIGN
 constexpr int PHASE_TURN = 2300;         // DESIGN
 constexpr int PHASE_TRANSFER = 2400;     // DESIGN
-constexpr int RUN_ORDER_AMOVE = 2100;    // DESIGN: KT1Register.h, synced "before move"
+constexpr int RUN_ORDER_AMOVE = 2300;    // DESIGN: KT1Register.h, synced "before move"
 constexpr int RUN_ORDER_RULES = 2200;    // DESIGN
 
 namespace Internal {

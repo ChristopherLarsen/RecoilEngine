@@ -139,6 +139,29 @@ bool GetLuaState(ByteReader& b, TurnUnit& u) {
 	return ok;
 }
 
+void PutEvents(Bytes& b, const std::vector<TurnEvent>& events) {
+	PutCount(b, events.size());
+	for (const TurnEvent& e: events) {
+		b.Put(static_cast<uint8_t>(e.kind));
+		b.Put(e.unit);
+	}
+}
+
+bool GetEvents(ByteReader& b, std::vector<TurnEvent>& events) {
+	size_t n = 0;
+	if (!GetCount(b, n))
+		return false;
+	events.resize(n);
+	for (TurnEvent& e: events) {
+		const uint8_t kind = b.Get<uint8_t>();
+		if (kind > static_cast<uint8_t>(TurnEventKind::Leave))
+			return false;
+		e.kind = static_cast<TurnEventKind>(kind);
+		e.unit = b.Get<int32_t>();
+	}
+	return true;
+}
+
 void PutUnit(Bytes& b, const TurnUnit& u) {
 	b.Put(u.unit);
 	b.Put(u.defId);
@@ -149,6 +172,7 @@ void PutUnit(Bytes& b, const TurnUnit& u) {
 	for (size_t i = 0; i < u.numQueue && i < u.queue.size(); ++i)
 		PutOrder(b, u.queue[i]);
 	PutLuaState(b, u);
+	PutEvents(b, u.during);
 }
 
 bool GetUnit(ByteReader& b, TurnUnit& u) {
@@ -163,25 +187,15 @@ bool GetUnit(ByteReader& b, TurnUnit& u) {
 	u.queue = {};
 	for (size_t i = 0; i < u.numQueue; ++i)
 		ok = GetOrder(b, u.queue[i]) && ok;
-	return GetLuaState(b, u) && ok;
+	return GetLuaState(b, u) && GetEvents(b, u.during) && ok;
 }
 
-bool GetEvents(ByteReader& b, TurnInput& in) {
+bool GetNet(ByteReader& b, std::vector<UnitId>& units) {
 	size_t n = 0;
 	if (!GetCount(b, n))
 		return false;
-	in.events.resize(n);
-	for (TurnEvent& e: in.events) {
-		const uint8_t kind = b.Get<uint8_t>();
-		if (kind > static_cast<uint8_t>(TurnEventKind::Leave))
-			return false;
-		e.kind = static_cast<TurnEventKind>(kind);
-		e.unit = b.Get<int32_t>();
-	}
-	if (!GetCount(b, n))
-		return false;
-	in.netUnits.resize(n);
-	for (UnitId& u: in.netUnits)
+	units.resize(n);
+	for (UnitId& u: units)
 		u = b.Get<int32_t>();
 	return true;
 }
@@ -193,11 +207,7 @@ void Put(Trace::Bytes& bytes, const TurnInput& in) {
 	if (in.hasInit)
 		PutInit(bytes, in.init);
 	bytes.Put(in.now);
-	PutCount(bytes, in.events.size());
-	for (const TurnEvent& e: in.events) {
-		bytes.Put(static_cast<uint8_t>(e.kind));
-		bytes.Put(e.unit);
-	}
+	PutEvents(bytes, in.events);
 	PutCount(bytes, in.netUnits.size());
 	for (const UnitId u: in.netUnits)
 		bytes.Put(u);
@@ -214,7 +224,7 @@ bool Get(Trace::ByteReader& bytes, TurnInput& in) {
 		return false;
 	in.now = bytes.Get<int32_t>();
 	size_t n = 0;
-	if (!GetEvents(bytes, in) || !GetCount(bytes, n))
+	if (!GetEvents(bytes, in.events) || !GetNet(bytes, in.netUnits) || !GetCount(bytes, n))
 		return false;
 	in.units.resize(n);
 	for (TurnUnit& u: in.units) {
