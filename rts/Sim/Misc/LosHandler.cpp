@@ -922,14 +922,14 @@ void CLosHandler::Update()
 
 void CLosHandler::KT1MarkSensors(const CUnit* unit)
 {
-	int radii[LOS_TYPE_COUNT] = {};   // indexed by LosType (the enum order: jammer before seismic)
-	radii[LOS_TYPE_LOS]          = unit->losRadius;
-	radii[LOS_TYPE_AIRLOS]       = unit->airLosRadius;
-	radii[LOS_TYPE_RADAR]        = unit->radarRadius;
-	radii[LOS_TYPE_SONAR]        = unit->sonarRadius;
-	radii[LOS_TYPE_JAMMER]       = unit->jammerRadius;
-	radii[LOS_TYPE_SEISMIC]      = unit->seismicRadius;
-	radii[LOS_TYPE_SONAR_JAMMER] = unit->sonarJamRadius;
+	int radii[ILosType::LOS_TYPE_COUNT] = {};   // indexed by LosType (the enum order: jammer before seismic)
+	radii[ILosType::LOS_TYPE_LOS]          = unit->losRadius;
+	radii[ILosType::LOS_TYPE_AIRLOS]       = unit->airLosRadius;
+	radii[ILosType::LOS_TYPE_RADAR]        = unit->radarRadius;
+	radii[ILosType::LOS_TYPE_SONAR]        = unit->sonarRadius;
+	radii[ILosType::LOS_TYPE_JAMMER]       = unit->jammerRadius;
+	radii[ILosType::LOS_TYPE_SEISMIC]      = unit->seismicRadius;
+	radii[ILosType::LOS_TYPE_SONAR_JAMMER] = unit->sonarJamRadius;
 	for (ILosType* lt: losTypes) {
 		if (radii[lt->type] > 0)
 			lt->kt1Used = true;
