@@ -61,10 +61,16 @@ namespace SupComAvoidSnapshot {
 		for (const CUnit* u: unitHandler.GetActiveUnits()) {
 			if (u->id < 0)
 				continue;
+			// supcom (MoveType split L11961: Take was 0.44 ms of 4.14 at 2k): avoidance asks Of() only about an avoidee
+			// with a moveDef (GetObstacleAvoidanceDir skips the rest), so a unit without one (structure, aircraft) is never
+			// read from the copy: skip it. Same values for every read, so the same result.
+			if (u->moveDef == nullptr)
+				continue;
 			if (static_cast<size_t>(u->id) >= entries.size())
 				entries.resize(u->id + 1024);
 
-			entries[u->id] = {Live(u), frame};
+			const bool holds = (u->moveType != nullptr && u->moveType->HoldsAgainstPush());
+			entries[u->id] = {{u->pos, u->speed, u->rightdir, u->frontdir, u->IsMoving(), holds}, frame};   // Live(u) without its dynamic_cast
 		}
 	}
 
