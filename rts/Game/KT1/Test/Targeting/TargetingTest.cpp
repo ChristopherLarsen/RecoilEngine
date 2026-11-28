@@ -296,3 +296,94 @@ KT1_CASE("TGT-COMMAND-GUN", "unit_cmd_gun: scan on its delay, first class then n
 	KT1_CHECK_EQ(s.gunner[s.units.index.SlotOf(1)].target, NONE);
 	KT1_CHECK(AllowTarget(s, c, 1, 10, 1, 3, 0, w) == false);
 }
+
+KT1_CASE("TGT-GUN-TIE", "COMBAT risk 8: equal rank and equal distance keep the first in the engine query order") {
+	const TargetingDefs d = Defs();
+	const TargetingParams p = Params();
+	const TargetingContext c{d, p};
+	FakeWorld w = World();
+	w.u[1].def = 3;
+	w.u[1].range = {{1, 200}};
+	w.u[13] = w.u[10];
+	w.u[13].pos[2] = 100; w.u[13].pos[0] = 0;   // the same distance as unit 10, on another bearing
+	TargetState s;
+	s.Init(64);
+	TargetUnitCreated(s, c, 1, 3, 0);
+	w.order = {13, 10};
+	RunCommandGuns(s, c, p.gunScanSteps, w);
+	KT1_CHECK_EQ(s.gunner[s.units.index.SlotOf(1)].target, 13);
+	TargetState s2;
+	s2.Init(64);
+	TargetUnitCreated(s2, c, 1, 3, 0);
+	w.order = {10, 13};
+	w.u[1].weaponTarget = NONE;
+	RunCommandGuns(s2, c, p.gunScanSteps, w);
+	KT1_CHECK_EQ(s2.gunner[s2.units.index.SlotOf(1)].target, 10);
+}
+
+KT1_CASE("TGT-GUN-HOLD", "CMB-004 R3, R5: a held target is kept until it leaves tracking range, then the gun scans at once") {
+	const TargetingDefs d = Defs();
+	const TargetingParams p = Params();
+	const TargetingContext c{d, p};
+	FakeWorld w = World();
+	w.u[1].def = 3;
+	w.u[1].range = {{1, 200}};
+	TargetState s;
+	s.Init(64);
+	TargetUnitCreated(s, c, 1, 3, 0);
+	w.order = {10};
+	RunCommandGuns(s, c, p.gunScanSteps, w);
+	const auto slot = s.units.index.SlotOf(1);
+	KT1_CHECK_EQ(s.gunner[slot].target, 10);
+	w.u[10].pos[0] = 200 * p.gunTrack - 1;      // past reach, inside tracking: kept
+	w.order = {};
+	RunCommandGuns(s, c, p.gunScanSteps + 1, w);
+	KT1_CHECK_EQ(s.gunner[slot].target, 10);
+	w.u[10].pos[0] = 200 * p.gunTrack + 1;      // past tracking: dropped, scanned again at once (nothing found)
+	RunCommandGuns(s, c, p.gunScanSteps + 2, w);
+	KT1_CHECK_EQ(s.gunner[slot].target, NONE);
+	KT1_CHECK_EQ(s.gunner[slot].nextScan, p.gunScanSteps + 2 + p.gunScanSteps);
+}
+
+KT1_CASE("TGT-FRIENDS", "CMB-003 R6: friends on the line block only when the config turns the test on") {
+	const TargetingDefs d = Defs();
+	TargetingConfig cfg;
+	cfg.line_friends = true;
+	const TargetingParams on = MakeTargetingParams(cfg, CommandIds{}, 30);
+	const TargetingParams off = Params();
+	FakeWorld w = World();
+	FakeUnit f;
+	f.pos[0] = 50; f.radius = 8;                // on the line, team 0
+	w.u[20] = f;
+	w.order = {20};
+	KT1_CHECK(!Acceptable(TargetingContext{d, on}, 1, 1, 10, false, w).ok);
+	KT1_CHECK(Acceptable(TargetingContext{d, off}, 1, 1, 10, false, w).ok);
+	w.u[20].pos[2] = 20;                        // off the line by more than its radius
+	KT1_CHECK(Acceptable(TargetingContext{d, on}, 1, 1, 10, false, w).ok);
+}
+
+KT1_CASE("TGT-FOCUS", "the attack-move focus is stored per unit and cleared with the unit") {
+	const TargetingDefs d = Defs();
+	const TargetingParams p = Params();
+	const TargetingContext c{d, p};
+	TargetState s;
+	s.Init(64);
+	TargetUnitCreated(s, c, 1, 1, 0);
+	SetFocus(s, 1, 10);
+	KT1_CHECK_EQ(s.focus[s.units.index.SlotOf(1)], 10);
+	TargetUnitDestroyed(s, 1);
+	TargetUnitCreated(s, c, 1, 1, 5);           // a new unit with the id starts clean
+	KT1_CHECK_EQ(s.focus[s.units.index.SlotOf(1)], NONE);
+}
+
+KT1_RATE_CASE("TGT-FIRST-SCAN-RATE", "a new gun first scans within one scan delay at 30 and at 10") {
+	const TargetingDefs d = Defs();
+	const TargetingParams p = Params(testCase.StepsPerSecond());
+	const TargetingContext c{d, p};
+	TargetState s;
+	s.Init(64);
+	TargetUnitCreated(s, c, 9, 1, 100);
+	const int32_t every = ScanSteps(p, 0.3f);
+	const int32_t due = s.guns[s.units.index.SlotOf(9)].scanDue[0];
+	KT1_CHECK(due >= 101 && due <= 100 + every);
+}
