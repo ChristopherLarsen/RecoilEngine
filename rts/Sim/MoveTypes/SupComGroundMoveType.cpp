@@ -738,6 +738,23 @@ bool CSupComGroundMoveType::HasFurtherPoint() const
 	return false;
 }
 
+// pathing fix 20 (PTH-004-E v3 "its path never crosses an impassable cell"; L11965 trace on kt1-big-1128: a unit held at a structure in a
+// one-cell gap crept 0.1 elmos every 20 frames into the wall corner, 0.72 elmos deep for 247 frames, though its own steps were refused):
+// the collision pass's push (the static block's strafe and bounce) is held to the rule the unit's own steps keep (the PTH-004-E step
+// test in UpdateOwnerPos): a push that takes the footprint deeper into impassable squares, or adds overlap, is dropped. Switch
+// SupComCollisionNoDeeper, default 1 (DESIGN: no released value names it)
+void CSupComGroundMoveType::ClipCollisionForce(float3& force) const
+{
+	static const bool on = SupComSimSwitch::Get("SupComCollisionNoDeeper", true);
+	if (!on || force.SqLength2D() <= 0.0f)
+		return;
+	const float3 next = owner->pos + force;
+	if (!FootprintBlocked(next))
+		return;
+	if (FootprintDepth(next) > FootprintDepth(owner->pos) + 1e-3f || FootprintOverlapArea(next) > FootprintOverlapArea(owner->pos) + 1e-3f)
+		force = ZeroVector;
+}
+
 float CSupComGroundMoveType::FootprintDepth(const float3& pos) const
 {
 	// how far the footprint reaches into impassable squares: over the blocked squares it overlaps, the largest

@@ -2653,12 +2653,14 @@ void CGroundMoveType::HandleObjectCollisions()
 	if (tryForce.SqLength() > maxPushForceSq)
 		(tryForce.Normalize()) *= maxSpeed;
 
+	ClipCollisionForce(tryForce); // supcom: pathing fix 20 (PTH-004-E)
 	UpdatePos(owner, tryForce, resultantForces, curThread);
 
 	if (resultantForces.same(ZeroVector) && positionStuck){
 		resultantForces = forceFromStaticCollidees;
 		if (resultantForces.SqLength() > maxPushForceSq)
 			(resultantForces.Normalize()) *= maxSpeed;
+		ClipCollisionForce(resultantForces);
 	}
 }
 
