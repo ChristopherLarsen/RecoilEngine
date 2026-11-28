@@ -30,6 +30,7 @@ public:
 			sps = stepsPerSecond;
 	}
 	static bool IsSet() { return sps >= 1; }
+	static void Clear() { sps = 0; }   // tests only: back to unset, so a case that forgets to set the rate asserts
 	static int32_t StepsPerSecond() { assert(IsSet()); return sps; }
 	static double StepSeconds() { assert(IsSet()); return IsSet() ? static_cast<double>(1) / sps : 0; }
 

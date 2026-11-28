@@ -406,6 +406,8 @@ int main() {
 		TestDetMath();
 		TestDoubleConstants();
 		TestFixedPool();
+		Rate::Clear();
+		CHECK(!Rate::IsSet(), "Clear unsets the rate");
 	}
 	std::printf("KT1 Core/Common: %d checks, %d failed (30 and 10 steps per second)\n", checks, fails);
 	return fails == 0 ? 0 : 1;
