@@ -86,10 +86,6 @@ make_global_var(sources_engine_Game
 		"${CMAKE_CURRENT_SOURCE_DIR}/WordCompletion.cpp"
 	)
 
-# KT1 hook: registry (LUA-FREE F01): every KT1 source, from the sources.cmake fragment of each KT1 system folder.
-include("${CMAKE_CURRENT_SOURCE_DIR}/KT1/sources.cmake")
-list(APPEND sources_engine_Game ${KT1_SOURCES})
-
 # Build-variant-agnostic Game library, see recoil_add_variant_library in rts/builds/CMakeLists.txt.
 add_library(GameCommon INTERFACE)
 target_sources(GameCommon INTERFACE ${sources_engine_Game})
@@ -103,3 +99,9 @@ target_link_libraries(GameCommon INTERFACE
 	nowide::nowide
 )
 add_dependencies(GameCommon generateVersionFiles)
+
+# KT1 hook: registry (LUA-FREE F01): every KT1 source and the engine targets they link, from the sources.cmake fragment of
+# each KT1 folder. The only KT1 lines in this file.
+include("${CMAKE_CURRENT_SOURCE_DIR}/KT1/sources.cmake")
+target_sources(GameCommon INTERFACE ${KT1_SOURCES})
+target_link_libraries(GameCommon INTERFACE ${KT1_LIBRARIES})
