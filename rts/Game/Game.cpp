@@ -133,6 +133,7 @@
 #include "System/Sound/ISound.h"
 #include "System/Sound/ISoundChannels.h"
 #include "System/Sync/DumpState.h"
+#include "System/Sync/SysHash.h"
 #include "System/TimeProfiler.h"
 #include "System/LoadLock.h"
 #include "Lua/SupComTargeting.h"
@@ -1876,6 +1877,7 @@ void CGame::SimFrame() {
 	// useful for desync-debugging (enter instead of -1 start & end frame of the range you want to debug)
 	// supcom: period -1 keeps the one /dumpstate set (1 reset it every frame, so every frame of the range was dumped)
 	DumpState(-1, -1, -1, std::nullopt);
+	KT1::SysHash::Frame(gs->frameNum); // KT1 S3: per-system hashes (off unless SysHashPeriodS > 0)
 
 	ASSERT_SYNCED(gsRNG.GetGenState());
 	LEAVE_SYNCED_CODE();

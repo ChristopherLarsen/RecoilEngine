@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "System/Sync/SysHash.h"
 #include <cinttypes>
 
 #include "Game/Game.h"
@@ -1588,6 +1589,7 @@ void CGame::ClientReadNet()
 				LOG("Collecting current game state information.");
 				const uint32_t desyncFrameNum = *reinterpret_cast<const uint32_t*>(inbuf + 1);
 				DumpState(gs->frameNum, gs->frameNum, 1, true, desyncFrameNum, true);
+				KT1::SysHash::DumpRing(int(desyncFrameNum));
 				break;
 			}
 
