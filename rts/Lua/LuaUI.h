@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include <functional>   // KT1 hook: Cues
 #include "LuaHandle.h"
 #include "System/UnorderedMap.hpp"
 
@@ -71,6 +72,8 @@ public: // call-ins
 	                   string& menuName);
 
 	bool ConfigureLayout(const string& command);
+	// KT1 hook: Cues. Calls a LuaUI global with the arguments `push` puts on the stack (it returns their number).
+	bool KT1CallGlobal(const char* name, const std::function<int(lua_State*)>& push);
 
 	void ShockFront(const float3& pos, float power, float areaOfEffect, const float* distMod = NULL);
 
