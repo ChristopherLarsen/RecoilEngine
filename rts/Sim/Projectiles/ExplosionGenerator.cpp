@@ -16,7 +16,7 @@
 #include "Game/Camera.h"
 #include "System/Config/ConfigHandler.h"
 
-CONFIG(bool, KardashevCegCull).defaultValue(true).description("Kardashev: CEG elements with a cullDistance are not made past it (view depth). 0 draws every element (captures). Graphics only.");
+CONFIG(bool, KardashevCegCull).defaultValue(false).description("Kardashev: CEG elements with a cullDistance are not made past it (view depth). 0 draws every element (captures). Graphics only.");
 CONFIG(float, KardashevCegCullScale).defaultValue(1.0f).minimumValue(0.0f).description("Kardashev: multiplies every CEG cullDistance (detail option, RND-006 R8). 0 = no culling.");
 
 bool CCustomExplosionGenerator::cegCullOn = true;

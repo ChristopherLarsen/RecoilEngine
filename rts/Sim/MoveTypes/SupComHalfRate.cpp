@@ -95,7 +95,7 @@ bool SupComHalfRate::LandedRest(CUnit* u)
 
 bool SupComHalfRate::PlanOffTick(CUnit* u)
 {
-	static const bool on = SupComSimSwitch::Get("SupComHalfRatePlan", true);
+	static const bool on = SupComSimSwitch::Get("SupComHalfRatePlan", false);
 	static const bool sleepOn = SupComSimSwitch::Get("SupComMoveSleep", false);
 	const bool odd = ((u->id + gs->frameNum) & 1) != 0;
 	bool skip = false;

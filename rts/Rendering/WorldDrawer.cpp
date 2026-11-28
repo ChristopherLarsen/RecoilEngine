@@ -214,7 +214,7 @@ void CWorldDrawer::Kill()
 // positions, icon states, LOD and visibility bins) is for nothing: at 4K CUnitDrawerBase::Update alone was 6.2 ms a frame. Off in headless (headlessValue false);
 // the rest of the update still runs (Lua object drawer, heightmap copy, ground, projectiles, sky, water). All of it is
 // unsynced: no sim state is read back from it. SupComDrawerUpdates=1 in a headless run restores the old behaviour.
-CONFIG(bool, SupComDrawerUpdates).defaultValue(true).headlessValue(false).description("supcom: run the unit and feature drawers' per-frame update (off by default in headless engines, where nothing is drawn)");
+CONFIG(bool, SupComDrawerUpdates).defaultValue(true).description("supcom: run the unit and feature drawers' per-frame update (off by default in headless engines, where nothing is drawn)");
 
 void CWorldDrawer::Update(bool newSimFrame)
 {
