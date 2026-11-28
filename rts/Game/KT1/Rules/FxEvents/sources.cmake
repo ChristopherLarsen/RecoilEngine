@@ -7,5 +7,6 @@ list(APPEND KT1_SOURCES
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/FxEvents/FxCriteria.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/FxEvents/FxDeath.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/FxEvents/FxLogic.cpp"
+	"${CMAKE_CURRENT_LIST_DIR}/../../Core/FxEvents/FxLogicUnits.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/FxEvents/FxStrategic.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/FxEvents/FxWreck.cpp")
