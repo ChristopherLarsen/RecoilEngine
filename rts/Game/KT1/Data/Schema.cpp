@@ -1,4 +1,5 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
+// KT1 engine-free: also built into kt1_core_tests (KT1/Test/README.md).
 // KT1 Data: reading one JSON object against a config struct's keys (Schema.h). Engine-free.
 
 #include "Schema.h"

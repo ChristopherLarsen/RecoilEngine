@@ -3,8 +3,8 @@
 //
 // Replaces:   LuaRules/Gadgets/kt1_census.lua (same numbers; it runs when this rule is off)
 // Switch:     mod option kt1_census (default off)
-// Config:     gamedata/kt1/census.lua
-//               period            frames between tallies (DESIGN 30)
+// Config:     data/kt1/census.json (CensusConfig.h)
+//               period_s          seconds between tallies (DESIGN 1)
 //               default_weight    a unit's weight when its def sets none (DESIGN 1)
 //               count_unfinished  count units still being built (DESIGN false)
 // Unit data:  kt1 = { census = { weight = <integer> } }   (customParams kt1_census_weight); count = false leaves the def out
@@ -24,9 +24,11 @@
 
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
+#include "Game/KT1/Core/Common/Rate.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/Rules/Census/CensusConfig.h"
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaHandle.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/Units/Unit.h"
@@ -40,10 +42,12 @@ class Census : public Rule {
 public:
 	Census() : Rule({"Census", 1, true, "LuaRules/Gadgets/kt1_census.lua", false}) {}
 
-	void LoadConfig(const LuaTable& cfg) override {
-		period = std::max(1, cfg.GetInt("period", 30));
-		defaultWeight = cfg.GetInt("default_weight", 1);
-		countUnfinished = cfg.GetBool("count_unfinished", false);
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		const Data::Report report = Data::ParseInto(text, strictness, cfg);
+		period = Core::Rate::Every(cfg.periodS);
+		defaultWeight = cfg.defaultWeight;
+		countUnfinished = cfg.countUnfinished;
+		return report;
 	}
 
 	void Start() override {
@@ -113,7 +117,8 @@ private:
 		return 1;
 	}
 
-	int period = 30, defaultWeight = 1;
+	CensusConfig cfg;
+	int period = 30, defaultWeight = 1;   // period in frames
 	bool countUnfinished = false;
 	std::vector<int> weight;          // per def id
 	std::vector<int> units, sums;     // per team, the last tally

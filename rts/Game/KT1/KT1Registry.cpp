@@ -4,7 +4,8 @@
 // Switch: mod option kt1_<key> ("1"/"true" on, "0"/"false" off, "check"; unset: the rule's defaultOn). Off: the engine rule
 // does nothing and its Lua gadget runs (the gadget asks Spring.KT1.IsActive("<Name>") and stands down when it is true).
 // Check (LUA-FREE §3.2): the engine rule runs and IsActive is false, so its Lua runs too and a proof compares the two.
-// Config: gamedata/kt1/<key>.lua from the game archive, read once per game when the rule is on.
+// Config: data/kt1/<key>.json from the game archive (Data/DataEngine.h), read once per game when the rule is on; an
+// unsynced rule's file is read again on /kt1 reload and, in a dev archive, when it changes.
 //
 // Lua (every handle, from LuaSyncedRead):
 //   Spring.KT1.Rules()        -> { {name, version, synced, replaces, enabled, option, timer}, ... } in registry order
@@ -23,11 +24,12 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "Core/Common/Rate.h"
+#include "Data/DataEngine.h"
 #include "Game/GameSetup.h"
 #include "Lua/LuaHandle.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
-#include "System/FileSystem/VFSModes.h"
+#include "Sim/Misc/GlobalConstants.h"
 #include "System/Log/ILog.h"
 #include "System/StringHash.h"
 #include "System/TimeProfiler.h"
@@ -41,6 +43,11 @@ static std::string Lower(const char* s) {
 }
 
 Rule::Rule(const RuleInfo& i) : info(i), key(Lower(i.name)), option("kt1_" + Lower(i.name)), timer(std::string("KT1::") + i.name) {}
+
+Data::Report Rule::ReadConfig(std::string_view text, Data::Strictness strictness) {
+	struct NoKeys { void Describe(Data::Schema&) {} } none;
+	return Data::ParseInto(text, strictness, none);
+}
 
 namespace {
 	struct Registration { const char* name; int order; MakeRuleFn make; };
@@ -83,6 +90,7 @@ Rule* Registry::Find(const char* name) const {
 void Registry::EnsureInit() {
 	if (inited || gameSetup == nullptr) return;   // no game yet (menu, LuaIntro): every rule reads as off
 	inited = true;
+	Core::Rate::SetStepsPerSecond(GAME_SPEED);   // before any system turns seconds into steps
 
 	const auto& opts = CGameSetup::GetModOptions();
 	for (auto& r : rules) {
@@ -97,12 +105,7 @@ void Registry::EnsureInit() {
 		r->enabled = on;
 
 		if (on) {
-			const std::string path = "gamedata/kt1/" + r->key + ".lua";
-			LuaParser p(path, SPRING_VFS_MOD_BASE, SPRING_VFS_ZIP, {r->info.synced}, {true});   // setup: the parser needs its own Lua state (setup false leaves it invalid)
-			const bool ok = p.Execute();
-			r->LoadConfig(p.GetRoot());   // an invalid root reads every field as its default
-			LOG("[KT1] %s v%d %s, config %s%s%s mode=%s", r->info.name, r->info.version, r->info.synced ? "synced" : "unsynced",
-			    path.c_str(), ok ? "" : " (none: defaults): ", ok ? "" : p.GetErrorLog().c_str(), Rule::ModeName(mode));
+			Data::LoadRule(*r, Rule::ModeName(mode));
 		} else {
 			LOG("[KT1] %s v%d off (Lua: %s) mode=off", r->info.name, r->info.version, r->info.replaces);
 		}
@@ -114,6 +117,7 @@ void Registry::EnsureStart() {
 	EnsureInit();
 	if (started || !inited) return;
 	started = true;
+	Data::StartReload();
 	for (auto& r : rules)
 		if (r->enabled) r->Start();
 }

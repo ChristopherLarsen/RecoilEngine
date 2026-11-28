@@ -5,7 +5,7 @@
 // Replaces:   the per-unit search of LuaRules/Gadgets/mov_trees.lua (MV-5: a tree knocked over) and LuaRules/Gadgets/map_plants.lua
 //             (MAP-002 v5: a plant falls, a cluster breaks); both stay and pull Events() when this is on
 // Switch:     mod option kt1_plants (default off)
-// Config:     gamedata/kt1/plants.lua
+// Config:     data/kt1/plants.json (PlantsConfig.h)
 //               trees_every       frames between the checks of one unit (units spread by id)       (DESIGN 3)
 //               trees_reach       share of the footprint half-width at which a tree is reached     (DESIGN 0.6)
 //               trees_min_speed   speed (elmos per frame) above which a unit knocks trees          (DESIGN 0.01)
@@ -34,8 +34,10 @@
 
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
+#include "Game/KT1/Core/Common/Rate.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/Rules/Plants/PlantsConfig.h"
 #include "Lua/LuaHandle.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/Ground.h"
 #include "Sim/Features/Feature.h"
@@ -54,13 +56,16 @@ class Plants : public Rule {
 public:
 	Plants() : Rule({"Plants", 1, true, "LuaRules/Gadgets/mov_trees.lua, map_plants.lua (contact search)", false}) {}
 
-	void LoadConfig(const LuaTable& cfg) override {
-		treesEvery = std::max(1, cfg.GetInt("trees_every", 3));
-		treesReach = cfg.GetFloat("trees_reach", 0.6f);
-		treesMin = cfg.GetFloat("trees_min_speed", 0.01f);
-		plantsEvery = std::max(1, cfg.GetInt("plants_every", 3));
-		plantsMargin = cfg.GetFloat("plants_margin", 4.0f);
-		plantsMin = cfg.GetFloat("plants_min_speed", 0.05f);
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		const Data::Report report = Data::ParseInto(text, strictness, cfg);
+		const float sps = static_cast<float>(Core::Rate::StepsPerSecond());
+		treesEvery = Core::Rate::Every(cfg.treesEveryS);
+		treesReach = cfg.treesReach;
+		treesMin = cfg.treesMinSpeedPerS / sps;
+		plantsEvery = Core::Rate::Every(cfg.plantsEveryS);
+		plantsMargin = cfg.plantsMargin;
+		plantsMin = cfg.plantsMinSpeedPerS / sps;
+		return report;
 	}
 
 	void Start() override {
@@ -157,7 +162,8 @@ private:
 		return 1;
 	}
 
-	int treesEvery = 3, plantsEvery = 3;
+	PlantsConfig cfg;
+	int treesEvery = 3, plantsEvery = 3;   // frames
 	float treesReach = 0.6f, treesMin = 0.01f, plantsMargin = 4.0f, plantsMin = 0.05f;
 	std::vector<char> knock;              // per feature def id
 	std::vector<float> treeR, plantR;     // per unit def id: probe radius, -1 = not probed

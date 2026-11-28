@@ -5,7 +5,7 @@
 //
 // Replaces:   LuaRules/Gadgets/mov_own_pass.lua (the walk and search only: the gadget stays and pulls Events when this is on)
 // Switch:     mod option kt1_ownpass (default off)
-// Config:     gamedata/kt1/ownpass.lua
+// Config:     data/kt1/ownpass.json (OwnPassConfig.h)
 //               slice          frames between the speed reads of one unit (DESIGN 3)
 //               ahead          elmos beyond the two sizes at which the light unit stops blocking (DESIGN 24)
 //               search_margin  elmos added to the search radius for the heavy's cylinder (DESIGN 64)
@@ -35,9 +35,11 @@
 
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
+#include "Game/KT1/Core/Common/Rate.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/Rules/OwnPass/OwnPassConfig.h"
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaHandle.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/Models/3DModel.hpp"
 #include "Sim/Misc/QuadField.h"
@@ -55,11 +57,14 @@ class OwnPass : public Rule {
 public:
 	OwnPass() : Rule({"OwnPass", 1, true, "LuaRules/Gadgets/mov_own_pass.lua", false}) {}
 
-	void LoadConfig(const LuaTable& cfg) override {
-		slice = std::max(1, cfg.GetInt("slice", 3));
-		ahead = cfg.GetFloat("ahead", 24.0f);
-		margin = cfg.GetFloat("search_margin", 64.0f);
-		idleSpeed = cfg.GetFloat("idle_speed", 0.05f);
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		const Data::Report report = Data::ParseInto(text, strictness, cfg);
+		slice = Core::Rate::Every(cfg.sliceS);
+		ahead = cfg.ahead;
+		margin = cfg.searchMargin;
+		// per frame in float: the same bits the .lua config's per-frame value had
+		idleSpeed = cfg.idleSpeedPerS / static_cast<float>(Core::Rate::StepsPerSecond());
+		return report;
 	}
 
 	void Start() override {
@@ -182,7 +187,8 @@ private:
 		return 1;
 	}
 
-	int slice = 3;
+	OwnPassConfig cfg;
+	int slice = 3;   // frames
 	float ahead = 24.0f, margin = 64.0f, idleSpeed = 0.05f;
 	std::vector<char> ground;             // per def id
 	std::vector<float> mass, size;        // per def id

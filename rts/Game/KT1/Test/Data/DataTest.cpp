@@ -92,6 +92,26 @@ KT1_CASE("DATA-FLOAT-BITS", "a float has the bits the Lua reader gave it (strtod
 	}
 }
 
+KT1_CASE("DATA-FLOAT-CAST", "a float field holds the file's double cast once to float, as the Lua number did") {
+	Sample c;
+	ParseInto(R"({"gain": 0.1})", Strictness::Dev, c);
+	const double exact = std::strtod("0.1", nullptr);
+	KT1_CHECK(c.gain == static_cast<float>(exact));
+	KT1_CHECK(static_cast<double>(c.gain) != exact);
+}
+
+KT1_CASE("DATA-NUMBER-PLACES", "a number the engine's reader would not read exactly is refused; strings are left alone") {
+	for (const char* bad : {"0.00000000001", "1.25e-9", "3e11", "-0.123456789012"}) {
+		Sample c;
+		const Report r = ParseInto(std::string("{\"gain\": ") + bad + "}", Strictness::Dev, c);
+		KT1_CHECK_MSG(!r.accepted && Says(r, "", true, "not read exactly"), bad);
+	}
+	Sample c;
+	const Report r = ParseInto(R"({"gain": 0.0000000001, "name": "1e99 \" 0.00000000001", "count": 3})", Strictness::Dev, c);
+	KT1_CHECK(r.accepted && c.count == 3);
+	KT1_CHECK(c.gain == static_cast<float>(std::strtod("0.0000000001", nullptr)));
+}
+
 KT1_CASE("DATA-UNKNOWN-DEV", "an unknown key is an error in dev, also inside objects and lists, and nothing applies") {
 	Sample c;
 	const Report r = ParseInto(UNKNOWN, Strictness::Dev, c);

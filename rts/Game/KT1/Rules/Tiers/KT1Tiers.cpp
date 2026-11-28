@@ -3,7 +3,7 @@
 //
 // Replaces:   nothing (an engine-only saving; Lua gadgets may read IsAsleep to skip their own per-unit work)
 // Switch:     mod option kt1_tiers (default off)
-// Config:     gamedata/kt1/tiers.lua
+// Config:     data/kt1/tiers.json (TiersConfig.h)
 //               far_period_s   seconds between tier visits; frames = round(s x GAME_SPEED), at least 2 (DESIGN, 0.5: 15 at 30 Hz, 5 at 10 Hz)
 //               margin_elmos   action distance = max(longest weapon range, sight) + this (DESIGN rules.lua sim.action_distance_margin 10 MU x 8 = 80)
 //               cell_elmos     occupancy grid cell (build choice, 512)
@@ -26,7 +26,8 @@
 
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
-#include "Lua/LuaParser.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/Rules/Tiers/TiersConfig.h"
 #include "Lua/LuaUtils.h"
 #include "Map/ReadMap.h"
 #include "Sim/Misc/GlobalConstants.h"
@@ -83,10 +84,12 @@ class TiersRule : public Rule {
 public:
 	TiersRule() : Rule({"Tiers", 1, true, "", false}) {}
 
-	void LoadConfig(const LuaTable& cfg) override {
-		periodSeconds = cfg.GetFloat("far_period_s", 0.5f);
-		marginElmos = cfg.GetFloat("margin_elmos", 80.0f);
-		cellElmos = std::max(64.0f, cfg.GetFloat("cell_elmos", 512.0f));
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		const Data::Report report = Data::ParseInto(text, strictness, cfg);
+		periodSeconds = cfg.farPeriodS;
+		marginElmos = cfg.marginElmos;
+		cellElmos = cfg.cellElmos;
+		return report;
 	}
 
 	void Start() override {
@@ -170,6 +173,7 @@ private:
 		return 3;
 	}
 
+	TiersConfig cfg;
 	float periodSeconds = 0.5f, marginElmos = 80.0f, cellElmos = 512.0f;
 	int period = 15;
 	int nAsleep = 0, nIdleNear = 0, nTotal = 0;

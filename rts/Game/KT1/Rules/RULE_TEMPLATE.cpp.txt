@@ -3,8 +3,8 @@
 //
 // Replaces:   LuaRules/Gadgets/<gadget>.lua (it runs when this rule is off; it calls KT1.StandDown(self, "<Name>"))
 // Switch:     mod option kt1_<name> (default <on|off>)
-// Config:     gamedata/kt1/<name>.lua
-//               <key>   <meaning> (<label: REQ / DESIGN / PLACEHOLDER / PARITY:>, default)
+// Config:     data/kt1/<name>.json (<Name>Config.h: an engine-free struct with the defaults and a Describe)
+//               <key>   <meaning> (<label: REQ / DESIGN / PLACEHOLDER / PARITY:>, default); times in seconds
 // Unit data:  kt1 = { <name> = { <key> = ... } }   (customParams kt1_<name>_<key>), read per def in Start
 // Timer:      KT1::<Name>
 // Lua:        Spring.KT1.<Name>.<Call>(...) -> ...   <what, which handles; writes are synced only>
@@ -15,10 +15,10 @@
 
 #include <memory>
 
+#include "Game/KT1/Data/Config.h"
 #include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1UnitData.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 
 namespace KT1 {
@@ -28,12 +28,16 @@ class NAME : public Rule {
 public:
 	NAME() : Rule({"<Name>", 1, true, "LuaRules/Gadgets/<gadget>.lua", false}) {}
 
-	void LoadConfig(const LuaTable& cfg) override { /* every tunable from cfg, with the config file's default */ }
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		return Data::ParseInto(text, strictness, cfg);   // then derive steps with Core::Rate; delete both for a rule with no keys
+	}
 	void Start() override { /* per-def data into vectors by def id */ }
 	void GameFrame(int frame) override { /* the rule */ }
 	void PushLua(lua_State* L) override { /* LuaPushRawNamedCFunc(L, "<Call>", L<Call>); */ }
 
 private:
+	NAMEConfig cfg;
+
 	static NAME* Self() { return static_cast<NAME*>(Registry::Get().Find("<Name>")); }
 };
 

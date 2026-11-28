@@ -5,11 +5,11 @@
 // Replaces:   the ribbon part (core, dash, thread) of LuaRules/Gadgets/gfx_shots.lua; puffs, bodies, prims and wakes stay there.
 //             With the rule on, gfx_shots drops those parts from its recipes (KT1.IsActive("Ribbons")).
 // Switch:     mod option kt1_ribbons (default off). Unsynced: draw only.
-// Config:     gamedata/kt1/ribbons.lua (the follower plan's numbers: caps by effect scale, distance bands, short and guard life,
+// Config:     data/kt1/ribbons.json (RibbonsConfig.h: the follower plan's numbers: caps by effect scale, distance bands, short and guard life,
 //             heavy-fight lightening, pool sizes)
 // Settings:   KardashevFxShots (0 none, 1 short, 2 full), KardashevFxScale (caps row), and the heavy-fight overrides
 //             KardashevRibbonExtrasMax, KardashevRibbonLifeMax, KardashevRibbonLifeK, KardashevRibbonCap; read at start and every
-//             `settings_every` frames; Lua may push them (SetLimits).
+//             `settings_every_s` seconds; Lua may push them (SetLimits).
 // Unit data:  weapon customParams kt1_ribbons_<key> (written by game/gamedata/unitdefs_post.lua from the follower recipe,
 //             gamedata/fx_shots.lua T.Recipe): priority, highonly, shortok, and per strip s in core, dash, thread:
 //             kt1_ribbons_<s>_tex (texture path), _base (hot: additive; smoke: alpha), _tile (elmos per repeat), _w0, _w1 (half-widths at
@@ -42,7 +42,9 @@
 #include "Game/GlobalUnsynced.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
-#include "Lua/LuaParser.h"
+#include "Game/KT1/Core/Common/Rate.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/UI/Ribbons/RibbonsConfig.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/Env/Particles/ProjectileDrawer.h"
 #include "Rendering/GL/SubState.h"
@@ -188,34 +190,35 @@ struct Pool {
 	}
 };
 
-struct Cap { float scale; int ribbons, points; };
+using Cap = RibbonsConfig::Cap;
 
 class Ribbons : public Rule {
 public:
 	Ribbons() : Rule({"Ribbons", 1, false, "LuaRules/Gadgets/gfx_shots.lua (ribbon parts)", false}) {}
 
-	void LoadConfig(const LuaTable& cfg) override {
-		caps.clear();
-		const LuaTable ct = cfg.SubTable("caps");
-		for (int i = 1; ct.KeyExists(i); ++i) {
-			const LuaTable c = ct.SubTable(i);
-			caps.push_back({c.GetFloat("scale", 1), c.GetInt("ribbons", 200), c.GetInt("points", 12)});
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		const Data::Report report = Data::ParseInto(text, strictness, cfg);
+		caps = cfg.caps.empty() ? RibbonsConfig{}.caps : cfg.caps;
+		nearD = cfg.nearD; midD = cfg.midD; farD = cfg.farD;
+		shortLife = cfg.shortLife; guardLife = cfg.guardLife;
+		extrasMax = cfg.extrasMax; lifeMax = cfg.lifeMax; lifeK = cfg.lifeK;
+		settingsEvery = Core::Rate::Every(cfg.settingsEveryS);
+		if (!started) {   // pools, their textures and the weapons' priorities are made once, in Start
+			poolMax = cfg.poolMax; extraPoolMax = cfg.extraPoolMax; headMax = cfg.headMax;
+			defaultPriority = cfg.defaultPriority;
+			texHot = cfg.texHot; texSmoke = cfg.texSmoke;
 		}
-		if (caps.empty()) caps = {{0.5f, 60, 6}, {1, 200, 12}, {2, 600, 20}};
-		nearD = cfg.GetFloat("near", 1500); midD = cfg.GetFloat("mid", 3500); farD = cfg.GetFloat("far", 6000);
-		shortLife = cfg.GetFloat("short_life", 0.5f); guardLife = cfg.GetFloat("guard_life", 0.5f);
-		const LuaTable h = cfg.SubTable("heavy");
-		extrasMax = h.GetInt("extras", 40); lifeMax = h.GetInt("life", 120); lifeK = h.GetFloat("lifeK", 0.5f);
-		poolMax = cfg.GetInt("pool_max", 8192); extraPoolMax = cfg.GetInt("extra_pool_max", 2048);
-		headMax = cfg.GetInt("head_max", 2048);
-		settingsEvery = std::max(1, cfg.GetInt("settings_every", 30));
-		defaultPriority = cfg.GetInt("default_priority", 9);
-		const LuaTable dt = cfg.SubTable("default_tex");
-		texHot = dt.GetString("hot", "bitmaps/sp_fx/sp_ribbon_hot.tga");
-		texSmoke = dt.GetString("smoke", "bitmaps/sp_fx/sp_ribbon_smoke.tga");
+		return report;
+	}
+	void ConfigReloaded() override {
+		ReadSettings();   // the heavy-fight numbers in use come from the settings, with the file's values as their defaults
+		if (poolMax != cfg.poolMax || extraPoolMax != cfg.extraPoolMax || headMax != cfg.headMax ||
+		    defaultPriority != cfg.defaultPriority || texHot != cfg.texHot || texSmoke != cfg.texSmoke)
+			LOG("[KT1] Ribbons: pool sizes, textures and the default priority apply at the next game start");
 	}
 
 	void Start() override {
+		started = true;
 		const int n = weaponDefHandler->NumWeaponDefs();
 		defs.assign(n, WeaponRibbon{});
 		int withRibbon = 0;
@@ -689,6 +692,8 @@ private:
 	}
 
 	// config
+	RibbonsConfig cfg;
+	bool started = false;
 	std::vector<Cap> caps;
 	float nearD = 1500, midD = 3500, farD = 6000, shortLife = 0.5f, guardLife = 0.5f, lifeK = 0.5f;
 	int extrasMax = 40, lifeMax = 120, poolMax = 8192, extraPoolMax = 2048, headMax = 2048, settingsEvery = 30, defaultPriority = 9;

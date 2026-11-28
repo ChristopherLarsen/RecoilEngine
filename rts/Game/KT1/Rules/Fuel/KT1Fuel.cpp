@@ -5,7 +5,7 @@
 // Replaces:   the fuel step of LuaRules/Gadgets/spc_staging.lua (its per-aircraft walk, the height read and the gauge); the gadget
 //             stays, reads fuel through this rule and pulls Events() when this is on
 // Switch:     mod option kt1_fuel (default off)
-// Config:     gamedata/kt1/fuel.lua
+// Config:     data/kt1/fuel.json (FuelConfig.h)
 //               climb_above   elmos above the ground at which an aircraft counts as flying (burns fuel)                  (DESIGN 4)
 //               gauge_step    share of the capacity the gauge must move before it is sent again                         (DESIGN 0.005)
 //               low_every     frames between the low-fuel events of one aircraft (units spread by id)                   (DESIGN 5)
@@ -39,8 +39,10 @@
 
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
+#include "Game/KT1/Core/Common/Rate.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/Rules/Fuel/FuelConfig.h"
 #include "Lua/LuaHandle.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/Ground.h"
 #include "Sim/Misc/GlobalConstants.h"
@@ -64,11 +66,13 @@ class Fuel : public Rule {
 public:
 	Fuel() : Rule({"Fuel", 1, true, "LuaRules/Gadgets/spc_staging.lua (fuel step)", false}) {}
 
-	void LoadConfig(const LuaTable& cfg) override {
-		climbAbove = cfg.GetFloat("climb_above", 4.0f);
-		gaugeStep = cfg.GetFloat("gauge_step", 0.005f);
-		lowEvery = std::max(1, cfg.GetInt("low_every", 5));
-		lowDefault = cfg.GetFloat("low_fraction", 0.19f);
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		const Data::Report report = Data::ParseInto(text, strictness, cfg);
+		climbAbove = cfg.climbAbove;
+		gaugeStep = cfg.gaugeStep;
+		lowEvery = Core::Rate::Every(cfg.lowEveryS);
+		lowDefault = cfg.lowFraction;
+		return report;
 	}
 
 	void Start() override {
@@ -224,7 +228,8 @@ private:
 	}
 
 	float climbAbove = 4.0f, gaugeStep = 0.005f, lowDefault = 0.19f;
-	int lowEvery = 5;
+	FuelConfig cfg;
+	int lowEvery = 5;   // frames
 	std::vector<float> cap, recharge, ground, low;   // per def id
 	std::vector<const CUnit*> owner;                 // per unit id: who the state belongs to (an id is reused)
 	std::vector<float> fuel, sent, mult;             // per unit id

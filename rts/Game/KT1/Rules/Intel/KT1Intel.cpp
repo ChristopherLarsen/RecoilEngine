@@ -10,7 +10,7 @@
 //             (rts/Sim/Units/SupComUnitPassIntel.cpp, docs/engine/INTEL-STEP10-DESIGN.md), which decided the same but left the
 //             Lua loop walking every (unit, army) pair.
 // Switch:     mod option kt1_intel (default off)
-// Config:     gamedata/kt1/intel.lua (no tuning values: the rule numbers come from int_values.lua through Rules())
+// Config:     data/kt1/intel.json (no tuning values: the rule numbers come from int_values.lua through Rules())
 // Unit data:  per def floater, jam, canMove: pushed once by the gadget (Defs), from its own tables
 // Timer:      KT1::Intel (each Run() call)
 // Lua (synced only):
@@ -49,7 +49,6 @@
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
 #include "Lua/LuaHandle.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Lua/SupComIntIndex.h"
 #include "Sim/Misc/GlobalSynced.h"

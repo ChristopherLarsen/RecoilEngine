@@ -7,7 +7,7 @@
 //             From that height every one of those is a few pixels; a pre-baked map image on a coarse mesh looks the same.
 // Replaces:   nothing in Lua; its "Lua" side is the engine's own full world pass when off.
 // Switch:     mod option kt1_farview (default off until the bench proves it). Unsynced: draw only.
-// Config:     gamedata/kt1/farview.lua: switch_height, hysteresis, grid, refresh_frames, water_level, water_color, brightness,
+// Config:     data/kt1/farview.json (FarViewConfig.h): switch_height, hysteresis, grid, refresh_s, water_level, water_color, brightness,
 //             texture (labels and pending values there).
 // Hooks:      ProjectileDrawer.cpp UpdateDrawFlags and DrawGroundFlashes: FxCulled (far only: effects past their view-depth cutoff).
 //             rts/Rendering/WorldDrawer.cpp, CWorldDrawer::Draw: `if (!KT1::FarView::Draw()) { DrawOpaqueObjects(); DrawAlphaObjects(); }`.
@@ -36,9 +36,10 @@
 #include "Game/GlobalUnsynced.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/UI/FarView/FarViewConfig.h"
 #include "Game/SelectedUnitsHandler.h"
 #include "Lua/LuaHandle.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/ReadMap.h"
 #include "Rendering/DepthBufferCopy.h"
@@ -113,27 +114,7 @@ void main() {
 }
 )";
 
-struct Cfg {
-	float switchHeight = 4000.0f;   // PLACEHOLDER (pending FAR-ZOOM-MAP-VIEW): camera height (or zoom) where the far view begins
-	float hysteresis = 0.05f;       // DESIGN: band below the switch before the full view returns (ZOOM-TIER-PLAN: 5%)
-	int grid = 128;                 // DESIGN: mesh cells per map side (about 640 elmos a cell on an 80 km map, 33k triangles)
-	int refreshFrames = 30;         // DESIGN: drawn frames between mesh height refreshes while far
-	float waterLevel = 0.0f;        // DESIGN: the engine's water plane
-	float waterColor[4] = {0.10f, 0.22f, 0.32f, 0.0f};   // PLACEHOLDER (pending): tint below water; a = 0 keeps the image's water
-	float brightness = 1.0f;        // PLACEHOLDER (pending): multiplier on the baked image
-	std::string texture;            // DESIGN: "" = the map's minimap image; else a game-archive image (a higher-resolution bake)
-	bool carto = true;              // REQ (RND-005 R10): the build's far view takes the cartographic look; false = the baked image
-	bool autoSwitch = true;         // DESIGN deviation (RND-005 R1, R10): switch by zoom; the default waits on the owner
-	float rampDark[3] = {0.45f, 0.38f, 0.41f};    // PARITY: G0-FARVIEW cartographic_terrain.builtin_ramp_dark_rgb
-	float rampLight[3] = {0.80f, 0.80f, 0.68f};   // PARITY: G0-FARVIEW cartographic_terrain.builtin_ramp_light_rgb
-	float contourStep = 0.10f;      // PARITY: G0-FARVIEW cartographic_terrain.builtin_contour_step_percent (10%)
-	float edgeGain = 16.0f;         // PARITY: G0-FARVIEW cartographic_terrain.contour_edge_gain
-	bool drawFx = true;             // REQ (owner 2026-11-26, D-Z3 withdrawn): projectiles, particles and ground flashes draw in the far view
-	float fxCutoff = -1.0f;         // REQ (released sweep 5b51164): no far-view cull by default; each layer keeps its own cut-off; a value > 0 is a cap (owner decision)
-	float weaponCutoff = -1.0f;     // DESIGN: weapon projectiles are not culled here; the VFX side sizes and cuts the shot's look (gfx_shots)
-};
-
-Cfg cfg;
+FarViewConfig cfg;
 bool active = false;       // the rule is on (mod option)
 bool farNow = false;       // this frame is drawn far
 int force = -1;            // -1 by height, 0 never, 1 always (tests)
@@ -154,7 +135,7 @@ VBO* iboP = nullptr;
 VAO* vaoP = nullptr;
 GLsizei indexCount = 0;
 uint32_t ownTex = 0;
-int sinceRefresh = 1 << 20;
+spring_time lastRefresh;   // wall time of the last mesh height refresh
 int stRefreshes = 0, stFrames = 0;
 double stDrawMs = 0.0;
 
@@ -228,7 +209,7 @@ void RefreshMesh() {
 	vboP->Bind(GL_ARRAY_BUFFER);
 	vboP->SetBufferSubData(0, sizeof(float) * v.size(), v.data());
 	vboP->Unbind();
-	sinceRefresh = 0;
+	lastRefresh = spring_gettime();
 	stRefreshes += 1;
 }
 
@@ -245,8 +226,7 @@ bool DecideFar() {
 
 void DrawMesh() {
 	const uint32_t tex = ownTex != 0 ? ownTex : readMap->GetMiniMapTexture();
-	if (sinceRefresh >= cfg.refreshFrames) RefreshMesh();
-	sinceRefresh += 1;
+	if (stRefreshes == 0 || (spring_gettime() - lastRefresh).toSecsf() >= cfg.refreshS) RefreshMesh();
 
 	using namespace GL::State;
 	auto st = GL::SubState(Blending(GL_FALSE), DepthTest(GL_TRUE), DepthMask(GL_TRUE), Culling(GL_FALSE));
@@ -280,25 +260,17 @@ class FarViewRule : public Rule {
 public:
 	FarViewRule() : Rule({"FarView", 2, false, "(engine world pass at full detail)", false}) {}
 
-	void LoadConfig(const LuaTable& t) override {
-		cfg.switchHeight = t.GetFloat("switch_height", cfg.switchHeight);
-		cfg.hysteresis = std::clamp(t.GetFloat("hysteresis", cfg.hysteresis), 0.0f, 0.5f);
-		cfg.grid = std::clamp(t.GetInt("grid", cfg.grid), 8, 512);
-		cfg.refreshFrames = std::max(1, t.GetInt("refresh_frames", cfg.refreshFrames));
-		cfg.waterLevel = t.GetFloat("water_level", cfg.waterLevel);
-		const LuaTable wc = t.SubTable("water_color");
-		for (int i = 0; i < 4; ++i) cfg.waterColor[i] = wc.GetFloat(i + 1, cfg.waterColor[i]);
-		cfg.brightness = t.GetFloat("brightness", cfg.brightness);
-		cfg.texture = t.GetString("texture", cfg.texture);
-		cfg.carto = t.GetBool("cartographic", cfg.carto);
-		cfg.autoSwitch = t.GetBool("auto_switch", cfg.autoSwitch);
-		const LuaTable rd = t.SubTable("ramp_dark"), rl = t.SubTable("ramp_light");
-		for (int i = 0; i < 3; ++i) { cfg.rampDark[i] = rd.GetFloat(i + 1, cfg.rampDark[i]); cfg.rampLight[i] = rl.GetFloat(i + 1, cfg.rampLight[i]); }
-		cfg.contourStep = std::max(0.001f, t.GetFloat("contour_step", cfg.contourStep));
-		cfg.edgeGain = t.GetFloat("contour_edge_gain", cfg.edgeGain);
-		cfg.drawFx = t.GetBool("draw_fx", cfg.drawFx);
-		cfg.fxCutoff = t.GetFloat("fx_cutoff", cfg.fxCutoff);
-		cfg.weaponCutoff = t.GetFloat("weapon_cutoff", cfg.weaponCutoff);
+	// The mesh and the texture are built once, with the values of the first InitGL: a reload keeps those two.
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		const int grid = cfg.grid;
+		const std::string texture = cfg.texture;
+		const Data::Report report = Data::ParseInto(text, strictness, cfg);
+		if (glTried && (cfg.grid != grid || cfg.texture != texture)) {
+			LOG("[KT1] FarView: grid and texture apply at the next game start");
+			cfg.grid = grid;
+			cfg.texture = texture;
+		}
+		return report;
 	}
 	void Start() override {
 		active = true;

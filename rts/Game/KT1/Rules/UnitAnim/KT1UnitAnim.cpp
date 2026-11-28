@@ -6,7 +6,7 @@
 // Replaces:   the Loop thread of scripts/pm/anim.lua for "engine units" (ground treads, wheels, legs or fixed; body static, level,
 //             follow_terrain or bank; no work, link, unpack, charge or tilt); the poll of pm/aim.lua AimWeapon for those units
 // Switch:     mod option kt1_unitanim (default off)
-// Config:     gamedata/kt1/unitanim.lua
+// Config:     data/kt1/unitanim.json (UnitAnimConfig.h)
 //               idle_ticks   still ticks before an idle unit backs off (DESIGN 2)
 //               rest_delay   frames with no aim before a mount turns to rest (DESIGN 90)
 //               rest_rate    rad/s back to rest (DESIGN 1.5)
@@ -35,8 +35,10 @@
 
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
+#include "Game/KT1/Core/Common/Rate.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/Rules/UnitAnim/UnitAnimConfig.h"
 #include "Lua/LuaHandle.h"
-#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/Ground.h"
 #include "Rendering/Models/3DModel.hpp"
@@ -90,15 +92,17 @@ class UnitAnim : public Rule {
 public:
 	UnitAnim() : Rule({"UnitAnim", 1, true, "scripts/pm/anim.lua (Loop), pm/loco.lua, pm/aim.lua (Tick, poll)", false}) {}
 
-	void LoadConfig(const LuaTable& cfg) override {
-		idleTicksN = std::max(1, cfg.GetInt("idle_ticks", 2));
-		restDelay = cfg.GetInt("rest_delay", 90);
-		restRate = cfg.GetFloat("rest_rate", 1.5f);
-		rollEps = cfg.GetFloat("roll_eps", 0.05f);
-		wakeEvery = std::max(1, cfg.GetInt("wake_every", 3));
-		spinRate = cfg.GetFloat("spin_rate", 0.6f);
-		fullUnits = std::max(1, cfg.GetInt("full_units", 250));
-		maxMs = cfg.GetInt("max_ms", 500);
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		const Data::Report report = Data::ParseInto(text, strictness, cfg);
+		idleTicksN = cfg.idleTicks;
+		restDelay = Core::Rate::Steps(cfg.restDelayS);
+		restRate = cfg.restRate;
+		rollEps = cfg.rollEps;
+		wakeEvery = cfg.wakeEvery;
+		spinRate = cfg.spinRate;
+		fullUnits = cfg.fullUnits;
+		maxMs = static_cast<int>(std::lround(cfg.maxTickS * 1000.0f));
+		return report;
 	}
 
 	// Without Lua driving (an older game), the rule ticks here with its own count. With Run (pm framework 2026-11-27), the ticks run
@@ -504,6 +508,7 @@ private:
 	}
 
 	bool luaDriven = false;
+	UnitAnimConfig cfg;
 	int idleTicksN = 2, restDelay = 90, wakeEvery = 3, fullUnits = 250, maxMs = 500;
 	float restRate = 1.5f;
 	float rollEps = 0.05f, spinRate = 0.6f;

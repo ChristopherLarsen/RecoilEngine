@@ -7,7 +7,7 @@
 //             (game-build docs/engine/DRAW-BREAKDOWN-FIGHT.md, option 7). Skipping them changes no pixel.
 // Replaces:   nothing in Lua (an engine pass made cheaper); its "Lua" side is the engine's own unculled loop when off.
 // Switch:     mod option kt1_iconcull (default on: no visual change). Off: the stock loops, for A/B.
-// Config:     gamedata/kt1/iconcull.lua: alpha_max (an icon is empty when every pixel's alpha is at most this; DESIGN 0)
+// Config:     data/kt1/iconcull.json (IconCullConfig.h): alpha_max (an icon is empty when every pixel's alpha is at most this; DESIGN 0)
 // Unit data:  none: decided per icon type from its bitmap, never by unit name.
 // Hooks:      rts/Rendering/Units/UnitDrawer.cpp, one line in DrawUnitIcons and in DrawUnitIconsScreen (units and dead ghosts):
 //             `if (KT1::IconCull::Skip(idx)) continue;` before the unit's position is read.
@@ -24,7 +24,8 @@
 
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
-#include "Lua/LuaParser.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/UI/IconCull/IconCullConfig.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/IconHandler.h"
 #include "Rendering/Textures/Bitmap.h"
@@ -67,7 +68,13 @@ namespace IconCull {
 	public:
 		IconCullRule() : KT1::Rule({"IconCull", 1, false, "(engine icon pass, unculled)", true}) {}
 
-		void LoadConfig(const LuaTable& cfg) override { alphaMax = cfg.GetInt("alpha_max", 0); }
+		Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+			const Data::Report report = Data::ParseInto(text, strictness, cfg);
+			alphaMax = cfg.alphaMax;
+			return report;
+		}
+		// a new limit: every checked icon is looked at again in the next drawn frame
+		void ConfigReloaded() override { for (std::string& name : checkedName) name.clear(); }
 		void Start() override { active = true; }
 
 		void DrawWorld() override {           // once per drawn frame, before Draw::Screen: refresh changed icons, reset the counter
@@ -82,6 +89,8 @@ namespace IconCull {
 		void PushLua(lua_State* L) override { LuaPushRawNamedCFunc(L, "Stats", LStats); }
 
 	private:
+		IconCullConfig cfg;
+
 		static int LStats(lua_State* L) {
 			lua_newtable(L);
 			LuaPushNamedNumber(L, "emptyIcons", (lua_Number)emptyCount);
