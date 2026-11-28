@@ -66,6 +66,10 @@ Registry& Registry::Get() {
 				}
 			}
 			reg.rules.push_back(p[i].make());
+			if (Lower(reg.rules.back()->info.name) != Lower(p[i].name)) {
+				LOG_L(L_FATAL, "[KT1] system registered as %s names itself %s: KT1_REGISTER_SYSTEM and RuleInfo.name must agree", p[i].name, reg.rules.back()->info.name);
+				std::abort();
+			}
 		}
 		p.clear();
 	}
@@ -91,6 +95,11 @@ void Registry::EnsureInit() {
 		if (it != opts.end()) {
 			const std::string v = Lower(it->second.c_str());
 			mode = (v == "1" || v == "true") ? Rule::Mode::On : (v == "check" ? Rule::Mode::Check : Rule::Mode::Off);
+		}
+		if (mode == Rule::Mode::Check && !r->info.checkSafe) {
+			// a proof run that believes it is checking and is not is the worst case: stop, never fall back (KT1Register.h)
+			LOG_L(L_FATAL, "[KT1] %s: %s=check, but the rule does not support check mode (RuleInfo.checkSafe; KT1Register.h)", r->info.name, r->option.c_str());
+			std::abort();
 		}
 		r->mode = mode;
 		const bool on = (mode != Rule::Mode::Off);
