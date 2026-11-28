@@ -41,7 +41,7 @@
 #include "Rendering/Env/Decals/SupComDecalCut.h"
 #include "Rendering/Env/IGroundDecalDrawer.h"
 #include "Rendering/Units/KT1PlainShadow.h"
-#include "Sim/Units/UnitDefHandler.h"
+#include "Sim/Units/UnitDefHandler.h"   // KT1 lint: allow draw-sim-include unit def tables, fixed after load; no work package removes it yet (978a128725)
 
 namespace KT1 {
 namespace Rnd005 {

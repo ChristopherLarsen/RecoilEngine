@@ -71,7 +71,7 @@ public:
 	void LoadConfig(const LuaTable& t) override {
 		climbAbove = t.GetFloat("climb_above", 4.0f);
 		gaugeStep = t.GetFloat("gauge_step", 0.005f);
-		lowEvery = KT1::ConfigFrames(t, "low_every_s", "low_every", 5);
+		lowEvery = KT1::ConfigFrames(t, "low_every_s", "low_every", 5);   // DESIGN: the default of the old key, frames at 30 Hz, which KT1::ConfigFrames converts
 		lowDefault = t.GetFloat("low_fraction", 0.19f);
 	}
 

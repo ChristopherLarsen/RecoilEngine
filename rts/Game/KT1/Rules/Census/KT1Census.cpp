@@ -45,7 +45,7 @@ public:
 	Census() : Rule({"Census", 1, true, "LuaRules/Gadgets/kt1_census.lua", false}) {}
 
 	void LoadConfig(const LuaTable& t) override {
-		period = KT1::ConfigFrames(t, "period_s", "period", 30);
+		period = KT1::ConfigFrames(t, "period_s", "period", 30);   // KT1 lint: allow frame-literal the default of the old key, frames at 30 Hz, which KT1::ConfigFrames converts
 		defaultWeight = t.GetInt("default_weight", 1);
 		countUnfinished = t.GetBool("count_unfinished", false);
 	}
@@ -132,7 +132,7 @@ private:
 	}
 
 	CensusConfig cfg;
-	int period = 30, defaultWeight = 1;   // period in frames
+	int period = 30, defaultWeight = 1;   // period in frames; KT1 lint: allow frame-literal the value before LoadConfig replaces it
 	bool countUnfinished = false;
 	std::vector<int> weight;          // per def id
 	std::vector<int> units, sums;     // per team, the last tally

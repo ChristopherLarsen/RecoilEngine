@@ -60,10 +60,10 @@ public:
 	OwnPass() : Rule({"OwnPass", 1, true, "LuaRules/Gadgets/mov_own_pass.lua", false}) {}
 
 	void LoadConfig(const LuaTable& t) override {
-		slice = KT1::ConfigFrames(t, "slice_s", "slice", 3);
+		slice = KT1::ConfigFrames(t, "slice_s", "slice", 3);   // DESIGN: the default of the old key, frames at 30 Hz, which KT1::ConfigFrames converts
 		ahead = t.GetFloat("ahead", 24.0f);
 		margin = t.GetFloat("search_margin", 64.0f);
-		idleSpeed = KT1::ConfigPerFrame30(t, "idle_speed", 0.05f);
+		idleSpeed = KT1::ConfigPerFrame30(t, "idle_speed", 0.05f);   // DESIGN: fallback in elmos per frame at 30 Hz (KT1::ConfigPerFrame30 converts)
 	}
 
 	void ConfigValues(Data::Values& v) const override {

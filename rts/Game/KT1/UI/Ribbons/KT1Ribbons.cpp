@@ -30,6 +30,7 @@
 // Draw:       one pool per (texture, base); a ring of segment instances on the GPU (only written slots are uploaded) and a head
 //             buffer rewritten each drawn frame; one instanced draw per buffer, the follower's GLSL (cfx_ribbons_gl4.lua RIBBON_VS/FS).
 
+// KT1 lint: allow-file file-size vfx-pilot (D05) splits Ribbons
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -56,12 +57,12 @@
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 #include "Rendering/Textures/Bitmap.h"
-#include "Sim/Misc/GlobalSynced.h"
-#include "Sim/Projectiles/Projectile.h"
-#include "Sim/Projectiles/ProjectileHandler.h"
-#include "Sim/Projectiles/WeaponProjectiles/WeaponProjectile.h"
-#include "Sim/Weapons/WeaponDef.h"
-#include "Sim/Weapons/WeaponDefHandler.h"
+#include "Sim/Misc/GlobalSynced.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
+#include "Sim/Projectiles/Projectile.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
+#include "Sim/Projectiles/ProjectileHandler.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
+#include "Sim/Projectiles/WeaponProjectiles/WeaponProjectile.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
+#include "Sim/Weapons/WeaponDef.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
+#include "Sim/Weapons/WeaponDefHandler.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
 #include "System/Config/ConfigHandler.h"
 #include "System/Log/ILog.h"
 #include "System/Misc/SpringTime.h"
@@ -70,7 +71,7 @@ namespace KT1 {
 namespace {
 
 constexpr float FPS = float(GAME_SPEED);     // GAME_SPEED: frames per game second (the follower's FPS)
-constexpr int CORE = 0, DASH = 1, THREAD = 2, NSTRIP = 3;
+constexpr int CORE = 0, DASH = 1, THREAD = 2, NSTRIP = 3;   // DESIGN: strip indices
 const char* const STRIP[NSTRIP] = {"core", "dash", "thread"};
 
 // One instance: a segment (cfx_ribbons_gl4.lua STRIDE 16 floats).
@@ -151,7 +152,7 @@ struct StripDef {
 };
 struct WeaponRibbon {
 	bool any = false;
-	int priority = 9;
+	int priority = 9;   // DESIGN: fallback of gamedata/kt1/ribbons.lua default_priority
 	bool highOnly = false, shortOk = false, essential = false;
 	StripDef s[NSTRIP];
 };
@@ -166,10 +167,10 @@ struct Emitter {
 
 struct Pool {
 	std::string tex, base;
-	float tile = 64;
+	float tile = 64;   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 	bool add = true;
 	uint32_t texID = 0;
-	int max = 2048;
+	int max = 2048;   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 	std::vector<Seg> ring;
 	int next = 0, used = 0;
 	int lo = -1, hi = -1;            // slots written since the last upload (a run; a wrap uploads the tail then starts anew)
@@ -205,14 +206,14 @@ public:
 			const LuaTable c = ct.SubTable(i);
 			caps.push_back({c.GetFloat("scale", 1), c.GetInt("ribbons", 200), c.GetInt("points", 12)});
 		}
-		if (caps.empty()) caps = {{0.5f, 60, 6}, {1, 200, 12}, {2, 600, 20}};
+		if (caps.empty()) caps = {{0.5f, 60, 6}, {1, 200, 12}, {2, 600, 20}};   // PLACEHOLDER: fallbacks of gamedata/kt1/ribbons.lua (its caps, bands and heavy numbers are PLACEHOLDER)
 		nearD = t.GetFloat("near", 1500); midD = t.GetFloat("mid", 3500); farD = t.GetFloat("far", 6000);
 		shortLife = t.GetFloat("short_life", 0.5f); guardLife = t.GetFloat("guard_life", 0.5f);
 		const LuaTable h = t.SubTable("heavy");
 		extrasMax = h.GetInt("extras", 40); lifeMax = h.GetInt("life", 120); lifeK = h.GetFloat("lifeK", 0.5f);
 		poolMax = t.GetInt("pool_max", 8192); extraPoolMax = t.GetInt("extra_pool_max", 2048);
 		headMax = t.GetInt("head_max", 2048);
-		settingsEvery = std::max(1, t.GetInt("settings_every", 30));
+		settingsEvery = std::max(1, t.GetInt("settings_every", 30));   // KT1 lint: allow frame-literal frames, the old .lua loader's key; the data loader takes settings_every_s
 		defaultPriority = t.GetInt("default_priority", 9);
 		const LuaTable dt = t.SubTable("default_tex");
 		texHot = dt.GetString("hot", "bitmaps/sp_fx/sp_ribbon_hot.tga");
@@ -283,11 +284,11 @@ public:
 				const std::string* tex = Str(wd, k + "tex");
 				const bool smoke = (*base == "smoke");
 				d.on = true;
-				d.pool = PoolOf(tex ? *tex : (smoke ? texSmoke : texHot), *base, Num(wd, k + "tile", smoke ? 48.0f : 64.0f), s == CORE ? poolMax : extraPoolMax);
-				d.w0 = Num(wd, k + "w0", 1); d.w1 = Num(wd, k + "w1", d.w0); d.life = Num(wd, k + "life", 0.25f);
+				d.pool = PoolOf(tex ? *tex : (smoke ? texSmoke : texHot), *base, Num(wd, k + "tile", smoke ? 48.0f : 64.0f), s == CORE ? poolMax : extraPoolMax);   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
+				d.w0 = Num(wd, k + "w0", 1); d.w1 = Num(wd, k + "w1", d.w0); d.life = Num(wd, k + "life", 0.25f);   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 				d.length = Num(wd, k + "length", 0); d.cull = Num(wd, k + "cull", -1);
-				Vec(wd, k + "colour", d.col, 4);
-				float wv[2] = {0, 0}; Vec(wd, k + "waver", wv, 2); d.waverAmp = wv[0]; d.waverHz = wv[1];
+				Vec(wd, k + "colour", d.col, 4);   // DESIGN: 4 colour components
+				float wv[2] = {0, 0}; Vec(wd, k + "waver", wv, 2); d.waverAmp = wv[0]; d.waverHz = wv[1];   // DESIGN: waver is 2 numbers
 			}
 			w.any = w.s[CORE].on;
 			withRibbon += w.any ? 1 : 0;
@@ -346,7 +347,7 @@ private:
 		for (size_t i = 0; i < pools.size(); ++i)
 			if (pools[i]->tex == tex && pools[i]->base == base) return (int)i;
 		auto p = std::make_unique<Pool>();
-		p->tex = tex; p->base = base; p->tile = tile; p->add = (base != "smoke"); p->max = std::max(16, max);
+		p->tex = tex; p->base = base; p->tile = tile; p->add = (base != "smoke"); p->max = std::max(16, max);   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 		p->ring.assign(p->max, Seg{});
 		pools.push_back(std::move(p));
 		return (int)pools.size() - 1;
@@ -354,7 +355,7 @@ private:
 
 	// ---- settings (configHandler; Lua's SetLimits wins while set)
 	void ReadSettings() {
-		setting = lockSetting ? setting : std::clamp(configHandler->GetIntSafe("KardashevFxShots", 1), 0, 2);
+		setting = lockSetting ? setting : std::clamp(configHandler->GetIntSafe("KardashevFxShots", 1), 0, 2);   // DESIGN: setting codes 0 none, 1 short, 2 full
 		scale = lockScale ? scale : configHandler->GetFloatSafe("KardashevFxScale", 1.0f);
 		if (!lockHeavy) {
 			extrasNow = configHandler->GetIntSafe("KardashevRibbonExtrasMax", extrasMax);
@@ -371,14 +372,15 @@ private:
 	}
 	int Band(float d2) const {
 		if (d2 < nearD * nearD) return 1;
-		if (d2 < midD * midD) return 2;
-		if (d2 < farD * farD) return 3;
-		return 4;
+		if (d2 < midD * midD) return 2;   // DESIGN: distance band codes
+		if (d2 < farD * farD) return 3;   // DESIGN: distance band codes
+		return 4;   // DESIGN: distance band codes
 	}
 
 	// ---- the plan of one game frame (gfx_shots.lua GameFrame)
 	struct Shot { int id; Emitter* e; const CProjectile* p; float d2; int band; int prio; bool want; };
 
+	// KT1 lint: allow function-size vfx-pilot (D05) splits Ribbons' plan
 	void Plan(int f) {
 		if (f % settingsEvery == 0) ReadSettings();
 		const float now = f / FPS;
@@ -412,14 +414,14 @@ private:
 		const bool modeRibbons = c != nullptr && setting > 0 && !limiting;
 		const bool modeKeep = c != nullptr && setting > 0;
 		const bool missilesOnly = setting == 1;
-		const bool flakOk = c != nullptr && c->scale >= 2.0f;
+		const bool flakOk = c != nullptr && c->scale >= 2.0f;   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 		const float lifeMul = limiting ? guardLife : 1.0f;
 		const float lifeCap = setting == 1 ? shortLife : -1.0f;
 
 		int want = 0;
 		for (Shot& s : shots) {
 			const WeaponRibbon& w = defs[s.e->wd];
-			bool ok = s.band < 3;                                                       // S.Eligible
+			bool ok = s.band < 3;                                                       // S.Eligible; DESIGN: distance band codes
 			if (ok && w.essential) ok = modeRibbons || modeKeep;
 			else if (ok) {
 				if (w.highOnly && !flakOk) ok = false;
@@ -457,14 +459,14 @@ private:
 			float life = core.life * lifeMul;
 			if (lifeCap >= 0.0f && life > lifeCap) life = lifeCap;
 			life *= lk;
-			if (core.length > 0.0f && v > 1.0f) life = std::max(2.0f / FPS, std::min(life * 3.0f, core.length / v));
+			if (core.length > 0.0f && v > 1.0f) life = std::max(2.0f / FPS, std::min(life * 3.0f, core.length / v));   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 			e.life = life;
-			const int points = s.band == 2 ? std::max(1, c->points / 2) : c->points;
+			const int points = s.band == 2 ? std::max(1, c->points / 2) : c->points;   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 			const int stride = std::max(1, (int)std::ceil(life * FPS / std::max(1, points)));
 			if (f - e.pf < stride) continue;
 			const float dx = pos.x - e.px, dy = pos.y - e.py, dz = pos.z - e.pz;
 			const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
-			if (len > 0.05f) {
+			if (len > 0.05f) {   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 				AddSeg(core, e, pos, f, now, life);
 				e.started = true;
 				for (int k = DASH; k <= THREAD; ++k) {
@@ -482,22 +484,22 @@ private:
 
 	bool PartIn(const StripDef& d, const Shot& s) const {
 		if (d.cull >= 0) return s.d2 <= d.cull * d.cull;
-		return s.band < 3;
+		return s.band < 3;   // DESIGN: distance band codes
 	}
 	static float ExtraLife(const StripDef& d, float v) {
 		if (d.length <= 0.0f) return d.life;
-		return v > 1.0f ? std::max(2.0f / FPS, d.length / v) : d.life;
+		return v > 1.0f ? std::max(2.0f / FPS, d.length / v) : d.life;   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 	}
 	static float Waver(const StripDef& d, float now) {
 		if (d.waverAmp == 0.0f) return 1.0f;
-		return 1.0f + d.waverAmp * std::sin(now * d.waverHz * 6.2832f) * std::sin(now * d.waverHz * 2.3f);
+		return 1.0f + d.waverAmp * std::sin(now * d.waverHz * 6.2832f) * std::sin(now * d.waverHz * 2.3f);   // PLACEHOLDER: follower plan number with no label in gamedata/kt1/ribbons.lua
 	}
 	static Seg MakeSeg(const StripDef& d, const Emitter& e, const float3& to, float t0, float t1, float life, float wv) {
 		Seg g;
 		g.p0t[0] = e.px; g.p0t[1] = e.py; g.p0t[2] = e.pz; g.p0t[3] = t0;
 		g.p1t[0] = to.x; g.p1t[1] = to.y; g.p1t[2] = to.z; g.p1t[3] = t1;
 		g.shape[0] = d.w0 * wv; g.shape[1] = d.w1 * wv; g.shape[2] = life; g.shape[3] = e.u;
-		for (int i = 0; i < 4; ++i) g.color[i] = d.col[i];
+		for (int i = 0; i < 4; ++i) g.color[i] = d.col[i];   // DESIGN: 4 colour components
 		return g;
 	}
 	void AddSeg(const StripDef& d, const Emitter& e, const float3& to, int f, float now, float life) {
@@ -525,7 +527,7 @@ private:
 				if (k != CORE) {
 					const float3 dd = p->pos - camera->GetPos();
 					const float d2 = dd.dot(dd);
-					if (d.cull >= 0 ? d2 > d.cull * d.cull : Band(d2) >= 3) continue;
+					if (d.cull >= 0 ? d2 > d.cull * d.cull : Band(d2) >= 3) continue;   // DESIGN: distance band codes
 				}
 				Pool& pl = *pools[d.pool];
 				if ((int)pl.heads.size() >= headMax) continue;
@@ -564,7 +566,7 @@ private:
 		glVertexAttribDivisor(0, 0);
 		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
 		inst.Bind(GL_ARRAY_BUFFER);
-		for (int i = 0; i < 4; ++i) {
+		for (int i = 0; i < 4; ++i) {   // DESIGN: 4 instance attributes
 			glEnableVertexAttribArray(1 + i);
 			glVertexAttribDivisor(1 + i, 1);
 			glVertexAttribPointer(1 + i, 4, GL_FLOAT, GL_FALSE, sizeof(Seg), (const void*)(sizeof(float) * 4 * i));
@@ -620,7 +622,7 @@ private:
 	void DrawPools(bool add, Shader::IProgramObject* sh) {
 		const float now = (gs->frameNum + globalRendering->timeOffset) / FPS;
 		const float3 cp = camera->GetPos();
-		const float pxWorld = 2.0f * std::tan(camera->GetHalfFov()) / std::max(1, globalRendering->viewSizeY);
+		const float pxWorld = 2.0f * std::tan(camera->GetHalfFov()) / std::max(1, globalRendering->viewSizeY);   // DESIGN: size of a pixel from the field of view
 		bool begun = false;
 		for (auto& pp : pools) {
 			Pool& p = *pp;
@@ -691,7 +693,7 @@ private:
 		lua_getfield(L, 1, "lifeMax"); if (lua_isnumber(L, -1)) { r->lifeMaxNow = lua_tointeger(L, -1); r->lockHeavy = true; } lua_pop(L, 1);
 		lua_getfield(L, 1, "lifeK"); if (lua_isnumber(L, -1)) { r->lifeKNow = lua_tonumber(L, -1); r->lockHeavy = true; } lua_pop(L, 1);
 		lua_getfield(L, 1, "cap"); if (lua_isnumber(L, -1)) { r->capOverride = lua_tointeger(L, -1); r->lockCap = true; } lua_pop(L, 1);
-		lua_getfield(L, 1, "setting"); if (lua_isnumber(L, -1)) { r->setting = std::clamp((int)lua_tointeger(L, -1), 0, 2); r->lockSetting = true; } lua_pop(L, 1);
+		lua_getfield(L, 1, "setting"); if (lua_isnumber(L, -1)) { r->setting = std::clamp((int)lua_tointeger(L, -1), 0, 2); r->lockSetting = true; } lua_pop(L, 1);   // DESIGN: setting codes 0 none, 1 short, 2 full
 		lua_getfield(L, 1, "scale"); if (lua_isnumber(L, -1)) { r->scale = lua_tonumber(L, -1); r->lockScale = true; } lua_pop(L, 1);
 		return 0;
 	}
@@ -742,11 +744,11 @@ private:
 	RibbonsConfig cfg;
 	bool started = false;
 	std::vector<Cap> caps;
-	float nearD = 1500, midD = 3500, farD = 6000, shortLife = 0.5f, guardLife = 0.5f, lifeK = 0.5f;
-	int extrasMax = 40, lifeMax = 120, poolMax = 8192, extraPoolMax = 2048, headMax = 2048, settingsEvery = 30, defaultPriority = 9;
+	float nearD = 1500, midD = 3500, farD = 6000, shortLife = 0.5f, guardLife = 0.5f, lifeK = 0.5f;   // PLACEHOLDER: fallbacks of gamedata/kt1/ribbons.lua (its caps, bands and heavy numbers are PLACEHOLDER)
+	int extrasMax = 40, lifeMax = 120, poolMax = 8192, extraPoolMax = 2048, headMax = 2048, settingsEvery = 30, defaultPriority = 9;   // PLACEHOLDER: fallbacks of gamedata/kt1/ribbons.lua (its caps, bands and heavy numbers are PLACEHOLDER); KT1 lint: allow frame-literal frames, the old .lua loader's key; the data loader takes settings_every_s
 	std::string texHot, texSmoke;
 	// settings in use
-	int setting = 1; float scale = 1; int extrasNow = 40, lifeMaxNow = 120; float lifeKNow = 0.5f; int capOverride = -1;
+	int setting = 1; float scale = 1; int extrasNow = 40, lifeMaxNow = 120; float lifeKNow = 0.5f; int capOverride = -1;   // PLACEHOLDER: fallbacks of gamedata/kt1/ribbons.lua (its caps, bands and heavy numbers are PLACEHOLDER)
 	bool limiting = false, lockSetting = false, lockScale = false, lockHeavy = false, lockCap = false;
 	// state
 	std::vector<WeaponRibbon> defs;

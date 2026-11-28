@@ -53,8 +53,8 @@
 namespace KT1 {
 namespace {
 
-constexpr float TAU = 2.0f * 3.14159265358979323846f;   // math.pi in Lua is the same float
-constexpr float PI = TAU / 2.0f;
+constexpr float TAU = 2.0f * 3.14159265358979323846f;   // math.pi in Lua is the same float; DESIGN: math constant
+constexpr float PI = TAU / 2.0f;   // DESIGN: math constant
 
 float Wrap(float a) { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; }
 float LuaMod(float a, float b) { return a - math::floor(a / b) * b; }   // Lua's %
@@ -63,15 +63,15 @@ float Deg(float r) { return r / math::DEG_TO_RAD; }                         // m
 
 enum Loco { L_FIXED, L_TREADS, L_WHEELS, L_LEGS, L_ROTOR, L_JET };
 // trail kinds (pm/loco.lua Trails): a bit each, in the order the descriptor lists them is irrelevant (a set)
-enum Trail { T_DUST = 1, T_TREADS = 2, T_FEET = 4, T_CONTRAIL = 8, T_EXHAUST = 16, T_GLOW = 32 };
-constexpr int N_TRAIL = 6;
+enum Trail { T_DUST = 1, T_TREADS = 2, T_FEET = 4, T_CONTRAIL = 8, T_EXHAUST = 16, T_GLOW = 32 };   // DESIGN: trail kind bits
+constexpr int N_TRAIL = 6;   // DESIGN: number of trail kinds
 enum Body { B_STATIC, B_TERRAIN, B_BANK };
 
 struct Weapon {
 	int yaw = -1, pit = -1;                    // aim pieces (script numbers, 0-based; -1 none)
 	int turret = -1, barrel = -1, barrelb = -1; // rest pieces
 	float rest = 0, yawRate = 0, pitchRate = 0, tol = 0;
-	int aimFrame = -9999;
+	int aimFrame = -9999;   // DESIGN: never-aimed sentinel
 	bool rested = false;
 };
 
@@ -88,15 +88,15 @@ struct Unit {
 	int base = -1;
 	std::vector<int> wheels, legs, feet;
 	std::vector<float> wside, wang, legOff, legAng;
-	float stride = 1, wr = 1, swing = 0, lift = 0, bob = 0, h = 4, bobMul = 1, cap = 0, bankRate = 1;
+	float stride = 1, wr = 1, swing = 0, lift = 0, bob = 0, h = 4, bobMul = 1, cap = 0, bankRate = 1;   // PLACEHOLDER: value for a descriptor that gives none
 	std::vector<Weapon> W;                     // by weapon number (1-based in Lua; index n-1)
 	// state
 	int lastFrame = 0, wakeAt = 0, idleTicks = 0, wakeTick = 0;
 	bool first = true, sensed = false, sleeping = false, rollSentSet = false;
-	float px = 0, py = 0, pz = 0, hd = 0, vs = 0, speed = 0, turn = 0, gh = 0, dt = 0.1f, t = 0;
+	float px = 0, py = 0, pz = 0, hd = 0, vs = 0, speed = 0, turn = 0, gh = 0, dt = 0.1f, t = 0;   // PLACEHOLDER: state before the first tick (dt: one 100 ms tick)
 	bool ghSet = false, land = true, inAir = false;
 	float vsPrev = 0, acc = 0, agl = 0, liftSpin = 0;
-	float trailTk[N_TRAIL] = {-1e9f, -1e9f, -1e9f, -1e9f, -1e9f, -1e9f};
+	float trailTk[N_TRAIL] = {-1e9f, -1e9f, -1e9f, -1e9f, -1e9f, -1e9f};   // DESIGN: no trail yet
 	float phase = 0, cycle = 0, rate = 0, sl = 0, sr = 0, pitch = 0, roll = 0, rollSent = 0, pitchSent = 0;
 	bool tiltSet = false; float tiltX = 0, tiltZ = 0, tiltH = 0, tiltP = 0, tiltR = 0;
 };
@@ -108,7 +108,7 @@ public:
 	// KT1 lint: allow-file file-size the .lua loader and its compare (LoadConfig, ConfigValues) go in the wave 4 data sweep
 	void LoadConfig(const LuaTable& t) override {
 		idleTicksN = std::max(1, t.GetInt("idle_ticks", 2));
-		restDelay = KT1::ConfigFrames(t, "rest_delay_s", "rest_delay", 90);
+		restDelay = KT1::ConfigFrames(t, "rest_delay_s", "rest_delay", 90);   // DESIGN: the default of the old key, frames at 30 Hz, which KT1::ConfigFrames converts
 		restRate = t.GetFloat("rest_rate", 1.5f);
 		rollEps = t.GetFloat("roll_eps", 0.05f);
 		wakeEvery = std::max(1, t.GetInt("wake_every", 3));
@@ -146,7 +146,7 @@ public:
 	void GameFrame(int frame) override {
 		if (luaDriven || ids.empty()) return;
 		const int n = (int)unitHandler.GetActiveUnits().size();
-		tickMs = (n <= fullUnits) ? 100 : std::min(maxMs, (int)math::floor(100.0f * n / fullUnits));
+		tickMs = (n <= fullUnits) ? 100 : std::min(maxMs, (int)math::floor(100.0f * n / fullUnits));   // DESIGN: the 100 ms tick (gamedata/kt1/unitanim.lua full_units, pm_tick.lua)
 		unitCount = n;
 		TickDue(frame);
 	}
@@ -178,8 +178,8 @@ public:
 private:
 	static constexpr size_t MAX_EVENTS = 4 * 4096;   // DESIGN: dust beyond this between pulls is dropped (look only)
 
-	static constexpr int FRAME_MS = 1000 / GAME_SPEED;   // base unit_script.lua Sleep: floor(1000 / gameSpeed), 33 at 30 Hz
-	static constexpr double FRAME_LEN = double(int(1000000.0 / GAME_SPEED)) / 1000.0;   // the stagger frame length, ms to 3 decimals: 33.333 at 30 Hz (the old literal), 100 at 10 (anim.lua: floor(1000000 / Game.gameSpeed) / 1000)
+	static constexpr int FRAME_MS = 1000 / GAME_SPEED;   // base unit_script.lua Sleep: floor(1000 / gameSpeed), 33 at 30 Hz; DESIGN: milliseconds per second (base unit_script.lua Sleep)
+	static constexpr double FRAME_LEN = double(int(1000000.0 / GAME_SPEED)) / 1000.0;   // the stagger frame length, ms to 3 decimals: 33.333 at 30 Hz (the old literal), 100 at 10 (anim.lua: floor(1000000 / Game.gameSpeed) / 1000); KT1 lint: allow double,number-label a compile-time ms constant rounded as anim.lua, narrowed to float where used; DESIGN: microseconds and milliseconds
 	static int SleepFrames(float ms) { return std::max(1, (int)math::floor(ms / float(FRAME_MS))); }   // base unit_script.lua Sleep
 
 	// ---- the tick (anim.lua Loop body) ----------------------------------------------------------------------------------------
@@ -189,13 +189,13 @@ private:
 		Loco(U, S);
 		AimTick(U, S, f);
 		// sleep (anim.lua Loop tail)
-		float ms = U.quiet ? 1000.0f : (float)tickMs;
-		if (U.canIdle && ms > 100) {
-			if (math::fabs(U.vs) <= 0.3f && math::fabs(U.turn) <= 0.05f && AimIdle(U) && !u->beingBuilt
-				&& (!U.air || (U.land && U.agl <= 1 && U.liftSpin < 0.02f && math::fabs(U.pitch) < 0.05f && math::fabs(U.roll) < 0.05f)))   // an aircraft idles landed, spun down
+		float ms = U.quiet ? 1000.0f : (float)tickMs;   // PLACEHOLDER: idle back-off thresholds and times of scripts/pm/anim.lua (no label there)
+		if (U.canIdle && ms > 100) {   // PLACEHOLDER: idle back-off thresholds and times of scripts/pm/anim.lua (no label there)
+			if (math::fabs(U.vs) <= 0.3f && math::fabs(U.turn) <= 0.05f && AimIdle(U) && !u->beingBuilt   // PLACEHOLDER: idle back-off thresholds and times of scripts/pm/anim.lua (no label there)
+				&& (!U.air || (U.land && U.agl <= 1 && U.liftSpin < 0.02f && math::fabs(U.pitch) < 0.05f && math::fabs(U.roll) < 0.05f)))   // an aircraft idles landed, spun down; PLACEHOLDER: idle back-off thresholds and times of scripts/pm/anim.lua (no label there)
 				++U.idleTicks; else U.idleTicks = 0;
 			if (U.idleTicks >= idleTicksN) {
-				ms = std::min(8000.0f, std::max(2000.0f, 2.0f * unitCount));
+				ms = std::min(8000.0f, std::max(2000.0f, 2.0f * unitCount));   // PLACEHOLDER: idle back-off thresholds and times of scripts/pm/anim.lua (no label there)
 				U.sleeping = true;
 			}
 		}
@@ -212,7 +212,7 @@ private:
 		U.dt = dt;
 		U.lastFrame = f;
 		const float x = u->pos.x, y = u->pos.y, z = u->pos.z;
-		const float hd = (float)u->heading * TAU / 65536.0f;
+		const float hd = (float)u->heading * TAU / 65536.0f;   // DESIGN: engine heading units per turn
 		if (!U.sensed) { U.sensed = true; U.px = x; U.py = y; U.pz = z; U.hd = hd; U.vs = 0; }
 		const float dx = x - U.px, dz = z - U.pz;
 		const float dist = math::sqrt(dx * dx + dz * dz);
@@ -226,7 +226,7 @@ private:
 		U.px = x; U.py = y; U.pz = z; U.hd = hd;
 		if (!U.ghSet || dx != 0 || dz != 0) { U.gh = (float)CGround::GetHeightReal((float)x, (float)z, true); U.ghSet = true; }
 		U.agl = y - U.gh;
-		U.inAir = U.air && U.agl > 3;                // anim.lua Sense: canFly and agl > 3 is "air", else gh >= 0 is "land"
+		U.inAir = U.air && U.agl > 3;                // anim.lua Sense: canFly and agl > 3 is "air", else gh >= 0 is "land"; DESIGN: air threshold of scripts/pm/anim.lua Sense
 		U.land = !U.inAir && U.gh >= 0;
 	}
 
@@ -234,7 +234,7 @@ private:
 		if (U.tiltSet && U.tiltX == U.px && U.tiltZ == U.pz && U.tiltH == U.hd) { p = U.tiltP; r = U.tiltR; return; }
 		const float3 n = CGround::GetSmoothNormal((float)U.px, (float)U.pz, true);
 		const float nx = n.x, ny = n.y, nz = n.z;
-		if (ny < 0.01f) { p = 0; r = 0; }
+		if (ny < 0.01f) { p = 0; r = 0; }   // DESIGN: animation tuning of scripts/pm/loco.lua
 		else {
 			const float fx = math::sin(U.hd), fz = math::cos(U.hd);
 			const float rx = -math::cos(U.hd), rz = math::sin(U.hd);
@@ -248,17 +248,18 @@ private:
 	// loco.lua SpinTo: a Spin only when the target moved by SPIN_EPS (0.5 rad/s), or to stop
 	static void SpinTo(CUnitScript* S, int p, int axis, float speed, float acc, float& last, char& set) {
 		if (p < 0) return;
-		if (set && math::fabs(last - speed) < 0.5f && (speed != 0 || last == 0)) return;
+		if (set && math::fabs(last - speed) < 0.5f && (speed != 0 || last == 0)) return;   // DESIGN: animation tuning of scripts/pm/loco.lua
 		if (speed == 0) S->StopSpin(p, axis, acc); else S->Spin(p, axis, speed, acc);
 		last = speed; set = 1;
 	}
 
 	// pm/loco.lua Tick, the parts an engine unit has (Turn(p, axis, dest, speed) in Lua is S->Turn(p, axis, speed, dest))
+	// KT1 lint: allow function-size one ported block, scripts/pm/loco.lua Tick
 	void Loco(Unit& U, CUnitScript* S) {
 		const float dt = U.dt;
 		U.t += dt;
-		const bool moving = math::fabs(U.vs) > 0.3f;
-		const bool turning = math::fabs(U.turn) > 0.05f;
+		const bool moving = math::fabs(U.vs) > 0.3f;   // DESIGN: animation tuning of scripts/pm/loco.lua
+		const bool turning = math::fabs(U.turn) > 0.05f;   // DESIGN: animation tuning of scripts/pm/loco.lua
 		const bool rolling = U.loco == L_TREADS || U.loco == L_WHEELS;
 		if (rolling || U.loco == L_LEGS) {
 			float rate = 0, sl = 0, sr = 0;
@@ -275,7 +276,7 @@ private:
 					const float side = U.wside[i] > 0 ? sl : sr;
 					if (side == 0) continue;
 					U.wang[i] = U.wang[i] + side * dt * (U.stride / U.wr);
-					S->Turn(U.wheels[i], 0, 40.0f, (float)(-U.wang[i]));
+					S->Turn(U.wheels[i], 0, 40.0f, (float)(-U.wang[i]));   // DESIGN: animation tuning of scripts/pm/loco.lua
 				}
 			} else {
 				float bobAmp = 0;
@@ -283,16 +284,16 @@ private:
 					for (size_t i = 0; i < U.legs.size(); ++i) {
 						const float ph = LuaMod(U.phase + U.legOff[i], 1.0f);
 						const float a = math::sin(ph * TAU) * U.swing;
-						S->Turn(U.legs[i], 0, (float)std::max(1.0f, math::fabs(a - U.legAng[i]) / dt * 1.2f), (float)a);
+						S->Turn(U.legs[i], 0, (float)std::max(1.0f, math::fabs(a - U.legAng[i]) / dt * 1.2f), (float)a);   // DESIGN: animation tuning of scripts/pm/loco.lua
 						U.legAng[i] = a;
 						if (i < U.feet.size() && U.feet[i] >= 0) {
-							const float l = std::max(0.0f, math::cos(ph * 2.0f * PI)) * U.lift;   // Gait.Lift: cos(ph * 2 * math.pi), two roundings
-							S->Turn(U.feet[i], 0, (float)std::max(1.0f, math::fabs(l) / dt * 1.5f), (float)l);
+							const float l = std::max(0.0f, math::cos(ph * 2.0f * PI)) * U.lift;   // Gait.Lift: cos(ph * 2 * math.pi), two roundings; DESIGN: animation tuning of scripts/pm/loco.lua
+							S->Turn(U.feet[i], 0, (float)std::max(1.0f, math::fabs(l) / dt * 1.5f), (float)l);   // DESIGN: animation tuning of scripts/pm/loco.lua
 						}
 					}
 					bobAmp = U.bob * U.h * math::fabs(math::sin(U.phase * TAU * U.bobMul));
 				}
-				if (U.base >= 0) S->Move(U.base, 1, 20.0f, (float)bobAmp);
+				if (U.base >= 0) S->Move(U.base, 1, 20.0f, (float)bobAmp);   // DESIGN: animation tuning of scripts/pm/loco.lua
 			}
 		}
 		// the body (R8)
@@ -301,35 +302,35 @@ private:
 		else if (U.body == B_BANK) {
 			const float share = std::min(1.0f, math::fabs(U.turn) / U.bankRate);
 			tr = (U.turn > 0 ? -1 : 1) * U.cap * share;
-			if (math::fabs(U.turn) < 0.01f) tr = 0;
+			if (math::fabs(U.turn) < 0.01f) tr = 0;   // DESIGN: animation tuning of scripts/pm/loco.lua
 		}
 		if (U.pfwd && U.loco == L_ROTOR) {                // nose down while speeding up
-			const float pit = (U.acc > 0.5f) ? -std::min(U.cap > 0 ? U.cap : 10.0f, U.acc * 1.2f) : 0.0f;
+			const float pit = (U.acc > 0.5f) ? -std::min(U.cap > 0 ? U.cap : 10.0f, U.acc * 1.2f) : 0.0f;   // DESIGN: animation tuning of scripts/pm/loco.lua
 			tp = tp + pit;
 		}
-		const float k = std::min(1.0f, dt / 0.25f);
+		const float k = std::min(1.0f, dt / 0.25f);   // DESIGN: animation tuning of scripts/pm/loco.lua
 		U.pitch = U.pitch + (tp - U.pitch) * k;
 		U.roll = U.roll + (tr - U.roll) * k;
 		if (U.base >= 0) {
 			if (!(U.rollSentSet && math::fabs(U.roll - U.rollSent) < rollEps && math::fabs(U.pitch - U.pitchSent) < rollEps)) {
 				U.rollSentSet = true; U.rollSent = U.roll; U.pitchSent = U.pitch;
-				S->Turn(U.base, 2, 6.0f, (float)Rad(U.roll));
-				S->Turn(U.base, 0, 6.0f, (float)(-Rad(U.pitch)));
+				S->Turn(U.base, 2, 6.0f, (float)Rad(U.roll));   // DESIGN: animation tuning of scripts/pm/loco.lua
+				S->Turn(U.base, 0, 6.0f, (float)(-Rad(U.pitch)));   // DESIGN: animation tuning of scripts/pm/loco.lua
 			}
 		}
 		// rotor and jet aircraft (loco.lua R6; tilt-rotor units stay with the Lua)
 		if (U.loco == L_ROTOR || U.loco == L_JET) {
 			const bool up = U.inAir || U.agl > 1;
 			const float target = up ? 1.0f : 0.0f;
-			U.liftSpin = U.liftSpin + (target - U.liftSpin) * std::min(1.0f, dt / (up ? 0.4f : 1.5f));
+			U.liftSpin = U.liftSpin + (target - U.liftSpin) * std::min(1.0f, dt / (up ? 0.4f : 1.5f));   // DESIGN: animation tuning of scripts/pm/loco.lua
 			for (size_t i = 0; i < U.rotors.size(); ++i)
-				SpinTo(S, U.rotors[i], 1, U.liftSpin > 0.02f ? 38 * U.liftSpin : 0.0f, U.liftSpin > 0.02f ? 8.0f : 6.0f, U.rotSpun[i], U.rotSet[i]);
+				SpinTo(S, U.rotors[i], 1, U.liftSpin > 0.02f ? 38 * U.liftSpin : 0.0f, U.liftSpin > 0.02f ? 8.0f : 6.0f, U.rotSpun[i], U.rotSet[i]);   // DESIGN: animation tuning of scripts/pm/loco.lua
 			for (size_t i = 0; i < U.jets.size(); ++i)
-				SpinTo(S, U.jets[i], 2, moving ? 60.0f : 8.0f, 20.0f, U.jetSpun[i], U.jetSet[i]);
+				SpinTo(S, U.jets[i], 2, moving ? 60.0f : 8.0f, 20.0f, U.jetSpun[i], U.jetSet[i]);   // DESIGN: animation tuning of scripts/pm/loco.lua
 			if (U.wings && up) {
-				const float a = Rad(28) * math::sin(U.t * (moving ? 9 : 6));
-				S->Turn(U.wingL, 2, 8.0f, (float)a);
-				S->Turn(U.wingR, 2, 8.0f, (float)(-a));
+				const float a = Rad(28) * math::sin(U.t * (moving ? 9 : 6));   // DESIGN: animation tuning of scripts/pm/loco.lua
+				S->Turn(U.wingL, 2, 8.0f, (float)a);   // DESIGN: animation tuning of scripts/pm/loco.lua
+				S->Turn(U.wingR, 2, 8.0f, (float)(-a));   // DESIGN: animation tuning of scripts/pm/loco.lua
 			}
 		}
 		// trails (loco.lua Trails): the active kinds, then dust and rotor downwash every wake_every moving ticks
@@ -339,7 +340,7 @@ private:
 			if (!(U.trails & kind)) continue;
 			bool ok = false;
 			if (kind == T_DUST || kind == T_TREADS || kind == T_FEET) ok = U.land;
-			else if (kind == T_CONTRAIL) ok = U.inAir && U.speed > 0.5f * std::max(U.vmax, 10.0f);
+			else if (kind == T_CONTRAIL) ok = U.inAir && U.speed > 0.5f * std::max(U.vmax, 10.0f);   // DESIGN: animation tuning of scripts/pm/loco.lua
 			else ok = U.inAir;   // exhaust, thruster_glow
 			if (ok) {
 				if (moving) U.trailTk[b] = U.t;
@@ -350,10 +351,10 @@ private:
 		if (moving) {
 			++U.wakeTick;
 			if (U.wakeTick % wakeEvery == 0) {
-				if ((on & T_DUST) && events.size() + 4 <= MAX_EVENTS) {
+				if ((on & T_DUST) && events.size() + 4 <= MAX_EVENTS) {   // DESIGN: one dust event is 4 numbers
 					events.push_back(U.owner->id); events.push_back(U.px); events.push_back(U.gh); events.push_back(U.pz);
 				}
-				if (U.loco == L_ROTOR && U.inAir && U.agl < U.washAgl && events.size() + 4 <= MAX_EVENTS) {   // downwash: the id negated
+				if (U.loco == L_ROTOR && U.inAir && U.agl < U.washAgl && events.size() + 4 <= MAX_EVENTS) {   // downwash: the id negated; DESIGN: one dust event is 4 numbers
 					events.push_back(-U.owner->id); events.push_back(U.px); events.push_back(U.gh); events.push_back(U.pz);
 				}
 			}
@@ -363,7 +364,7 @@ private:
 	// pm/aim.lua Tick: the rest pose (R9)
 	void AimTick(Unit& U, CUnitScript* S, int f) {
 		for (Weapon& w : U.W) {
-			if (f - w.aimFrame > restDelay && !w.rested && w.aimFrame > -9000) {
+			if (f - w.aimFrame > restDelay && !w.rested && w.aimFrame > -9000) {   // DESIGN: never-aimed sentinel
 				w.rested = true;
 				if (w.turret >= 0) S->Turn(w.turret, 1, restRate, 0.0f);
 				if (w.barrel >= 0) S->Turn(w.barrel, 0, restRate, 0.0f);
@@ -372,7 +373,7 @@ private:
 		}
 	}
 	static bool AimIdle(const Unit& U) {
-		for (const Weapon& w : U.W) if (!(w.rested || w.aimFrame <= -9000)) return false;
+		for (const Weapon& w : U.W) if (!(w.rested || w.aimFrame <= -9000)) return false;   // DESIGN: never-aimed sentinel
 		return true;
 	}
 
@@ -446,27 +447,27 @@ private:
 		U.owner = u;
 		static const char* LOCO[] = {"fixed", "treads", "wheels", "legs", "rotor", "jet"};
 		static const char* BODY[] = {"static", "follow_terrain", "bank"};
-		U.loco = Str(L, 2, "loco", LOCO, 6, L_FIXED);
-		U.body = Str(L, 2, "body", BODY, 3, B_STATIC);
-		U.spin = Flag(L, 2, "spin"); U.dust = Flag(L, 2, "dust"); U.quiet = Flag(L, 2, "quiet");
-		U.air = Flag(L, 2, "air"); U.pfwd = Flag(L, 2, "pfwd"); U.wings = Flag(L, 2, "wings");
+		U.loco = Str(L, 2, "loco", LOCO, 6, L_FIXED);   // DESIGN: Lua stack index and name table size
+		U.body = Str(L, 2, "body", BODY, 3, B_STATIC);   // DESIGN: Lua stack index and name table size
+		U.spin = Flag(L, 2, "spin"); U.dust = Flag(L, 2, "dust"); U.quiet = Flag(L, 2, "quiet");   // DESIGN: Lua stack index
+		U.air = Flag(L, 2, "air"); U.pfwd = Flag(L, 2, "pfwd"); U.wings = Flag(L, 2, "wings");   // DESIGN: Lua stack index
 		U.canIdle = U.air || U.body != B_BANK;       // anim.lua: a banking body idles only on an aircraft
-		U.trails = (int)Num(L, 2, "trail", 0);
+		U.trails = (int)Num(L, 2, "trail", 0);   // DESIGN: Lua stack index
 		if (U.dust) U.trails |= T_DUST;             // an older script sends only the dust flag
-		U.vmax = Num(L, 2, "vmax", 0); U.washAgl = Num(L, 2, "wash_agl", 0);
-		U.wingL = (int)Num(L, 2, "wing_l", 0) - 1; U.wingR = (int)Num(L, 2, "wing_r", 0) - 1;
-		Pieces(L, 2, "rotors", U.rotors); Pieces(L, 2, "jets", U.jets);
+		U.vmax = Num(L, 2, "vmax", 0); U.washAgl = Num(L, 2, "wash_agl", 0);   // DESIGN: Lua stack index; 0 when the descriptor gives none
+		U.wingL = (int)Num(L, 2, "wing_l", 0) - 1; U.wingR = (int)Num(L, 2, "wing_r", 0) - 1;   // DESIGN: Lua stack index; Lua counts pieces from 1
+		Pieces(L, 2, "rotors", U.rotors); Pieces(L, 2, "jets", U.jets);   // DESIGN: Lua stack index
 		U.rotSpun.assign(U.rotors.size(), 0); U.rotSet.assign(U.rotors.size(), 0);
 		U.jetSpun.assign(U.jets.size(), 0); U.jetSet.assign(U.jets.size(), 0);
-		U.base = (int)Num(L, 2, "base", 0) - 1;
-		Pieces(L, 2, "wheels", U.wheels); Pieces(L, 2, "legs", U.legs); Pieces(L, 2, "feet", U.feet);
-		List(L, 2, "wside", U.wside, 0); List(L, 2, "leg_off", U.legOff, 0);
+		U.base = (int)Num(L, 2, "base", 0) - 1;   // DESIGN: Lua stack index; Lua counts pieces from 1
+		Pieces(L, 2, "wheels", U.wheels); Pieces(L, 2, "legs", U.legs); Pieces(L, 2, "feet", U.feet);   // DESIGN: Lua stack index
+		List(L, 2, "wside", U.wside, 0); List(L, 2, "leg_off", U.legOff, 0);   // DESIGN: Lua stack index
 		U.wside.resize(U.wheels.size(), 1); U.wang.assign(U.wheels.size(), 0);
 		U.legOff.resize(U.legs.size(), 0); U.legAng.assign(U.legs.size(), 0);
-		U.stride = Num(L, 2, "stride", 1); U.wr = Num(L, 2, "wr", 1); U.swing = Num(L, 2, "swing", 0); U.lift = Num(L, 2, "lift", 0);
-		U.bob = Num(L, 2, "bob", 0); U.h = Num(L, 2, "h", 4); U.bobMul = Num(L, 2, "bob_mul", 1);
-		U.cap = Num(L, 2, "cap", 0); U.bankRate = Num(L, 2, "bank_rate", 1);
-		U.t = Num(L, 2, "t", 0);
+		U.stride = Num(L, 2, "stride", 1); U.wr = Num(L, 2, "wr", 1); U.swing = Num(L, 2, "swing", 0); U.lift = Num(L, 2, "lift", 0);   // PLACEHOLDER: value for a descriptor that gives none
+		U.bob = Num(L, 2, "bob", 0); U.h = Num(L, 2, "h", 4); U.bobMul = Num(L, 2, "bob_mul", 1);   // PLACEHOLDER: value for a descriptor that gives none
+		U.cap = Num(L, 2, "cap", 0); U.bankRate = Num(L, 2, "bank_rate", 1);   // PLACEHOLDER: value for a descriptor that gives none
+		U.t = Num(L, 2, "t", 0);   // PLACEHOLDER: value for a descriptor that gives none
 		U.lastFrame = gs->frameNum;
 		U.wakeAt = std::numeric_limits<int>::max();   // Start (from script.Create) runs the first tick, as the Lua Create starts the Loop
 		lua_getfield(L, 2, "weapons");
@@ -547,7 +548,7 @@ private:
 		const float heading = luaL_checknumber(L, 3), pitch = luaL_checknumber(L, 4);
 		const Weapon& w = U->W[n - 1];
 		CUnitScript* S = u->script;
-		const float ptol = std::max(w.tol, 0.02f);
+		const float ptol = std::max(w.tol, 0.02f);   // PLACEHOLDER: tolerance floor of scripts/pm/aim.lua (no label there)
 		float ey = 0, ep = 0;
 		bool ok = true;
 		if (w.yaw >= 0) { const auto* p = S->SafeGetPiece(w.yaw); ey = math::fabs(Wrap((p ? (float)p->GetRotation().y : 0.0f) - heading)); if (ey > w.tol) ok = false; }
@@ -557,7 +558,7 @@ private:
 		if (w.yaw >= 0) lb = std::max(lb, (ey - w.tol) / (w.yawRate / float(GAME_SPEED)));
 		if (w.pit >= 0) lb = std::max(lb, (ep - ptol) / (w.pitchRate / float(GAME_SPEED)));
 		const float skip = math::floor(lb) - 1;
-		lua_pushnumber(L, (skip >= 2 && skip < 1e6f) ? SleepFrames(skip * FRAME_MS) : 1);
+		lua_pushnumber(L, (skip >= 2 && skip < 1e6f) ? SleepFrames(skip * FRAME_MS) : 1);   // DESIGN: bounds of a usable skip count
 		return 1;
 	}
 	static int LState(lua_State* L) {
@@ -607,10 +608,10 @@ private:
 
 	bool luaDriven = false;
 	UnitAnimConfig cfg;
-	int idleTicksN = 2, restDelay = 90, wakeEvery = 3, fullUnits = 250, maxMs = 500;
-	float restRate = 1.5f;
-	float rollEps = 0.05f, spinRate = 0.6f;
-	int tickMs = 100, unitCount = 0;
+	int idleTicksN = 2, restDelay = 90, wakeEvery = 3, fullUnits = 250, maxMs = 500;   // DESIGN: fallbacks of gamedata/kt1/unitanim.lua, except wakeEvery: PLACEHOLDER there
+	float restRate = 1.5f;   // DESIGN: fallback of gamedata/kt1/unitanim.lua
+	float rollEps = 0.05f, spinRate = 0.6f;   // DESIGN: fallbacks of gamedata/kt1/unitanim.lua
+	int tickMs = 100, unitCount = 0;   // DESIGN: the 100 ms tick (pm_tick.lua)
 	std::vector<Unit> units;      // per unit id
 	std::vector<int> ids;         // registered ids, ascending
 	std::vector<float> events;   // unitID (negated: rotor downwash, else dust), x, ground height, z

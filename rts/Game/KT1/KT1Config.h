@@ -20,7 +20,7 @@ inline int ConfigFrames(const LuaTable& cfg, const std::string& keyS, const std:
 		return std::max(1, int(std::floor(double(cfg.GetFloat(keyS, 0.0f)) * GAME_SPEED + 0.5)));
 
 	const int f30 = cfg.GetInt(keyF, defFrames30);
-	return std::max(1, (GAME_SPEED == 30)? f30: int(std::floor(double(f30) * GAME_SPEED / 30.0 + 0.5)));
+	return std::max(1, (GAME_SPEED == 30)? f30: int(std::floor(double(f30) * GAME_SPEED / 30.0 + 0.5)));   // KT1 lint: allow frame-literal 30 Hz is the rate the old per-frame keys count in
 }
 
 // A speed threshold given in elmos per frame at 30 Hz, per sim frame at GAME_SPEED (unit speeds per frame scale with the
@@ -28,7 +28,7 @@ inline int ConfigFrames(const LuaTable& cfg, const std::string& keyS, const std:
 inline float ConfigPerFrame30(const LuaTable& cfg, const std::string& key, float def30)
 {
 	const float v = cfg.GetFloat(key, def30);
-	return (GAME_SPEED == 30)? v: v * (30.0f / GAME_SPEED);
+	return (GAME_SPEED == 30)? v: v * (30.0f / GAME_SPEED);   // KT1 lint: allow frame-literal 30 Hz is the rate the old per-frame keys count in
 }
 
 } // namespace KT1

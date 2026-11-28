@@ -59,12 +59,12 @@ public:
 	Plants() : Rule({"Plants", 1, true, "LuaRules/Gadgets/mov_trees.lua, map_plants.lua (contact search)", false}) {}
 
 	void LoadConfig(const LuaTable& t) override {
-		treesEvery = KT1::ConfigFrames(t, "trees_every_s", "trees_every", 3);
+		treesEvery = KT1::ConfigFrames(t, "trees_every_s", "trees_every", 3);   // DESIGN: the default of the old key, frames at 30 Hz, which KT1::ConfigFrames converts
 		treesReach = t.GetFloat("trees_reach", 0.6f);
-		treesMin = KT1::ConfigPerFrame30(t, "trees_min_speed", 0.01f);
-		plantsEvery = KT1::ConfigFrames(t, "plants_every_s", "plants_every", 3);
+		treesMin = KT1::ConfigPerFrame30(t, "trees_min_speed", 0.01f);   // DESIGN: fallback in elmos per frame at 30 Hz (KT1::ConfigPerFrame30 converts)
+		plantsEvery = KT1::ConfigFrames(t, "plants_every_s", "plants_every", 3);   // DESIGN: the default of the old key, frames at 30 Hz, which KT1::ConfigFrames converts
 		plantsMargin = t.GetFloat("plants_margin", 4.0f);
-		plantsMin = KT1::ConfigPerFrame30(t, "plants_min_speed", 0.05f);
+		plantsMin = KT1::ConfigPerFrame30(t, "plants_min_speed", 0.05f);   // DESIGN: fallback in elmos per frame at 30 Hz (KT1::ConfigPerFrame30 converts)
 	}
 
 	void ConfigValues(Data::Values& v) const override {
