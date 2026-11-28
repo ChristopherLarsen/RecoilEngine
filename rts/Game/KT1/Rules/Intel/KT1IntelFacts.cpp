@@ -15,7 +15,7 @@
 // Lua (synced only), Spring.KT1.IntelFacts (each call in full: game-build docs/engine/rules/intel-facts.md):
 //   Init(cfg) -> ok, Source(u, vr, wr, nv, sensors), UnitAnswers(u, upkeepOff, scale), Reset(), Slot(j, u), Fresh(u, on),
 //   Unsettle(u), Run(cand, cn, part, f, stamp, all0, shadow, fin, drop, ev, F, lean) -> nRead, nStill, nShot, nFin, nDrop, nEv,
-//   Fact(u) -> def, owner, sub, landed, px, pz, fcx, fcz, ccx, ccz; Fact(u, "dr", kind) -> dr, stamps; Fact(u, "built"),
+//   Fact(u) -> def, owner, sub, landed, px, pz, fcx, fcz, ccx, ccz; Fact(u, "dr", kind) -> dr, stamps (vision: and stf); Fact(u, "built"),
 //   Circle(u), SensorCircle(u, kind) (check mode and cases).
 // Determinism: units in the order Lua gives them (ascending slot), per-def and per-unit vectors, no hash order; float maths in
 //             the Lua's order (Core), no FMA contraction.
@@ -528,7 +528,12 @@ int IntelFacts::LFact(lua_State* L) {
 		const Src& s = r->srcs[u];
 		if (!s.present) return 0;
 		const std::string kind = luaL_optstring(L, 3, "vision");
-		if (kind == "vision") { if (s.hasDr) lua_pushnumber(L, s.dr); else lua_pushnil(L); lua_pushnumber(L, s.st.stamps); return 2; }
+		if (kind == "vision") {   // and the stamp's frame (cases)
+			if (s.hasDr) lua_pushnumber(L, s.dr); else lua_pushnil(L);
+			lua_pushnumber(L, s.st.stamps);
+			if (s.st.has) lua_pushnumber(L, s.st.f); else lua_pushnil(L);
+			return 3;
+		}
 		for (int k = 0; k < NSENS; ++k)
 			if (kind == SENS_NAME[k]) {
 				const Sens& c = s.sens[k];
