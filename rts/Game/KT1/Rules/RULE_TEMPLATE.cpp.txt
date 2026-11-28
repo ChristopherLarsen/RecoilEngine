@@ -39,6 +39,8 @@ private:
 
 } // namespace
 
-KT1_REGISTER_SYSTEM(NAME, ORDER, NAME)   // ORDER: its place in the frame order (docs/engine/rules/INDEX.md), a multiple of 100 not yet taken
+KT1_REGISTER_SYSTEM(NAME, ORDER, NAME)   // NAME as in RuleInfo.name; ORDER from KT1Register.h's table
+// Also in this folder: sources.cmake with `kt1_system(NAMES NAME SOURCES KT1NAME.cpp)`; in the game:
+// gamedata/kt1/options/<name>.lua with the kt1_<name> switch, and gamedata/kt1/<name>.lua for tuning.
 
 } // namespace KT1

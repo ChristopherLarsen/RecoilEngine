@@ -23,6 +23,12 @@
 //  8000 -  8499   interface (UI/)
 //  8500 -  8999   audio
 //  9000 -  9999   probes and test systems (F06 Draw/Probe 9000)
+//
+// Switch modes (mod option kt1_<key>): off, on, check. The [KT1] load line ends with mode=<mode> (lf_proof.py reads it).
+// Check-mode contract (LUA-FREE §3.2): the Lua is authoritative. The native rule computes into its own shadow columns and
+// reports them through the check helper (F05, Spring.KT1.Check); it writes no engine state, gives no orders, emits no
+// DisplayEvents and answers no Allow call, and its shadow state is not in the sync checksum. A rule declares that it
+// honours this with RuleInfo.checkSafe = true; check on a rule without it stops the engine at start (never a silent off).
 
 #ifndef KT1_REGISTER_H
 #define KT1_REGISTER_H
