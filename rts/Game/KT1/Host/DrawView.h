@@ -6,6 +6,10 @@
 // What it gives: the draw-side id table (Alive), a copy of a unit's drawn state (Unit), the mirror of the live unit ids
 // (UnitIds), the screen ray (Trace) and the snapshots sim systems publish (Snapshots<T>).
 //
+// And the reads a widget makes, under the viewer's fog of war (DrawReads.h): units, rules params, defs, teams, the
+// ground and features. Alive, Unit and UnitIds are the engine's draw view of EVERY live unit, at its true position: what
+// is shown to the player comes from Status (or is filtered by Unit's inLos and inRadar).
+//
 // Today it reads the live engine (NEW-ENGINE-PLAN agreement: the draw copy, mirrors and id table behind this interface
 // are New Engine's to supply, phase 4; until then they are read live, behind the same const interface).
 // A missing id means dead: look an id up each frame, never keep what a unit was.
@@ -14,9 +18,12 @@
 #define KT1_HOST_DRAWVIEW_H
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "Game/KT1/Core/DrawHost/IdBits.h"
+#include "Game/KT1/Host/DrawReads.h"
 #include "Game/KT1/Host/Snapshot.h"
 #include "System/float3.h"
 
@@ -63,6 +70,40 @@ public:
 	RayHit Trace(int x, int y) const;
 
 	template<typename T> const Snapshot<T>* Snapshots() const { return SnapshotBoard::Get().Find<T>(); }
+
+	// the viewer, teams and the ground (DrawViewUnits.cpp)
+	ViewerView Viewer() const;
+	int TeamCount() const;                                   // team ids are 0 .. count - 1
+	int TeamAllyTeam(int team) const;                        // -1: no such team
+	bool TeamColour(int team, float (&rgba)[4]) const;       // GetTeamColor; false: no such team
+	float GroundHeight(float x, float z) const;              // GetGroundHeight, the unsynced height
+
+	// units, as the viewer may read them (DrawViewUnits.cpp)
+	bool Visible(int id) const;                              // ValidUnitID: lives and the viewer sees it
+	bool Status(int id, UnitStatus& out) const;              // false: dead or not seen
+	bool UnitDrawState(int id, ObjectDrawState& out) const;  // false: dead or not seen
+	// GetUnitRulesParam: false when the unit is not seen, the name is unset, the viewer may not read it, or the value is
+	// of the other kind. A boolean reads as 0 or 1.
+	bool UnitRulesParam(int id, const std::string& name, float& out) const;
+	bool UnitRulesParamText(int id, const std::string& name, std::string& out) const;
+
+	// defs (DrawViewObjects.cpp). Ids are 1 .. count.
+	int UnitDefCount() const;
+	bool UnitDefInfo(int defId, UnitDefView& out) const;
+	bool UnitDefParam(int defId, const std::string& key, std::string_view& out) const;   // false: no such def or key
+	float UnitDefModelHeight(int defId) const;               // loads the model the first time; 0: none
+	int FeatureDefCount() const;
+	bool FeatureDefInfo(int defId, FeatureDefView& out) const;
+	bool FeatureDefParam(int defId, const std::string& key, std::string_view& out) const;
+	float FeatureDefModelRadius(int defId) const;            // loads the model the first time; 0: none
+
+	// features (DrawViewObjects.cpp)
+	int FeatureCapacity() const;                             // feature ids are 0 .. capacity - 1
+	bool FeatureAlive(int id) const;                         // ValidFeatureID: lives AND the viewer sees it
+	void FeatureIds(std::vector<int>& out) const;            // GetAllFeatures: those the viewer sees, ascending
+	bool Feature(int id, FeatureView& out) const;            // false: dead or not seen
+	// any live feature, seen or not (GetFeatureEngineDrawMask): the draw state is this client's own
+	bool FeatureDrawState(int id, ObjectDrawState& out) const;
 
 private:
 	mutable IdBits idBits;
