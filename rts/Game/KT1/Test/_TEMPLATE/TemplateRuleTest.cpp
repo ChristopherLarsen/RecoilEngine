@@ -6,6 +6,8 @@
 
 #include "Game/KT1/Core/Common/Rate.h"
 #include "Game/KT1/Core/_TEMPLATE/TemplateRuleCore.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/Rules/_TEMPLATE/TemplateRuleConfig.h"
 
 using namespace KT1::Core::Template;
 using KT1::Core::Rate;
@@ -66,4 +68,12 @@ KT1_CASE("TEMPLATE-RULE-NOALLOC", "no allocation once the wheel has turned") {
 	const auto before = AllocationCount();
 	Run(s, p, 40);
 	KT1_CHECK_EQ(AllocationCount(), before);
+}
+
+KT1_CASE("TEMPLATE-RULE-CONFIG", "the file's keys fill the config; a key it leaves out keeps its default") {
+	KT1::TemplateRuleConfig c;
+	KT1_CHECK(KT1::Data::ParseInto(R"({"period_s": 2, "gain": 3})", KT1::Data::Strictness::Dev, c).accepted);
+	KT1_CHECK_EQ(c.periodS, 2.0f);
+	KT1_CHECK_EQ(c.gain, 3.0f);
+	KT1_CHECK_EQ(c.cap, 10.0f);
 }

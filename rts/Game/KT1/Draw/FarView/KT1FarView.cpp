@@ -220,7 +220,7 @@ void RefreshMesh() {
 
 bool DecideFar() {
 	luaZoomAge += 1;
-	const float h = (luaZoomAge <= 30 && luaZoom >= 0.0f) ? luaZoom : camera->GetPos().y - readMap->GetCurrAvgHeight();   // KT1 lint: allow frame-literal a count of drawn frames, not converted here: SIM-10HZ stage 0 (lua-to-engine) converts
+	const float h = (luaZoomAge <= 30 && luaZoom >= 0.0f) ? luaZoom : camera->GetPos().y - readMap->GetCurrAvgHeight();   // KT1 lint: allow frame-literal a count of drawn frames, not sim frames: the sim rate does not change it
 	lastHeight = h;
 	if (force >= 0) return force == 1;
 	if (manual) return true;

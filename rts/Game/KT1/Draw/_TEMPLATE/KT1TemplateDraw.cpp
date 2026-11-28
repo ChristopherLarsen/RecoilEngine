@@ -5,7 +5,8 @@
 //      Test/<System>; rename TemplateDraw to <System>;
 //   2. in sources.cmake use kt1_system(NAMES <System> SOURCES KT1<System>.cpp);
 //   3. give KT1_REGISTER_SYSTEM the next free order of the draw range (KT1Register.h);
-//   4. add the option fragment gamedata/kt1/options/<system>.lua and write docs/engine/rules/<system>.md.
+//   4. in the game add data/kt1/<system>.json and the option fragment gamedata/kt1/options/<system>.lua, and write
+//      docs/engine/rules/<system>.md.
 //
 // Replaces:   the drawing of <gadget or widget>.lua. Stand-down (game side): the replaced Lua calls
 //             KT1.StandDown(gadget, "TemplateDraw", handler). With the rule on it is removed; with kt1_capture=1 it
@@ -13,7 +14,9 @@
 //             run can capture the same frame with the switch off, then on (the pixel proof).
 // Switch:     mod option kt1_templatedraw = 0 (default) / 1 / check. Spring.KT1.SetEnabled("TemplateDraw", on) switches
 //             it inside a run; it draws a correct frame on the first frame after being switched on. Unsynced: draw only.
-// Config:     gamedata/kt1/templatedraw.lua (KT1TemplateDrawConfig.h has the keys, defaults and labels)
+// Config:     data/kt1/templatedraw.json (TemplateDrawConfig.h has the keys, defaults and labels). Read again when the
+//             file changes; every value is used each frame, so nothing is rebuilt. A system that replaces a .lua
+//             config adds LoadConfig, which only sets values (KT1Rule.h)
 // Reads:      DrawView (Snapshot<Core::Template::Dot>) and FrameFacts only. No Sim/ include; no pointer kept.
 // Draws:      WorldAlpha: one camera-facing quad per published unit in view, one instanced draw, only changes uploaded
 // Check:      check mode (RuleInfo.checkSafe) reads the GPU buffer back each frame and counts differing instances; it
@@ -23,13 +26,13 @@
 
 #include <cstddef>
 
-#include "KT1TemplateDrawConfig.h"
+#include "TemplateDrawConfig.h"
 
 #include "Game/KT1/Core/_TEMPLATE/TemplateDrawCore.h"
+#include "Game/KT1/Data/Config.h"
 #include "Game/KT1/Draw/Common/InstanceBatch.h"
 #include "Game/KT1/Host/DrawPhases.h"
 #include "Game/KT1/KT1Register.h"
-#include "Lua/LuaParser.h"
 #include "Rendering/GL/SubState.h"
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Shaders/ShaderHandler.h"
@@ -73,12 +76,13 @@ public:
 	TemplateDraw() : Rule({NAME, 1, false, "<the drawing it replaces>", false, true}) {}
 
 	// Rule
-	void LoadConfig(const LuaTable& cfg) override {
-		config.half_size = cfg.GetFloat("half_size", config.half_size);
-		config.full_charge = cfg.GetFloat("full_charge", config.full_charge);
-		const LuaTable c = cfg.SubTable("colour");
-		for (size_t i = 0; i < config.colour.size(); ++i)
-			config.colour[i] = static_cast<uint8_t>(c.GetInt(static_cast<int>(i) + 1, config.colour[i]));
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		return Data::ParseInto(text, strictness, config);
+	}
+	void ConfigValues(Data::Values& v) const override {
+		v.Add("half_size", config.halfSize);
+		v.Add("full_charge", config.fullCharge);
+		v.Add("colour", config.colour.data(), config.colour.size());
 	}
 	void Start() override { DrawPhases::Add(this); }
 
@@ -142,13 +146,15 @@ private:
 		const FrameFacts& facts = ctx.facts;
 		InstanceStore<DotInstance>& store = batch.Instances();
 		store.RemoveUnless([&facts, &dots](int id) { return facts.IsVisible(id) && dots.Current(id) != nullptr; });
+		std::array<uint8_t, 4> colour;
+		for (size_t i = 0; i < colour.size(); ++i) colour[i] = static_cast<uint8_t>(config.colour[i]);
 		for (const int id : facts.VisibleUnits()) {
 			const Core::Template::Dot* current = dots.Current(id);
 			if (current == nullptr) continue;
 			const Core::Template::Dot d = Core::Template::Blend(dots.Previous(id), *current, facts.StepFraction());
-			std::array<uint8_t, 4> rgba = config.colour;
-			rgba.back() = Core::Template::Alpha(d.charge, config.full_charge, rgba.back());
-			store.Set(id, {d.x, d.y, d.z, config.half_size, rgba});
+			std::array<uint8_t, 4> rgba = colour;
+			rgba.back() = Core::Template::Alpha(d.charge, config.fullCharge, rgba.back());
+			store.Set(id, {d.x, d.y, d.z, config.halfSize, rgba});
 		}
 	}
 

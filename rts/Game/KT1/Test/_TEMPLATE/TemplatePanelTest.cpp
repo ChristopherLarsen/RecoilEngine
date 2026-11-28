@@ -4,6 +4,8 @@
 #include "../KT1Test.h"
 
 #include "Game/KT1/Core/_TEMPLATE/TemplatePanelCore.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/UI/_TEMPLATE/TemplatePanelConfig.h"
 
 #include <initializer_list>
 
@@ -56,4 +58,10 @@ KT1_CASE("TEMPLATE-PANEL-NOALLOC", "no allocation after Init") {
 		m.Rebuild(change);
 	}
 	KT1_CHECK_EQ(AllocationCount(), before);
+}
+
+KT1_CASE("TEMPLATE-PANEL-CONFIG", "max_rows is read from the file") {
+	KT1::TemplatePanelConfig c;
+	KT1_CHECK(KT1::Data::ParseInto(R"({"max_rows": 5})", KT1::Data::Strictness::Dev, c).accepted);
+	KT1_CHECK_EQ(c.maxRows, 5);
 }

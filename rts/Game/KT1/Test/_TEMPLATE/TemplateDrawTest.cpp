@@ -5,6 +5,8 @@
 #include "../KT1Test.h"
 
 #include "Game/KT1/Core/_TEMPLATE/TemplateDrawCore.h"
+#include "Game/KT1/Data/Config.h"
+#include "Game/KT1/Draw/_TEMPLATE/TemplateDrawConfig.h"
 #include "Game/KT1/Host/Snapshot.h"
 
 using namespace KT1::Core::Template;
@@ -34,4 +36,12 @@ KT1_CASE("TEMPLATE-DRAW-ALPHA", "opacity follows the charge and stays within 0 a
 	KT1_CHECK_EQ(static_cast<int>(Alpha(5, 10, 200)), 100);
 	KT1_CHECK_EQ(static_cast<int>(Alpha(20, 10, 200)), 200);
 	KT1_CHECK_EQ(static_cast<int>(Alpha(1, 0, 200)), 200);
+}
+
+KT1_CASE("TEMPLATE-DRAW-CONFIG", "a colour out of range rejects the file in dev and leaves the config") {
+	KT1::TemplateDrawConfig c;
+	KT1_CHECK(!KT1::Data::ParseInto(R"({"colour": [0, 0, 300, 0]})", KT1::Data::Strictness::Dev, c).accepted);
+	KT1_CHECK_EQ(c.colour[2], 255.0f);
+	KT1_CHECK(KT1::Data::ParseInto(R"({"colour": [1, 2, 3, 4]})", KT1::Data::Strictness::Dev, c).accepted);
+	KT1_CHECK_EQ(c.colour[3], 4.0f);
 }
