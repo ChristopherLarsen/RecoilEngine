@@ -16,6 +16,7 @@
 #include "Game/Camera.h"
 #include "Game/CameraHandler.h"
 #include "Game/GameHelper.h"
+#include "Game/KT1/Host/DrawPhases.h" // KT1 hook: DrawPhases
 #include "Game/GlobalUnsynced.h"
 #include "Game/SelectedUnitsHandler.h"
 #include "Game/Players/Player.h"
@@ -1413,6 +1414,7 @@ void CMiniMap::DrawForReal(bool useNormalizedCoors, bool updateTex, bool luaCall
 
 	// allow Lua scripts to draw into the minimap
 	SetClipPlanes(true);
+	KT1::DrawPhases::Run(KT1::DrawPhase::MiniMap); // KT1 hook: DrawPhases
 	{ SCOPED_TIMER("Draw::Screen::MiniMap::Lua"); eventHandler.DrawInMiniMap(); } // supcom: sub-timer
 
 	if (!updateTex) {

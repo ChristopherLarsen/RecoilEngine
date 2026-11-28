@@ -8,6 +8,7 @@
 
 #include "GlobalRendering.h"
 #include "GlobalRenderingInfo.h"
+#include "Game/KT1/Host/DrawPhases.h" // KT1 hook: DrawPhases
 #include "Rendering/VerticalSync.h"
 #include "Rendering/GL/StreamBuffer.h"
 #include "Rendering/GL/RenderBuffers.h"
@@ -777,6 +778,8 @@ void CGlobalRendering::SwapBuffers(bool allowSwapBuffers, bool clearErrors)
 
 		if (!allowSwapBuffers && !forceSwapBuffers)
 			return;
+
+		KT1::DrawPhases::FrameEnd(); // KT1 hook: DrawPhases (after everything drawn, before the swap)
 
 		pre = spring_now();
 
