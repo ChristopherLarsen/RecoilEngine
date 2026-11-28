@@ -155,6 +155,15 @@ CONFIG(int, ShowPlayerInfo).defaultValue(1).headlessValue(0);
 CONFIG(float, GuiOpacity).defaultValue(0.8f).minimumValue(0.0f).maximumValue(1.0f).description("Sets the opacity of the built-in Spring UI. Generally has no effect on LuaUI widgets. Can be set in-game using shift+, to decrease and shift+. to increase.");
 CONFIG(std::string, InputTextGeo).defaultValue("");
 
+CONFIG(int, StepBlend).defaultValue(0).headlessValue(0).minimumValue(0).maximumValue(1).description("KT1: 1 = blend between steps by the measured wall interval between steps, clamped to [0, 1] and never backwards between steps; 0 = engine default");
+
+// KT1 StepBlend 1 (NEW-ENGINE-PLAN Phase 2 item 4): the blend follows a slipping clock.
+// stepIntervalEmaMs is the recent wall time per step, measured per drawn frame from the steps that arrived in it.
+static float kt1StepIntervalEmaMs = 1000.0f / GAME_SPEED;
+static spring_time kt1LastStepWall = spring_notime;
+static constexpr float KT1_STEP_EMA_WEIGHT = 0.25f;
+static constexpr float KT1_STEP_INTERVAL_MAX_S = 2.0f;
+
 CONFIG(int, SmoothTimeOffset).defaultValue(0).headlessValue(0).description("Enables frametimeoffset smoothing, 0 = off (old version), -1 = forced 0.5,  1-20 smooth, recommended = 2-3");
 
 CGame* game = nullptr;
@@ -1282,7 +1291,25 @@ bool CGame::UpdateUnsynced(const spring_time currentTime)
 	globalRendering->drawFrame = std::max(1U, globalRendering->drawFrame + 1);
 	globalRendering->lastFrameStart = currentTime;
 	// Update the interpolation coefficient (globalRendering->timeOffset)
-	if (!gs->paused && !IsSimLagging() && !gs->PreSimFrame() && !videoCapturing->AllowRecord()) {
+	static const bool kt1StepBlend = (configHandler->GetInt("StepBlend") == 1);
+	if (kt1StepBlend && !gs->paused && !gs->PreSimFrame() && !videoCapturing->AllowRecord()) {
+		// Bursts after a hold put several steps in one drawn frame: the interval is shared among them.
+		if (newSimFrame) {
+			const int steps = std::max(1, gs->frameNum - lastSimFrame);
+			if (kt1LastStepWall != spring_notime) {
+				const float ivMs = std::clamp((currentTime - kt1LastStepWall).toMilliSecsf() / steps, 1.0f, KT1_STEP_INTERVAL_MAX_S * 1000.0f);
+				kt1StepIntervalEmaMs += (ivMs - kt1StepIntervalEmaMs) * KT1_STEP_EMA_WEIGHT;
+			}
+			kt1LastStepWall = currentTime;
+		}
+		globalRendering->weightedSpeedFactor = 1.0f / kt1StepIntervalEmaMs;
+		globalRendering->lastTimeOffset = globalRendering->timeOffset;
+		float to = std::clamp((currentTime - lastFrameTime).toMilliSecsf() / kt1StepIntervalEmaMs, 0.0f, 1.0f);
+		// Between steps the drawn time never goes back; during a hold it rises to the held step and stands (SIM-RATE-002 v4 R7).
+		if (!newSimFrame)
+			to = std::max(to, globalRendering->lastTimeOffset);
+		globalRendering->timeOffset = to;
+	} else if (!gs->paused && !IsSimLagging() && !gs->PreSimFrame() && !videoCapturing->AllowRecord()) {
 		globalRendering->weightedSpeedFactor = 0.001f * gu->simFPS;
 		globalRendering->lastTimeOffset = globalRendering->timeOffset;
 		globalRendering->timeOffset = (currentTime - lastFrameTime).toMilliSecsf() * globalRendering->weightedSpeedFactor;
