@@ -468,6 +468,69 @@ void CLosMap::AddRaycast(SLosInstance* instance, int amount)
 }
 
 
+void CLosMap::AddDelta(const SLosInstance* from, const SLosInstance* to, bool raycast)
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	// edges: (index, change of coverage) at run starts and ends; to's runs count +1, from's -1
+	thread_local std::vector<std::pair<int, int>> edges;
+	edges.clear();
+
+	const auto PushRuns = [&](const SLosInstance* li, int sign) {
+		if (raycast) {
+			for (const SLosInstance::RLE rle: li->squares) {
+				if (rle.length == 0)
+					continue;
+				edges.emplace_back(rle.start, sign);
+				edges.emplace_back(rle.start + int(rle.length), -sign);
+			}
+			return;
+		}
+		// the same rows and clamps as AddCircle (a row emitted twice counts twice)
+		MidpointCircleAlgoPerLine(li->radius, [&](int width, int y) {
+			const unsigned y_ = li->basePos.y + y;
+			if (y_ >= size.y)
+				return;
+			const unsigned sx = std::clamp(li->basePos.x - width,     0, size.x);
+			const unsigned ex = std::clamp(li->basePos.x + width + 1, 0, size.x);
+			if (ex <= sx)
+				return;
+			edges.emplace_back(int(y_ * size.x + sx), sign);
+			edges.emplace_back(int(y_ * size.x + ex), -sign);
+		});
+	};
+	PushRuns(to, 1);
+	PushRuns(from, -1);
+	std::sort(edges.begin(), edges.end());
+
+	const bool visibleInstanceSquares = raycast && (to->allyteam >= 0 && (to->allyteam == gu->myAllyTeam || gu->spectatingFullView));
+	const bool updateUnsyncedHeightMap = sendReadmapEvents && visibleInstanceSquares;
+
+	int net = 0;
+	for (size_t i = 0; i < edges.size(); ) {
+		const int pos = edges[i].first;
+		while (i < edges.size() && edges[i].first == pos)
+			net += edges[(i++)].second;
+		if (net == 0 || i >= edges.size())
+			continue;
+		const int end = edges[i].first;
+		for (int idx = pos; idx < end; ++idx) {
+			losmap[idx] += net;
+
+			// as AddRaycast: inform ReadMap when a square enters LOS (its count was zero before this change)
+			if (!updateUnsyncedHeightMap || net <= 0 || losmap[idx] != net)
+				continue;
+
+			const int2 lm = IdxToCoord(idx, size.x);
+			const int2 p1 = (lm             ) * LOS2HEIGHT;
+			const int2 p2 = (lm + int2(1, 1)) * LOS2HEIGHT;
+			const int2 p3 = {std::min(p2.x, mapDims.mapxm1), std::min(p2.y, mapDims.mapym1)};
+
+			readMap->UpdateLOS(SRectangle(p1.x, p1.y,  p3.x, p3.y));
+		}
+	}
+}
+
+
 void CLosMap::PrepareRaycast(SLosInstance* instance) const
 {
 	RECOIL_DETAILED_TRACY_ZONE;

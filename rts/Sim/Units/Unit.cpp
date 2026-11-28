@@ -293,6 +293,7 @@ void CUnit::PreInit(const UnitLoadParams& params)
 	jammerRadius     = std::clamp(    unitDef->jammerRadius  , 0, MAX_UNIT_SENSOR_RADIUS);
 	sonarJamRadius   = std::clamp(    unitDef->sonarJamRadius, 0, MAX_UNIT_SENSOR_RADIUS);
 	seismicRadius    = std::clamp(    unitDef->seismicRadius , 0, MAX_UNIT_SENSOR_RADIUS);
+	if (losHandler != nullptr) losHandler->KT1MarkSensors(this);   // KT1 LosCut (D)
 	seismicSignature = unitDef->seismicSignature;
 
 	stealth = unitDef->stealth;
@@ -1536,6 +1537,7 @@ void CUnit::ChangeLos(int losRad, int airRad)
 	RECOIL_DETAILED_TRACY_ZONE;
 	losRadius = losRad;
 	airLosRadius = airRad;
+	if (losHandler != nullptr) losHandler->KT1MarkSensors(this);   // KT1 LosCut (D)
 }
 
 
