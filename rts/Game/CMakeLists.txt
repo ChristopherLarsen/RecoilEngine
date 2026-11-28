@@ -101,5 +101,6 @@ target_link_libraries(GameCommon INTERFACE
 	streflop
 	fmt::fmt
 	nowide::nowide
+	${KT1_LIBRARIES} # KT1 hook: registry (what KT1 sources.cmake fragments need: Data's simdjson)
 )
 add_dependencies(GameCommon generateVersionFiles)
