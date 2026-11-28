@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <new>
 #include <set>
+#include <type_traits>
 #include <vector>
 
 using namespace KT1::Core;
@@ -296,38 +297,53 @@ static void TestDueWheelPeriodic() {
 // ---- DetMath --------------------------------------------------------------------------------------------------------
 static void TestDetMath() {
 	using namespace DetMath;
-	CHECK(Mod(-1.0, 3.0) == 2.0 && Mod(5.5, 2.0) == 1.5 && Mod(7.0, -3.0) == -2.0, "Lua 5.1 mod");
-	CHECK(RoundHalfUp(2.5) == 3.0 && RoundHalfUp(-0.5) == 0.0 && RoundHalfUp(-1.5) == -1.0, "floor(x + 0.5)");
-	CHECK(Floor(-0.25) == -1.0, "floor");
-	CHECK(Lerp(1.0, 3.0, 0.25) == 1.5 && Lerp(2.0, 2.0, 0.7) == 2.0, "lerp");
-	CHECK(Clamp(5.0, 0.0, 1.0) == 1.0 && Clamp(-5.0, 0.0, 1.0) == 0.0 && Clamp(0.5, 0.0, 1.0) == 0.5, "clamp");
-	CHECK(Dist2(3.0, 4.0) == 5.0 && Dist3(2.0, 3.0, 6.0) == 7.0, "dist");
-	CHECK(Dot2(1.0, 2.0, 3.0, 4.0) == 11.0 && Dot3(1.0, 2.0, 3.0, 4.0, 5.0, 6.0) == 32.0, "dot");
+	using F = LuaNumber;
+	static_assert(std::is_same_v<LuaNumber, float>, "the engine's Lua number is float (luaconf.h)");
+	static_assert(std::is_same_v<decltype(Lerp(F{}, F{}, F{})), float>, "helpers return the Lua number");
+	const F one = 1, two = 2, three = 3, four = 4, ten = 10;
+	CHECK(Mod(-one, three) == two, "Lua 5.1: -1 % 3 == 2");
+	CHECK(Mod(F(11) / 2, two) == F(3) / 2 && Mod(F(7), -three) == -two, "Lua 5.1 mod: 5.5 % 2, 7 % -3");
+	CHECK(RoundHalfUp(F(5) / 2) == three && RoundHalfUp(-one / 2) == 0 && RoundHalfUp(-F(3) / 2) == -one, "floor(x + 0.5)");
+	CHECK(Floor(-one / 4) == -one, "floor");
+	CHECK(Lerp(one, three, one / 4) == F(3) / 2 && Lerp(two, two, F(7) / 10) == two, "lerp");
+	CHECK(Clamp(F(5), 0, one) == one && Clamp(-F(5), 0, one) == 0 && Clamp(one / 2, 0, one) == one / 2, "clamp");
+	CHECK(Dist2(three, four) == F(5) && Dist3(two, three, F(6)) == F(7), "dist");
+	CHECK(Dot2(one, two, three, four) == F(11) && Dot3(one, two, three, four, F(5), F(6)) == F(32), "dot");
 	// order is pinned: front to back gives 0 here, back to front would give 1
-	const double v[] = {1e16, 1.0, -1e16};
-	CHECK(Sum(v) == 0.0, "sum front to back");
-	// a value the Lua would compute through a + (b - a) * t, not a * (1 - t) + b * t
-	const double a = 0.1, b = 0.7, t = 0.3;
-	CHECK(Lerp(a, b, t) == a + (b - a) * t, "lerp is the Lua form");
-	// a rate-dependent use: per-step decay over 1 s ends at the same value at 30 and 10 within one step's rounding
-	double hp = 100.0;
-	const double perStep = 10.0 * Rate::StepSeconds();   // 10 per second
+	const F big = F(100000000);
+	const F v[] = {one, big, -big};
+	CHECK(Sum(v) == 0, "sum front to back");
+	// a Lerp whose float and double results differ: the helper must give the float one (the Lua's)
+	bool found = false, matches = true;
+	for (int i = 1; i < 10 && !found; ++i)
+		for (int j = 1; j < 10 && !found; ++j)
+			for (int k = 1; k < 10 && !found; ++k) {
+				const F a = F(i) / ten, b = F(j) / ten + F(k), t = F(k) / ten;
+				const F d = b - a, m = d * t, luaFloat = a + m;   // the Lua expression, one float operation at a time
+				const double viaDouble = double(a) + (double(b) - double(a)) * double(t);
+				if (static_cast<F>(viaDouble) != luaFloat) {
+					found = true;
+					matches = Lerp(a, b, t) == luaFloat;
+				}
+			}
+	CHECK(found, "there is a Lerp where float and double differ");
+	CHECK(matches, "Lerp gives the float (Lua) result");
+	// a rate-dependent use: per-step decay over 1 s ends near the same value at 30 and at 10
+	F hp = F(100);
+	const F perStep = ten * static_cast<F>(Rate::StepSeconds());   // 10 per second
 	for (int i = 0; i < Rate::Steps(1.0); ++i)
-		hp = Clamp(hp - perStep, 0.0, 100.0);
-	CHECK(std::fabs(hp - 90.0) < 1e-9, "rate-agnostic decay");
+		hp = Clamp(hp - perStep, 0, F(100));
+	CHECK(std::fabs(hp - F(90)) < F(1) / 1000, "rate-agnostic decay");
 }
 
-// the engine builds with -fsingle-precision-constant: a bare literal is a float. These fail if a Core helper's maths
-// were done through a float literal (the old Rate::StepSeconds `1.0 / sps` was a float division under that flag).
+// the engine builds with -fsingle-precision-constant: a bare literal is a float. Rate works in double (config seconds);
+// these fail if its maths went through a float literal (the old StepSeconds `1.0 / sps` was a float division).
 static void TestDoubleConstants() {
-	const double one = 1, ten = 10, three = 3;
+	const double one = 1, ten = 10;
 	CHECK(0.1 != one / ten, "the tests build with the engine's float-constant flag");
 	CHECK(Rate::StepSeconds() == one / Rate::StepsPerSecond(), "StepSeconds is a double division");
 	CHECK(Rate::Seconds(1) == one / Rate::StepsPerSecond(), "Seconds is a double division");
-	CHECK(DetMath::HALF == one / 2, "HALF");
-	const double third = one / three;   // not a float value
-	CHECK(DetMath::RoundHalfUp(third) == 0 && DetMath::RoundHalfUp(one - third) == 1, "RoundHalfUp in double");
-	CHECK(DetMath::Lerp(0, three, third) == third * three, "Lerp in double");
+	CHECK(DetMath::HALF == static_cast<float>(1) / 2, "HALF");
 }
 
 // ---- FixedPool ------------------------------------------------------------------------------------------------------

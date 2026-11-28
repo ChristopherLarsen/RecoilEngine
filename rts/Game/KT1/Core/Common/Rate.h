@@ -6,7 +6,9 @@
 //   (Rate::SetStepsPerSecond). It is the same on every client: SIM-10HZ stage 0 puts the rate in the sync check.
 // There is no default: a conversion before SetStepsPerSecond asserts in dev, so no system can run at a guessed rate.
 //   In release it degrades to "every step" (Every 1, Steps 0, Seconds 0).
-// Rounding is std::lround (half away from zero), so 0.5 s is 15 steps at 30 and 5 at 10; 0.25 s at 10 is 3 steps.
+// Rounding is std::lround (half away from zero), so 0.5 s is 15 steps at 30 and 5 at 10; 0.25 s at 10 is 3 steps. For the
+//   positive seconds config gives this equals the Lua idiom math.floor(x + 0.5). Rate works in double: its input is config,
+//   not a Lua number. The rate is per process: the host sets it at every game start, a restart from the menu included.
 // No engine include, no allocation.
 
 #ifndef KT1_CORE_COMMON_RATE_H

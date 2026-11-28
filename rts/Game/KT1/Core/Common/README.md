@@ -12,7 +12,7 @@ and its allocation rule.
 | `SortedIdList.h` | a small id set in ascending order in one flat array |
 | `EventBuffer.h` | one step's events in push order; `Flip()` hands them to the next step |
 | `DueWheel.h` | ids by due step; `Take()` once per step returns that step's ids ascending and unique |
-| `DetMath.h` | double helpers in the Lua's evaluation order (lerp, clamp, Lua 5.1 mod, floor(x + 0.5), dot, dist, sum) |
+| `DetMath.h` | the Lua's number maths in float (this engine's `LUA_NUMBER` is float, luaconf.h) and in the Lua's evaluation order (lerp, clamp, Lua 5.1 mod, floor(x + 0.5), dot, dist, sum) |
 | `FixedPool.h` | a fixed number of T by integer handle, last released reused first |
 
 Steady state allocates nothing: storage is sized at `Init`. The tests count every `operator new` to prove it.
