@@ -2,7 +2,7 @@
 
 #include "UnitDrawer.h"
 #include "KT1PlainShadow.h" // KT1 hook: plain shadows
-#include "Game/KT1/UI/IconCull/KT1IconCull.h" // KT1 hook: IconCull
+#include "Game/KT1/Draw/IconCull/KT1IconCull.h" // KT1 hook: IconCull
 
 #include <algorithm>
 #include <cassert>

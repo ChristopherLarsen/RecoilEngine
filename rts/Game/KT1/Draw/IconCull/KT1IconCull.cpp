@@ -25,7 +25,7 @@
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
 #include "Game/KT1/Data/Config.h"
-#include "Game/KT1/UI/IconCull/IconCullConfig.h"
+#include "Game/KT1/Draw/IconCull/IconCullConfig.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/IconHandler.h"

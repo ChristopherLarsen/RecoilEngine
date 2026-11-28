@@ -5,7 +5,7 @@
 #include "WorldDrawer.h"
 #include "Game/KT1/Host/DrawPhases.h" // KT1 hook: DrawPhases
 #include "Game/KT1/KT1Registry.h" // KT1 hook: registry
-#include "Game/KT1/UI/FarView/KT1FarView.h" // KT1 hook: FarView
+#include "Game/KT1/Draw/FarView/KT1FarView.h" // KT1 hook: FarView
 #include "SupComZoomLevel.h"
 #include "Sim/Units/UnitDefHandler.h"
 #include "Sim/Features/FeatureDefHandler.h"

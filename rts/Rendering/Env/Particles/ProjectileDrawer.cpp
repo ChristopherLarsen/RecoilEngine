@@ -6,7 +6,7 @@
 #include <tuple>
 #include <bit>
 
-#include "Game/KT1/UI/FarView/KT1FarView.h" // KT1 hook: FarView fx
+#include "Game/KT1/Draw/FarView/KT1FarView.h" // KT1 hook: FarView fx
 #include "Game/Camera.h"
 #include "Game/CameraHandler.h"
 #include "Game/GlobalUnsynced.h"

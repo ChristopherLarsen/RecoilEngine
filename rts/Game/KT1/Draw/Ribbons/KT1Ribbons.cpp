@@ -46,7 +46,7 @@
 #include "Game/KT1/KT1Register.h"
 #include "Game/KT1/Core/Common/Rate.h"
 #include "Game/KT1/Data/Config.h"
-#include "Game/KT1/UI/Ribbons/RibbonsConfig.h"
+#include "Game/KT1/Draw/Ribbons/RibbonsConfig.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/Env/Particles/ProjectileDrawer.h"

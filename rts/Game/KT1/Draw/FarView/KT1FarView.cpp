@@ -37,7 +37,7 @@
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
 #include "Game/KT1/Data/Config.h"
-#include "Game/KT1/UI/FarView/FarViewConfig.h"
+#include "Game/KT1/Draw/FarView/FarViewConfig.h"
 #include "Game/SelectedUnitsHandler.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
