@@ -1019,7 +1019,7 @@ float CGameServer::PaceWorstExcessLagS() const
 void CGameServer::PaceFromFrameLag()
 {
 	const spring_time now = spring_gettime();
-	const float dtS = (paceLastTick == spring_notime)? 0.0f: (now - paceLastTick).toSecsf();
+	const float dtS = (!spring_istime(paceLastTick))? 0.0f: (now - paceLastTick).toSecsf();
 	paceLastTick = now;
 
 	float worstExcessS = 0.0f;

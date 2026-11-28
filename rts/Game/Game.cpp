@@ -1297,7 +1297,7 @@ bool CGame::UpdateUnsynced(const spring_time currentTime)
 		// Bursts after a hold put several steps in one drawn frame: the interval is shared among them.
 		if (newSimFrame) {
 			const int steps = std::max(1, gs->frameNum - lastSimFrame);
-			if (kt1LastStepWall != spring_notime) {
+			if (spring_istime(kt1LastStepWall)) {
 				const float ivMs = std::clamp((currentTime - kt1LastStepWall).toMilliSecsf() / steps, 1.0f, KT1_STEP_INTERVAL_MAX_S * 1000.0f);
 				kt1StepIntervalEmaMs += (ivMs - kt1StepIntervalEmaMs) * KT1_STEP_EMA_WEIGHT;
 			}
