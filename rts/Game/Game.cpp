@@ -470,6 +470,7 @@ void CGame::Load(const std::string& mapFileName)
 		try {
 			LOG("[Game::%s][6] globalQuit=%d forcedQuit=%d", __func__, globalQuit.load(), forcedQuit);
 
+			KT1::Registry::Setup(); // KT1 hook: Setup
 			LoadLua(saveFileHandler != nullptr, false);
 			Watchdog::ClearTimer(WDT_LOAD);
 		} catch (const content_error& e) {

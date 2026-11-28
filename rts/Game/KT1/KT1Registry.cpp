@@ -37,6 +37,7 @@
 #include "Sim/Misc/GlobalConstants.h"
 #include "System/Log/ILog.h"
 #include "System/StringHash.h"
+#include "System/Sync/SyncedPrimitiveBase.h"
 #include "System/TimeProfiler.h"
 
 namespace KT1 {
@@ -92,7 +93,8 @@ void Registry::Reset() {
 	Registry& reg = Get();
 	ResetSimHost();   // first: its phase functions, validators and sync columns point into the rules
 	reg.rules.clear();
-	reg.built = reg.inited = reg.started = false;
+	reg.built = reg.inited = false;
+	reg.starts.Reset();
 }
 
 Rule* Registry::Find(const char* name) const {
@@ -140,13 +142,20 @@ void Registry::EnsureInit() {
 	if (configSource == Data::Source::Check) Data::LogCheck(check);
 }
 
+void Registry::Setup() {
+	Registry& reg = Get();
+	ENTER_SYNCED_CODE();
+	reg.EnsureInit();
+	if (reg.inited) {
+		if (reg.configSource == Data::Source::Json) Data::StartReload();
+		reg.starts.Setup(reg.rules);
+	}
+	LEAVE_SYNCED_CODE();
+}
+
 void Registry::EnsureStart() {
 	EnsureInit();
-	if (started || !inited) return;
-	started = true;
-	if (configSource == Data::Source::Json) Data::StartReload();
-	for (auto& r : rules)
-		if (r->enabled) r->Start();
+	if (inited) starts.StepOrDraw(rules);
 }
 
 void Registry::GameFrame(int frame) {

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "KT1Rule.h"
+#include "Core/SimHost/StartGate.h"
 #include "Prof/KT1FrameCount.h" // KT1 hook: FrameCount (dev frame counters; stock files call KT1::FrameCount::*)
 
 namespace KT1 {
@@ -16,6 +17,9 @@ namespace KT1 {
 	public:
 		static Registry& Get();
 
+		// KT1 hook: Setup (CGame::Load, after the defs and the simulation are loaded, before LuaRules): switches and
+		// configs, then every enabled synced rule's Start. Same moment on every machine, before any unit and any Allow call.
+		static void Setup();
 		// KT1 hook: registry (Game.cpp, before eventHandler.GameFrame): every enabled synced rule's frame, timed.
 		static void GameFrame(int frame);
 		// KT1 hook: registry (WorldDrawer, after the alpha particles above water): every enabled unsynced rule's draw, timed.
@@ -35,10 +39,11 @@ namespace KT1 {
 
 	private:
 		void EnsureInit();     // switches and configs, once a game is set up
-		void EnsureStart();    // per-def data, at the first frame
+		void EnsureStart();    // unsynced rules' Start, at the first sim step or drawn frame
 
 		std::vector<std::unique_ptr<Rule>> rules;
-		bool built = false, inited = false, started = false;
+		bool built = false, inited = false;
+		Core::SimHost::StartGate starts;
 		Data::Source configSource = Data::Source::Lua;   // mod option kt1_jsonconfig
 	};
 }
