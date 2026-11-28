@@ -5,7 +5,7 @@ list(APPEND KT1_SOURCES
 	"${CMAKE_CURRENT_LIST_DIR}/OrdersApi.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/OrdersBridge.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/OrdersForeign.cpp"
-	"${CMAKE_CURRENT_LIST_DIR}/OrdersInternal.cpp"
+	"${CMAKE_CURRENT_LIST_DIR}/OrdersRowActions.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/OrdersShared.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/OrdersTargetPick.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/Orders/DefFacts.cpp"
