@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "Game/KT1/KT1Registry.h"
+#include "Game/KT1/KT1Register.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
@@ -166,6 +167,6 @@ private:
 
 } // namespace
 
-std::unique_ptr<Rule> MakePlants() { return std::make_unique<Plants>(); }
+KT1_REGISTER_SYSTEM(Plants, 500, Plants)
 
 } // namespace KT1

@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "Game/KT1/KT1Registry.h"
+#include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
@@ -194,6 +195,6 @@ private:
 
 } // namespace
 
-std::unique_ptr<Rule> MakeOwnPass() { return std::make_unique<OwnPass>(); }
+KT1_REGISTER_SYSTEM(OwnPass, 400, OwnPass)
 
 } // namespace KT1
