@@ -36,6 +36,7 @@
 #include "Game/KT1/Host/Capture/CaptureScript.h"
 #include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1Registry.h"
+#include "Game/Camera.h"   // after the KT1 headers: it defines a macro `camera` (FrameFacts has a member of that name)
 #include "Game/Players/PlayerBase.h"
 #include "Game/UI/UnitTracker.h"
 #include "Lua/LuaParser.h"
@@ -93,6 +94,7 @@ namespace Capture {
 			void Stop();
 			bool SetSide(Side side);
 			void Apply(const Shot& shot);
+			void SnapCamera();
 			void Restore();
 			void ReadBack(const Shot& shot);
 			void Finish();
@@ -201,6 +203,18 @@ namespace Capture {
 				state["pz"] = pose.atZ * mapDims.mapy * SQUARE_SIZE;
 			}
 			if (!state.empty()) camHandler->SetState(state);
+			SnapCamera();
+		}
+
+		// SetState moves the controller only: the drawn camera would follow at the next frame's controller update, after key
+		// and screen-edge moves and any unfinished transition. Take the controller's view now (this frame's
+		// camera->Update() is still to come) and end the transition.
+		void CaptureRule::SnapCamera() {
+			const CCameraController& controller = camHandler->GetCurrentController();
+			camera->SetPos(controller.GetPos());
+			camera->SetRot(controller.GetRot());
+			camera->SetVFOV(controller.GetFOV());
+			camHandler->CameraTransition(0.0f);
 		}
 
 		void CaptureRule::Restore() {
@@ -215,6 +229,7 @@ namespace Capture {
 
 		void CaptureRule::Before() {
 			if (!running) return;
+			Restore();   // a frame whose FrameEnd never ran (inactive window): the originals first, or Apply saves overrides
 			step = sequence.Draw(gs->frameNum);
 			holdStep = sequence.HoldFrame();
 			if (step.shot < 0) return;
