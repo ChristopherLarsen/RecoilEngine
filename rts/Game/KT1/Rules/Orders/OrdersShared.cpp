@@ -202,15 +202,6 @@ void ResetShared() {
 	s.handedAccepts.clear();
 }
 
-bool HandValue(std::string_view name, float value) {
-	Core::OrderRules::GuardValues& v = MutableConfig().rules.values;
-	if (name == "short_order_mu") v.short_order_mu = value;
-	else if (name == "goal_cell_mu") v.goal_cell_mu = value;
-	else if (name == "rest_short_mu") v.rest_short_mu = value;
-	else return false;
-	return true;
-}
-
 bool HandAccepts(int unitDefId, std::string_view words) {
 	if (unitDefId <= 0 || unitDefId > static_cast<int>(unitDefHandler->NumUnitDefs())) return false;
 	Shared& s = Data();

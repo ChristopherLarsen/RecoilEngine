@@ -48,9 +48,8 @@ const Core::Orders::OrdersConfig& Config();
 const std::vector<Core::Orders::DefFacts>& Defs();
 // a new game: forgets the config, the def facts and what the game handed over
 void ResetShared();
-// What the running data set holds and the JSON cannot, handed over by synced Lua at load (system OrderRules): a guard
-// value by its config name, or a def's accepted-order words (rebuilds Defs()). false: unknown name or def.
-bool HandValue(std::string_view name, float value);
+// What the running data set holds and the JSON cannot, handed over by synced Lua at load (system OrderRules): a def's
+// accepted-order words (rebuilds Defs()). false: no such def.
 bool HandAccepts(int unitDefId, std::string_view words);
 Core::Orders::State* State();            // nullptr while system Orders is off
 
