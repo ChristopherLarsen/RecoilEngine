@@ -69,6 +69,9 @@ public:
 	bool WantReverseTurnGo(const float3& wpDir, const float3& ffDir) const;
 	bool HoldForTurn(int dir) const;
 	bool GetHeadingFree() const { return headingFree; }
+	/// KT1 hullturn (LUA-FREE S19): the native rule gives the hull direction to itself (on) or back to the move type
+	/// (off), as "supcomHeadingFree" does from Lua; refused (false) for a unit that is not hover, as there
+	bool SetHeadingFree(bool on);
 	/// true while SetWaypointDir steers straight at the goal instead of along the path's waypoints (read-only: the
 	/// last straight-line answer for this goal, never a new test)
 	bool GetDirectSteer() const;
