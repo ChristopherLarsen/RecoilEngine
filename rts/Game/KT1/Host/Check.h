@@ -12,6 +12,8 @@
 //         KT1::Check::Add("Orders", compared, differed, "what differed");
 //   Lua   Spring.KT1.Check.Report("Orders", compared, differed [, "what differed"])
 //         Spring.KT1.Check.Total()                                       the total lines now (a test run's end)
+// Check mode is compute-only (KT1Register.h). The host runs each system's code inside a Running scope; a write asks
+// MayWrite() first (SimContext, DisplayEvents).
 // A step with differences logs one line at its end; cumulative totals are logged every TOTAL_EVERY_S, at game over, and
 // on Total(). The last total line of a system is its result.
 
@@ -21,12 +23,22 @@
 #include <cstddef>
 
 #include "Game/KT1/Core/SimHost/CheckPairs.h"
+#include "Game/KT1/Core/SimHost/WriteGate.h"
 
 namespace KT1 {
 
 class Check {
 public:
 	using Value = Core::SimHost::CheckValue;
+
+	static bool InCheck(const char* system);   // the system's switch is "check"
+	static bool MayWrite();                    // false: the running system is in check mode; counted
+	static Core::SimHost::WriteGate& Gate();   // for a Core function that runs systems' code (Validators.h)
+	// The running system, for the life of the object.
+	class Running : public Core::SimHost::WriteGate::Scope {
+	public:
+		Running(const char* system, bool check);
+	};
 
 	static void Native(const char* system, const char* what, int id1, int id2, int id3, const Value& value);
 	static void Native(const char* system, const char* what, int id1, int id2, int id3, float value);

@@ -4,6 +4,7 @@
 
 #include "DisplayEvents.h"
 
+#include "Check.h"
 #include "System/float3.h"
 
 namespace KT1 {
@@ -22,7 +23,11 @@ void Set(float (&to)[3], const float3& v) {
 
 } // namespace
 
-void DisplayEvents::Emit(const DisplayEvent& e) { queue.Emit(e); }
+bool DisplayEvents::Emit(const DisplayEvent& e) {
+	if (!Check::MayWrite()) return false;
+	queue.Emit(e);
+	return true;
+}
 
 void DisplayEvents::Sound(int soundId, const float3& pos, float volume) {
 	DisplayEvent e;
@@ -30,7 +35,7 @@ void DisplayEvents::Sound(int soundId, const float3& pos, float volume) {
 	e.id = soundId;
 	Set(e.a, pos);
 	e.value = volume;
-	queue.Emit(e);
+	Emit(e);
 }
 
 void DisplayEvents::Effect(int generatorId, const float3& pos, const float3& dir, float damage, float radius, int ownerId) {
@@ -42,14 +47,14 @@ void DisplayEvents::Effect(int generatorId, const float3& pos, const float3& dir
 	Set(e.b, dir);
 	e.value = damage;
 	e.size = radius;
-	queue.Emit(e);
+	Emit(e);
 }
 
 void DisplayEvents::Log(const char* text) {
 	DisplayEvent e;
 	e.kind = DisplayKind::Log;
 	e.SetText(text);
-	queue.Emit(e);
+	Emit(e);
 }
 
 void DisplayEvents::DebugLine(const float3& from, const float3& to, float width, float seconds) {
@@ -59,7 +64,7 @@ void DisplayEvents::DebugLine(const float3& from, const float3& to, float width,
 	Set(e.b, to);
 	e.size = width;
 	e.value = seconds;
-	queue.Emit(e);
+	Emit(e);
 }
 
 void DisplayEvents::Ping(const float3& pos, const char* label, int playerId) {
@@ -68,7 +73,7 @@ void DisplayEvents::Ping(const float3& pos, const char* label, int playerId) {
 	e.unit = playerId;
 	Set(e.a, pos);
 	e.SetText(label);
-	queue.Emit(e);
+	Emit(e);
 }
 
 void DisplayEvents::Publish(int step) { queue.Publish(step); }

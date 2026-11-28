@@ -10,22 +10,25 @@
 #include <string>
 
 #include "Ordered.h"
+#include "WriteGate.h"
 
 namespace KT1::Core::SimHost {
 
 template<class Fn> struct Validator {
 	std::string system;
-	bool check;     // true: its system's switch is "check"
+	bool check;     // true: its system's switch is "check" (the host asks the registry)
 	Fn fn;
 };
 
 template<class Fn> using Chain = Ordered<Validator<Fn>>;
 
-// A veto chain in order; checked(system, answer) takes each check-mode answer. False: a live validator refused, and the
-// chain and Lua are not asked further.
+// A veto chain in order, each validator running behind the write gate; checked(system, answer) takes each check-mode
+// answer. False: a live validator refused, and the chain and Lua are not asked further.
 // KT1 hot
-template<class Fn, class Checked, class... Args> bool AskVeto(const Chain<Fn>& chain, Checked&& checked, Args&&... args) {
+template<class Fn, class Checked, class... Args>
+bool AskVeto(const Chain<Fn>& chain, WriteGate& gate, Checked&& checked, Args&&... args) {
 	for (const auto& item : chain) {
+		const WriteGate::Scope running(gate, item.value.system.c_str(), item.value.check);
 		const bool yes = item.value.fn(args...);
 		if (item.value.check) checked(item.value.system, yes);
 		else if (!yes) return false;
