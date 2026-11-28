@@ -1,5 +1,5 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 rule Tiers: the pure decision (no engine includes), shared by KT1Tiers.cpp and the engine-free tests in test/.
+// KT1 rule Tiers: the pure decision (no engine includes), shared by KT1Tiers.cpp and the engine-free tests (KT1/Test/Tiers/).
 // PRF-002 v3 R7; plan: game-build docs/engine/RATE-TIERS-PLAN.md.
 
 #ifndef KT1_TIERS_CORE_H
