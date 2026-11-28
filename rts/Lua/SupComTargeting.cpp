@@ -529,7 +529,7 @@ const Gun* GunOf(int u, int n) {
 	return nullptr;
 }
 
-int Init(lua_State* L) {
+int InitL(lua_State* L) {
 	const int m = luaL_checkint(L, 1);
 	ReadRules(L, 2);
 	luaL_checktype(L, 5, LUA_TTABLE);
@@ -615,7 +615,7 @@ int Get(lua_State* L) {
 }
 
 // Spring.SupComTgtStats() -> scans, candidates, holds since the last call
-int Stats(lua_State* L) {
+int StatsL(lua_State* L) {
 	lua_pushnumber(L, stScans);
 	lua_pushnumber(L, stCand);
 	lua_pushnumber(L, stHolds);
@@ -731,7 +731,7 @@ static int Prof(lua_State* L)
 
 void SupComTargeting::PushSyncedCtrl(lua_State* L)
 {
-	LuaPushRawNamedCFunc(L, "SupComTgtInit", Init);
+	LuaPushRawNamedCFunc(L, "SupComTgtInit", InitL);
 	LuaPushRawNamedCFunc(L, "SupComTgtRules", Rules);
 	LuaPushRawNamedCFunc(L, "SupComTgtAdd", Add);
 	LuaPushRawNamedCFunc(L, "SupComTgtWake", WakeL);
@@ -740,6 +740,6 @@ void SupComTargeting::PushSyncedCtrl(lua_State* L)
 	LuaPushRawNamedCFunc(L, "SupComTgtFocus", Focus);
 	LuaPushRawNamedCFunc(L, "SupComTgtInflight", Inflight);
 	LuaPushRawNamedCFunc(L, "SupComTgtGet", Get);
-	LuaPushRawNamedCFunc(L, "SupComTgtStats", Stats);
+	LuaPushRawNamedCFunc(L, "SupComTgtStats", StatsL);
 	LuaPushRawNamedCFunc(L, "SupComTgtProf", Prof);
 }
