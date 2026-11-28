@@ -7,7 +7,7 @@ namespace KT1::Core::AMove {
 
 int32_t ModeParam(Mode) { return 0; }
 const char* EventName(EventKind) { return ""; }
-Params MakeParams(const Orders::OrdersConfig&, std::span<const Orders::DefFacts>) { return {}; }
+Params MakeParams(const Orders::OrdersConfig&, const Orders::AMoveConfig&, std::span<const Orders::DefFacts>) { return {}; }
 float GuardRadius(const Orders::DefFacts&, const Params&) { return 0; }
 StripShape ShapeFor(float, const Params&) { return {}; }
 

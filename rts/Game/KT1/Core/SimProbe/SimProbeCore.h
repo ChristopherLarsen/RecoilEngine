@@ -17,6 +17,9 @@ namespace KT1::Core::SimProbe {
 // The unit event types come first in EventType.
 constexpr bool IsUnitEvent(SimHost::EventType t) { return t <= SimHost::EventType::UnitIdle; }
 
+// The command validator: it refuses one command id (0: none).
+constexpr bool Allows(int32_t denyCommand, int32_t commandID) { return denyCommand == 0 || commandID != denyCommand; }
+
 class State {
 public:
 	void Init(int32_t maxIds) {

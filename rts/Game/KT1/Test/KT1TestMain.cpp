@@ -1,6 +1,6 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // kt1_core_tests: runs every Core test case in id order.
-//   kt1_core_tests [--cases <dir>] [--only <id prefix>] [--from <n>] [--list]
+//   kt1_core_tests [--cases <dir>] [--traces <dir>] [--only <id prefix>] [--from <n>] [--list]
 // Output: "[RUN] <n> <id>" before a case, "[CHECKS] <count>" and "[CASE] <id> PASS|FAIL <text>" after it,
 // "[DONE] pass=N fail=N" at the end.
 // The driver uses [RUN] and [DONE] to fail a case that crashes or hangs and to go on from the next one (--from).
@@ -8,6 +8,7 @@
 
 #include "KT1CaseLoader.h"
 #include "KT1Test.h"
+#include "KT1TraceCase.h"
 #include "Game/KT1/Core/Common/Rate.h"
 
 #include <algorithm>
@@ -30,6 +31,7 @@ using KT1::Core::Rate;
 namespace {
 	struct Options {
 		std::string casesDir;
+		std::string tracesDir;   // replay cases (KT1TraceCase.h)
 		std::string only;
 		size_t from = 0;
 		bool list = false;
@@ -44,6 +46,8 @@ namespace {
 				options.list = true;
 			else if (arg == "--cases" && hasValue)
 				options.casesDir = argv[++i];
+			else if (arg == "--traces" && hasValue)
+				options.tracesDir = argv[++i];
 			else if (arg == "--only" && hasValue)
 				options.only = argv[++i];
 			else if (arg == "--from" && hasValue)
@@ -94,6 +98,8 @@ namespace {
 		std::vector<CaseDef> cases = Registry();
 		if (!options.casesDir.empty())
 			LoadJsonCases(options.casesDir, cases);
+		if (!options.tracesDir.empty())
+			AddTraceCases(options.tracesDir, cases);
 
 		std::stable_sort(cases.begin(), cases.end(), [](const CaseDef& a, const CaseDef& b) { return a.id < b.id; });
 
@@ -122,7 +128,7 @@ int main(int argc, char** argv) {
 
 	Options options;
 	if (!Parse(argc, argv, options)) {
-		std::fprintf(stderr, "usage: kt1_core_tests [--cases <dir>] [--only <id prefix>] [--from <n>] [--list]\n");
+		std::fprintf(stderr, "usage: kt1_core_tests [--cases <dir>] [--traces <dir>] [--only <id prefix>] [--from <n>] [--list]\n");
 		return 1;
 	}
 

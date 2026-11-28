@@ -15,8 +15,10 @@
 
 #include <cstdint>
 #include <span>
+#include <string_view>
 #include <vector>
 
+#include "Game/KT1/Core/Orders/DefFacts.h"
 #include "Game/KT1/Core/Orders/OrderTypes.h"
 #include "Game/KT1/Core/Orders/OrdersConfig.h"
 #include "Game/KT1/Core/Orders/OrdersState.h"
@@ -40,8 +42,15 @@ constexpr int RUN_ORDER_RULES = 2200;    // DESIGN
 
 namespace Internal {
 
-// the family's config with the fixture in use over it (data/kt1/orders.json); the defaults before Orders has read it
+// the family's config (data/kt1/orders.json), read on first use by whichever system asks first (OrdersShared.cpp)
 const Core::Orders::OrdersConfig& Config();
+// what the family knows of each unit def, by unit def id (0 unused), built on first use
+const std::vector<Core::Orders::DefFacts>& Defs();
+// a new game: forgets the config, the def facts and what the game handed over
+void ResetShared();
+// What the running data set holds and the JSON cannot, handed over by synced Lua at load (system OrderRules): a def's
+// accepted-order words (rebuilds Defs()). false: no such def.
+bool HandAccepts(int unitDefId, std::string_view words);
 Core::Orders::State* State();            // nullptr while system Orders is off
 
 // the unit's queue as the engine holds it (a factory: its orders for new units), at most `max` entries; `out` is cleared
@@ -56,6 +65,13 @@ bool Remove(int unit, std::uint32_t tag);              // an engine remove of on
 // ord_orders.lua Insert: an internal order put in front, remembered as the unit's own step when it took the front
 void InsertAhead(int unit, int commandID, std::span<const float> params, Core::Orders::OwnKind kind, int target);
 void SetMoveGoal(int unit, float x, float y, float z, float radius);
+// S12 (KT1OrdersFallback.cpp; approved by S05/S10 2026-11-28): the waypoint fallback, the cut point and the step
+// insertion. Orders LoadConfig calls it at game setup.
+void RegisterQueueHandling();
+// S12 (KT1OrdersFerry.cpp; approved by S05/S10 2026-11-28): Orders PHASE_PRE_TURN calls them in the Lua order: dropped
+// reclaims, RunSelfDestructs, move tracking, RunFerries
+void RunSelfDestructs(const SimContext& c);
+void RunFerries(const SimContext& c);
 
 // ord_refuse.lua: rules params cmb_refused and cmb_refused_frame (the HUD shows the refusal once)
 void Refuse(int unit, const char* reason, int frame);

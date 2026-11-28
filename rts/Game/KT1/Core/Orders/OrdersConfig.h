@@ -12,7 +12,6 @@
 #include <string_view>
 #include <vector>
 
-#include "Game/KT1/Core/OrderRules/OrderRuleRow.h"
 
 namespace KT1::Core::Orders {
 
@@ -308,7 +307,7 @@ struct FireConfig {
 	}
 };
 
-// the attack-move task (system AMove)
+// the attack-move task (system AMove): its own file, data/kt1/amove.json
 struct AMoveConfig {
 	float resume_tick_s = 0.2f;          // DESIGN: upkeep tick; the pick of a unit with no scanned weapon
 	float guard_factor = 1.5f;           // DESIGN: strip half width = this x the primary weapon's range
@@ -392,10 +391,8 @@ struct OrdersConfig {
 	TransportConfig transport;
 	FerryConfig ferry;
 	FireConfig fire;
-	AMoveConfig amove;
 	std::vector<AcceptRow> accepts;
 	std::vector<Fixture> fixtures;
-	OrderRules::RulesConfig rules;
 
 	template<class S> void Describe(S& s) {
 		s.Field("arrival_radius_mu", arrival_radius_mu);
@@ -413,10 +410,8 @@ struct OrdersConfig {
 		s.Object("transport", [this](auto& o) { transport.Describe(o); });
 		s.Object("ferry", [this](auto& o) { ferry.Describe(o); });
 		s.Object("fire", [this](auto& o) { fire.Describe(o); });
-		s.Object("amove", [this](auto& o) { amove.Describe(o); });
 		s.List("accepts", accepts, [](auto& o, AcceptRow& row) { row.Describe(o); });
 		s.List("fixtures", fixtures, [](auto& o, Fixture& f) { f.Describe(o); });
-		s.Object("rules", [this](auto& o) { rules.Describe(o); });
 	}
 
 	float ArrivalElmo() const { return arrival_radius_mu * elmos_per_mu; }
@@ -430,6 +425,9 @@ struct OrdersConfig {
 bool SetValue(OrdersConfig& config, std::string_view key, float value);
 // base with the named fixture's values over it; an unknown or empty name: base
 OrdersConfig WithFixture(const OrdersConfig& base, std::string_view name);
+// the attack-move values a fixture of orders.json overlays (keys fight_resume_tick, fight_guard_factor, fight_stop_share)
+bool SetValue(AMoveConfig& config, std::string_view key, float value);
+AMoveConfig WithFixture(const AMoveConfig& base, const OrdersConfig& orders, std::string_view name);
 
 } // namespace KT1::Core::Orders
 
