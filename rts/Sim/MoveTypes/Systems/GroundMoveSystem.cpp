@@ -58,6 +58,7 @@ void GroundMoveSystem::Update() {
 			unit->SanityCheck();
             #endif
 
+			if (SupComHalfRate::PlanOffTick(unit)) return; // supcom: idle half rate for the plan (SupComHalfRate.h)
 			moveType->UpdateTraversalPlan();
 		});
 		}
@@ -69,6 +70,7 @@ void GroundMoveSystem::Update() {
 				for_mt(0, view.size(), [&view, part](const int i) {
 					auto entity = (*view.storage<GroundMoveType>())[i];
 					CUnit* unit = unitHandler.GetUnit(view.get<GroundMoveType>(entity).value);
+					if (unit->supcomPlanSkip) return; // supcom: idle half rate (SupComHalfRate.h)
 					static_cast<CGroundMoveType*>(unit->moveType)->SupComPlanPart(part);
 				});
 				static TimerNameRegistrar tnrAvoid("Sim::Unit::MoveType::1c::Avoidance");
@@ -153,6 +155,7 @@ void GroundMoveSystem::Update() {
             assert(moveType != nullptr);
 
             moveType->SetMtJobId(i);
+            if (SupComHalfRate::Asleep(unit)) return; // supcom: SupComMoveSleep, a moving unit's test still finds it (SupComHalfRate.h)
             moveType->UpdateCollisionDetections();
         });
     }
@@ -187,6 +190,7 @@ void GroundMoveSystem::Update() {
             CUnit* unit = unitHandler.GetUnit(unitId.value);
             CGroundMoveType* moveType = static_cast<CGroundMoveType*>(unit->moveType);
             assert(moveType != nullptr);
+            if (unit->supcomPlanSkip) return; // supcom: idle half rate (SupComHalfRate::PlanOffTick)
             if (moveType->Update()) 
                 { SupComMoveTimers::Section st(SupComMoveTimers::GMovedEvent); eventHandler.UnitMoved(unit); }
 

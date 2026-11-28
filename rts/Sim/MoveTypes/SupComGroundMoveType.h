@@ -89,6 +89,8 @@ public:
 
 protected:
 	bool ArrivalAllowed() const override;
+	// SupComHalfRate::PlanOffTick: also no coast poll, make-way or walk-back pending
+	bool SupComPlanQuiet() const override { return CGroundMoveType::SupComPlanQuiet() && !wpCoast && !scYielding && !yieldReturning && yieldMover < 0 && !gqHeld; }
 	bool HoldLastLeg() override;
 	bool WantBackTurn() const;
 	bool WantReverse(const float3& wpDir, const float3& ffDir) const override;

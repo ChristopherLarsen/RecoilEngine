@@ -3,6 +3,8 @@
 
 #include "SupComHalfRate.h"
 
+#include <algorithm>
+
 #include "Game/GameSetup.h"
 #include "Sim/Misc/GlobalSynced.h"
 #include "Sim/MoveTypes/AAirMoveType.h"
@@ -13,10 +15,12 @@
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "System/Log/ILog.h"
+#include "System/SupComSimSwitch.h"
 
 namespace {
 	constexpr int IDLE_FRAMES = 0;    // PRF-002 v1 R2: idle from the tick after an update that shows no change
 	constexpr int HIT_FRAMES = 1;     // PRF-002 v1 R4: damage wakes the unit for the next tick
+	constexpr int SLEEP_FRAMES = 30;  // PLACEHOLDER (no released value): idle and unmoved this many frames before sleeping
 
 	int enabled = -1;                 // -1 unknown, then 0 or 1 (mod options are fixed for the game)
 	int countFrame = -1;
@@ -63,6 +67,7 @@ bool SupComHalfRate::SkipGround(CUnit* u)
 {
 	if (!Enabled())
 		return false;
+	if (u->supcomSleep) { Tally(true, true); return true; }
 	const CGroundMoveType* mt = static_cast<const CGroundMoveType*>(u->moveType);
 	const bool idle = UnitIdle(u) && u->speed.w == 0.0f && mt->SupComQuiet();
 	const bool half = Half(u, idle);
@@ -87,6 +92,35 @@ bool SupComHalfRate::LandedRest(CUnit* u)
 	if (!skip) u->supcomMoveFrame = gs->frameNum;
 	return skip;
 }
+
+bool SupComHalfRate::PlanOffTick(CUnit* u)
+{
+	static const bool on = SupComSimSwitch::Get("SupComHalfRatePlan", true);
+	static const bool sleepOn = SupComSimSwitch::Get("SupComMoveSleep", false);
+	const bool odd = ((u->id + gs->frameNum) & 1) != 0;
+	bool skip = false;
+	if (on && Enabled() && (odd || sleepOn)) {
+		// the idle test of SkipGround, read only (the health it compares with is the last pre-collision step's)
+		const CGroundMoveType* mt = static_cast<const CGroundMoveType*>(u->moveType);
+		skip = u->health == u->supcomLastHealth && !u->beingBuilt && !u->isDead && !u->IsStunned() && !u->IsSkidding() && !u->IsFalling()
+			&& u->GetTransporter() == nullptr && !u->requestRemoveUnloadTransportId && u->commandAI != nullptr && u->commandAI->commandQue.empty()
+			&& u->lastAttackFrame < gs->frameNum - HIT_FRAMES && u->speed.w == 0.0f && mt->SupComPlanQuiet();
+	}
+	bool sleep = false;
+	if (sleepOn) {
+		// SupComMoveSleep (DESIGN): idle and not moved since the last plan pass, SLEEP_FRAMES frames in a row
+		const bool still = skip && u->pos == u->supcomSleepPos;
+		u->supcomSleepRun = still ? std::min(u->supcomSleepRun + 1, SLEEP_FRAMES) : 0;
+		u->supcomSleepPos = u->pos;
+		sleep = (u->supcomSleepRun >= SLEEP_FRAMES);
+		skip = skip && (odd || sleep);
+	}
+	u->supcomSleep = sleep;
+	u->supcomPlanSkip = skip;
+	return skip;
+}
+
+bool SupComHalfRate::Asleep(const CUnit* u) { return u->supcomSleep; }
 
 void SupComHalfRate::Moved(CUnit* u) { u->supcomMoveFrame = gs->frameNum; }
 
