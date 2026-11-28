@@ -5,7 +5,7 @@
 //             and the delivery to the sound manager. The gadget stays for the facts only Lua holds (abilities, capture,
 //             fuel, layers, shields) and raises them through GG.SoundEvent, which calls this rule.
 // Switch:     mod option kt1_cues, else kt1_fam_frame; 0 (default) / 1 / check
-// Config:     data/kt1/sound_events.json (Core/Cues/CueRow.h has the keys, defaults and labels)
+// Config:     data/kt1/cues.json (Core/Cues/CueRow.h has the keys, defaults and labels)
 // Phases:     FrameStart  tracks units; opens the step's budget; movement (one share), build loops
 //             FrameEnd    shots and impacts in the order the engine raised them
 // Writes:     none to the sim. Cues leave as display events (Core/Cues/CueEvents.h); the audio side plays them
@@ -40,8 +40,13 @@ public:
 	CuesRule() : Rule({NAME, 1, true, "LuaRules/Gadgets/snd_events.lua", false, true}) {}
 	~CuesRule() override { SetActiveSim(nullptr); }
 
-	void LoadConfig(const LuaTable&) override {
-		sim.Init(Data::Load<Core::Cues::CueConfig>("sound_events"), MAX_UNITS, weaponDefHandler->NumWeaponDefs());
+	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
+		return Data::ParseInto(text, strictness, config);
+	}
+
+	// game setup, before LuaRules and any unit; the config is read by then (the rule has only the .json file)
+	void Start() override {
+		sim.Init(config, MAX_UNITS, weaponDefHandler->NumWeaponDefs());
 		const auto units = MaskOf(EventType::UnitCreated) | MaskOf(EventType::UnitDestroyed);
 		const auto hits = MaskOf(EventType::ProjectileCreated) | MaskOf(EventType::Explosion);
 		Phases::Add(NAME, Phase::FrameStart, 0, units, [this](const SimContext& c) { sim.Step(c); });
@@ -53,6 +58,7 @@ public:
 	void PushLua(lua_State* L) override { PushCuesBridge(L); }
 
 private:
+	Core::Cues::CueConfig config;
 	CueSim sim;
 };
 
@@ -61,6 +67,6 @@ private:
 
 // ORDER: after movement; reads state only
 using CuesRuleType = Cues::CuesRule;
-KT1_REGISTER_SYSTEM(Cues, 4600, CuesRuleType)
+KT1_REGISTER_SYSTEM(Cues, 4500, CuesRuleType)
 
 } // namespace KT1
