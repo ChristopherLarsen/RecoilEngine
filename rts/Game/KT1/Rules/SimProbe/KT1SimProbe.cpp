@@ -1,13 +1,15 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 rule: SimProbe (version 1). The sim host's test system: it uses every part of the host and changes nothing in a
-// game, except that it refuses one command id no unit has (game-build docs/engine/rules/simhost.md).
+// game, except that it refuses one command id no unit has (game-build docs/engine/rules/simhost.md). In check mode that
+// refusal only answers: the Lua twin refuses the same id, and the host compares the two answers. Its other validators
+// only count (they say yes and change nothing), so they are live in both modes.
 //
 // Replaces:   nothing. LuaRules/Gadgets/dev_kt1_simprobe.lua records the same things from the Lua call-ins in check mode
 // Switch:     mod option kt1_simprobe: 0 off (default), 1 on, check (on, and the gadget compares both)
 // Config:     gamedata/kt1/simprobe.lua
 //               deny_command     the command id its validator refuses (DESIGN 39990, a test id; 0: none)
 //               report_every_s   seconds between [SIMPROBE] lines (DESIGN 10)
-// Phases:     FrameStart (order 0): state from the events, and the check stream; the four later phases only count
+// Phases:     FrameStart (order 0): state from the events, and the check stream; the two later phases only count
 // Events:     all
 // State:      per unit: damage taken, unit events; both in the sync checksum
 // Display:    one [SIMPROBE] log line per report, through DisplayEvents
@@ -55,13 +57,13 @@ void SimProbeRule::LoadConfig(const LuaTable& cfg) {
 
 void SimProbeRule::RegisterPhases() {
 	Phases::Add("SimProbe", Phase::FrameStart, 0, ALL_EVENTS, [this](const SimContext& c) { FrameStart(c); });
-	for (const Phase p : {Phase::AfterCommands, Phase::AfterMove, Phase::AfterWeapons, Phase::FrameEnd})
+	for (const Phase p : {Phase::AfterUnits, Phase::FrameEnd})
 		Phases::Add("SimProbe", p, 0, ALL_EVENTS, [this](const SimContext& c) { Count(c); });
 }
 
 void SimProbeRule::RegisterValidators() {
 	const auto saw = [this](Veto v) { ++asked[static_cast<size_t>(v)]; };
-	AllowChain::AddCommand("SimProbe", 0, [this, saw](const CUnit* u, const ::Command& c, int, bool, bool) {
+	AllowChain::AddCommand("SimProbe", CheckMode(), 0, [this, saw](const CUnit* u, const ::Command& c, int, bool, bool) {
 		saw(Veto::Command);
 		if (CheckMode()) {
 			if (commands.size() < MAX_RECORDS) {
@@ -73,13 +75,13 @@ void SimProbeRule::RegisterValidators() {
 		}
 		return denyCommand == 0 || c.GetID() != denyCommand;
 	});
-	AllowChain::AddUnitCreation("SimProbe", 0, [saw](const UnitDef*, const CUnit*, const BuildInfo*, bool&) { saw(Veto::Creation); return true; });
-	AllowChain::AddUnitTransfer("SimProbe", 0, [saw](const CUnit*, int, bool) { saw(Veto::Transfer); return true; });
-	AllowChain::AddBuildStep("SimProbe", 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::BuildStep); return true; });
-	AllowChain::AddCaptureStep("SimProbe", 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::CaptureStep); return true; });
-	AllowChain::AddFeatureBuildStep("SimProbe", 0, [saw](const CUnit*, const CFeature*, float) { saw(Veto::FeatureStep); return true; });
-	AllowChain::AddWeaponTarget("SimProbe", 0, [saw](unsigned, unsigned, unsigned, unsigned, float*) { saw(Veto::Target); return true; });
-	AllowChain::AddPreDamage("SimProbe", 0, [saw](const PreDamage&, float&, float&) { saw(Veto::PreDamage); });
+	AllowChain::AddUnitCreation("SimProbe", false, 0, [saw](const UnitDef*, const CUnit*, const BuildInfo*, bool&) { saw(Veto::Creation); return true; });
+	AllowChain::AddUnitTransfer("SimProbe", false, 0, [saw](const CUnit*, int, bool) { saw(Veto::Transfer); return true; });
+	AllowChain::AddBuildStep("SimProbe", false, 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::BuildStep); return true; });
+	AllowChain::AddCaptureStep("SimProbe", false, 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::CaptureStep); return true; });
+	AllowChain::AddFeatureBuildStep("SimProbe", false, 0, [saw](const CUnit*, const CFeature*, float) { saw(Veto::FeatureStep); return true; });
+	AllowChain::AddWeaponTarget("SimProbe", false, 0, [saw](unsigned, unsigned, unsigned, unsigned, float*) { saw(Veto::Target); return true; });
+	AllowChain::AddPreDamage("SimProbe", false, 0, [saw](const PreDamage&, float&, float&) { saw(Veto::PreDamage); });
 }
 
 void SimProbeRule::FrameStart(const SimContext& c) {
@@ -100,9 +102,8 @@ void SimProbeRule::Count(const SimContext& c) {
 
 void SimProbeRule::Report(int frame) {
 	char line[Core::SimHost::DISPLAY_TEXT];
-	std::snprintf(line, sizeof(line), "[SIMPROBE] f=%d seen=%llu/%llu/%llu/%llu/%llu cmds=%llu predmg=%llu units=%d",
+	std::snprintf(line, sizeof(line), "[SIMPROBE] f=%d seen=%llu/%llu/%llu cmds=%llu predmg=%llu units=%d",
 		frame, (unsigned long long)seen[0], (unsigned long long)seen[1], (unsigned long long)seen[2],
-		(unsigned long long)seen[3], (unsigned long long)seen[4],
 		(unsigned long long)asked[static_cast<size_t>(Veto::Command)],
 		(unsigned long long)asked[static_cast<size_t>(Veto::PreDamage)], state.units.index.Size());
 	DisplayEvents::Log(line);

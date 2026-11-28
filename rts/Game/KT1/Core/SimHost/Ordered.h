@@ -44,14 +44,6 @@ private:
 	std::vector<Item> items;
 };
 
-// A veto chain: every validator in order, the first "no" ends it (the Lua gadget handler's rule for Allow* call-ins).
-// KT1 hot
-template<class Fn, class... A> bool AllAllow(const Ordered<Fn>& chain, A&&... args) {
-	for (const auto& item : chain)
-		if (!item.value(args...)) return false;
-	return true;
-}
-
 } // namespace KT1::Core::SimHost
 
 #endif

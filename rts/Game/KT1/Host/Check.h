@@ -5,7 +5,8 @@
 //             KT1::Check::Add("Orders", compared, differed, "what differed");
 // From Lua:   Spring.KT1.Check.Report("Orders", compared, differed [, "what differed"])
 //             Spring.KT1.Check.Total()                                       the total lines now (a test run's end)
-// A step with differences logs one line at its end; totals are logged every TOTAL_EVERY_S, at game over, and on Total().
+// A step with differences logs one line at its end; cumulative totals are logged every TOTAL_EVERY_S, at game over, and
+// on Total(). The last total line of a system is its result.
 
 #ifndef KT1_HOST_CHECK_H
 #define KT1_HOST_CHECK_H

@@ -1,12 +1,13 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 SimHost core: the phases of a sim step and the id range a phase function works over. No engine include.
 //
-// Where each phase sits in CGame::SimFrame:
-//   FrameStart     before any Lua GameFrame; the events of the time between steps (orders from the net) are in
-//   AfterCommands  after the Lua GameFrame, before units move
-//   AfterMove      after the unit update (move types, slow update, weapons) and path updates, before projectiles move
-//   AfterWeapons   after projectiles, features, unit scripts, LOS and interceptors: this step's hits are applied
-//   FrameEnd       after Lua GameFramePost; then the checksum and the display events are closed
+// Where each phase sits in CGame::SimFrame (fixed; Host/Phases.h):
+//   FrameStart   immediately BEFORE the Lua GameFrame call-in, after the engine's own rules: a ported GameFrame sees the
+//                sim state the Lua one saw
+//   AfterUnits   after the unit handler's update: movement and weapons are both done
+//   FrameEnd     after projectiles, everything else and Lua GameFramePost; then the step is closed
+// There is no phase between unit movement and weapon update. It would need a stock hook inside the unit update, agreed
+// with the New Engine plan, which will slice there.
 
 #ifndef KT1_PHASE_H
 #define KT1_PHASE_H
@@ -17,12 +18,12 @@
 
 namespace KT1::Core::SimHost {
 
-enum class Phase : uint8_t { FrameStart, AfterCommands, AfterMove, AfterWeapons, FrameEnd, Count };
+enum class Phase : uint8_t { FrameStart, AfterUnits, FrameEnd, Count };
 
 constexpr size_t PHASES = static_cast<size_t>(Phase::Count);
 
 constexpr const char* PhaseName(Phase p) {
-	constexpr const char* names[PHASES] = {"FrameStart", "AfterCommands", "AfterMove", "AfterWeapons", "FrameEnd"};
+	constexpr const char* names[PHASES] = {"FrameStart", "AfterUnits", "FrameEnd"};
 	return (p < Phase::Count) ? names[static_cast<size_t>(p)] : "?";
 }
 

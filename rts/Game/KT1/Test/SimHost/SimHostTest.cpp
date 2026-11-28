@@ -10,6 +10,7 @@
 #include "Game/KT1/Core/SimHost/SimEventLog.h"
 #include "Game/KT1/Core/SimHost/StateHash.h"
 #include "Game/KT1/Core/SimHost/UnitColumns.h"
+#include "Game/KT1/Core/SimHost/Validators.h"
 #include "Game/KT1/Core/SimProbe/SimProbeCore.h"
 
 #include <functional>
@@ -144,7 +145,7 @@ KT1_CASE("SIMHOST-NOALLOC", "warm event lists and display queue allocate nothing
 		b.ForEachRaised([&](const Event& e) { sink += e.id; });
 		b.ForEachById(EventType::UnitDamaged, scratch, [&](const Event& e) { sink -= e.id; });
 		log.Compact();
-		q.Publish();
+		q.Publish(0);
 		q.Replay([&](const DisplayEvent& d) { sink += d.id; });
 	};
 	for (int i = 0; i < 4; ++i) step();
@@ -154,25 +155,46 @@ KT1_CASE("SIMHOST-NOALLOC", "warm event lists and display queue allocate nothing
 	KT1_CHECK(sink != 0);
 }
 
-KT1_CASE("SIMHOST-CHAIN", "validators run by (order, name); the first no ends the chain") {
-	Ordered<std::function<bool(std::string&)>> chain;
-	const auto v = [](const char* tag, bool allow) {
-		return [tag, allow](std::string& seen) { seen += tag; return allow; };
-	};
-	chain.Add(10, "zeta", v("z", true));
-	chain.Add(10, "alpha", v("a", true));
-	chain.Add(-5, "late", v("l", true));
-	chain.Add(20, "tail", v("t", true));
+namespace {
+	using Fn = std::function<bool(std::string&)>;
+	void AddValidator(Chain<Fn>& chain, int order, const char* name, const char* tag, bool allow, bool check = false) {
+		chain.Add(order, name, {name, check, [tag, allow](std::string& seen) { seen += tag; return allow; }});
+	}
+}
+
+KT1_CASE("SIMHOST-CHAIN", "validators run by (order, name); the first live no ends the chain") {
+	Chain<Fn> chain;
+	AddValidator(chain, 10, "zeta", "z", true);
+	AddValidator(chain, 10, "alpha", "a", true);
+	AddValidator(chain, -5, "late", "l", true);
+	AddValidator(chain, 20, "tail", "t", true);
 	std::string seen;
-	KT1_CHECK(AllAllow(chain, seen));
+	Shadow<bool> shadow;
+	KT1_CHECK(AskVeto(chain, shadow, seen));
 	KT1_CHECK_EQ(seen, std::string("lazt"));
-	chain.Add(10, "mid", v("m", false));
+	AddValidator(chain, 10, "mid", "m", false);
 	seen.clear();
-	KT1_CHECK(!AllAllow(chain, seen));
+	KT1_CHECK(!AskVeto(chain, shadow, seen));
 	KT1_CHECK_EQ(seen, std::string("lam"));
-	const Ordered<std::function<bool(std::string&)>> none;
+	KT1_CHECK_EQ(shadow.Size(), 0);
+	const Chain<Fn> none;
 	seen.clear();
-	KT1_CHECK(AllAllow(none, seen) && seen.empty());
+	KT1_CHECK(AskVeto(none, shadow, seen) && seen.empty());
+}
+
+KT1_CASE("SIMHOST-CHAIN-CHECK", "a check-mode validator never refuses; its answer is kept for the comparison") {
+	Chain<Fn> chain;
+	AddValidator(chain, 1, "probe", "p", false, true);
+	AddValidator(chain, 2, "live", "v", true);
+	AddValidator(chain, 3, "other", "o", true, true);
+	std::string seen, answers;
+	Shadow<bool> shadow;
+	KT1_CHECK(AskVeto(chain, shadow, seen));
+	KT1_CHECK_EQ(seen, std::string("pvo"));
+	shadow.Each([&](const std::string& system, bool yes) { answers += system + (yes ? "=yes " : "=no "); });
+	KT1_CHECK_EQ(answers, std::string("probe=no other=yes "));
+	for (int i = 0; i < 20; ++i) shadow.Keep(std::string("x"), true);
+	KT1_CHECK_EQ(shadow.Size(), SHADOW_CAPACITY);
 }
 
 KT1_CASE("SIMHOST-PHASE", "phase names and half-open id ranges") {
@@ -181,6 +203,8 @@ KT1_CASE("SIMHOST-PHASE", "phase names and half-open id ranges") {
 	KT1_CHECK(all.Contains(0) && all.Contains(1000000));
 	KT1_CHECK(half.Contains(10) && half.Contains(19) && !half.Contains(20) && !half.Contains(9));
 	KT1_CHECK_EQ(std::string(PhaseName(Phase::FrameStart)), std::string("FrameStart"));
+	KT1_CHECK_EQ(std::string(PhaseName(Phase::AfterUnits)), std::string("AfterUnits"));
+	KT1_CHECK_EQ(PHASES, static_cast<size_t>(3));
 	KT1_CHECK_EQ(std::string(PhaseName(Phase::FrameEnd)), std::string("FrameEnd"));
 }
 
@@ -200,25 +224,46 @@ KT1_CASE("SIMHOST-DISPLAY", "display events: after publish, in emit order, once"
 	DisplayQueue q;
 	const auto emit = [&](int id) { DisplayEvent d; d.kind = DisplayKind::Sound; d.id = id; q.Emit(d); };
 	std::string seen;
-	const auto replay = [&]() { seen.clear(); q.Replay([&](const DisplayEvent& d) { seen += std::to_string(d.id) + " "; }); };
-	emit(1);
+	const auto replay = [&]() {
+		seen.clear();
+		q.Replay([&](const DisplayEvent& d) { seen += std::to_string(d.id) + "@" + std::to_string(d.step) + " "; });
+	};
+	emit(1);   // a system emits in step 7
+	KT1_CHECK_EQ(q.Pending(), static_cast<size_t>(0));
 	replay();
-	KT1_CHECK(seen.empty());   // the step is not published
+	KT1_CHECK(seen.empty());   // the step is not published: nothing to see
 	emit(2);
-	q.Publish();
+	q.Publish(7);
 	emit(3);
+	KT1_CHECK_EQ(q.Pending(), static_cast<size_t>(2));   // published, and seen by nobody until Replay
 	replay();
-	KT1_CHECK_EQ(seen, std::string("1 2 "));
-	q.Publish();
+	KT1_CHECK_EQ(seen, std::string("1@7 2@7 "));
+	replay();
+	KT1_CHECK(seen.empty());   // once
+	q.Publish(8);
 	emit(4);
-	q.Publish();
+	q.Publish(9);
 	replay();
-	KT1_CHECK_EQ(seen, std::string("3 4 "));   // two steps before a replay: both
-	replay();
-	KT1_CHECK(seen.empty());
+	KT1_CHECK_EQ(seen, std::string("3@8 4@9 "));   // two steps without a drawn frame: step order
 	DisplayEvent d;
 	d.SetText(std::string(500, 'x').c_str());
 	KT1_CHECK(std::string(d.text).size() == DISPLAY_TEXT - 1);
+}
+
+KT1_CASE("SIMHOST-DISPLAY-CAP", "with no replay the published events stay bounded: the oldest go, counted") {
+	DisplayQueue q;
+	const int total = static_cast<int>(DISPLAY_PUBLISHED_MAX) + 10;
+	for (int i = 0; i < total; ++i) {
+		DisplayEvent d;
+		d.id = i;
+		q.Emit(d);
+		q.Publish(i);
+	}
+	KT1_CHECK_EQ(q.Pending(), DISPLAY_PUBLISHED_MAX);
+	KT1_CHECK_EQ(q.Dropped(), static_cast<uint64_t>(10));
+	int first = -1;
+	q.Replay([&](const DisplayEvent& d) { if (first < 0) first = d.id; });
+	KT1_CHECK_EQ(first, 10);
 }
 
 KT1_CASE("SIMPROBE-STATE", "units are tracked from creation to death, and a reused id starts blank") {
@@ -275,6 +320,6 @@ KT1_CASE("SIMHOST-CHECK", "check lines: a step line only on differences, totals 
 	t.CloseStep(3, add);
 	KT1_CHECK(lines.empty());
 	t.Totals(add);
-	KT1_CHECK_EQ(lines, std::string("[KT1CHECK] Abc total n=60 diffs=30;[KT1CHECK] Zed total n=5 diffs=0;"));
+	KT1_CHECK_EQ(lines, std::string("[KT1CHECK] Abc total n=60 diffs=30 cumulative;[KT1CHECK] Zed total n=5 diffs=0 cumulative;"));
 	KT1_CHECK(CheckTally::SameBits(1.5f, 1.5f) && !CheckTally::SameBits(0.0f, -0.0f));
 }

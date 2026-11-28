@@ -4,7 +4,7 @@
 // Per system: how many values were compared and how many differed, this step and in the whole game. The lines are the
 // ones tools/engine/lf_proof.py reads:
 //   [KT1CHECK] <System> f=<step> n=<compared> diffs=<k>      a step with differences
-//   [KT1CHECK] <System> total n=<sum> diffs=<sum>            the game so far
+//   [KT1CHECK] <System> total n=<sum> diffs=<sum> cumulative   the game so far: the last one is the result
 // Values are compared bit for bit as float, the engine's Lua number.
 
 #ifndef KT1_CHECK_TALLY_H
@@ -47,7 +47,7 @@ public:
 
 	template<class F> void Totals(F&& fn) const {
 		for (const Row& r : rows)
-			fn("[KT1CHECK] " + r.system + " total n=" + std::to_string(r.n) + " diffs=" + std::to_string(r.diffs));
+			fn("[KT1CHECK] " + r.system + " total n=" + std::to_string(r.n) + " diffs=" + std::to_string(r.diffs) + " cumulative");
 	}
 
 	bool Empty() const { return rows.empty(); }
