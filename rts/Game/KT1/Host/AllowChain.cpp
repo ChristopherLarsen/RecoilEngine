@@ -30,8 +30,8 @@ struct Chains {
 
 Chains chains;
 
-template<class Fn> void Add(Chain<Fn>& chain, const char* system, bool check, int order, Fn fn) {
-	chain.Add(order, system, {system, check, std::move(fn)});
+template<class Fn> void Add(Chain<Fn>& chain, const char* system, int order, Fn fn) {
+	chain.Add(order, system, {system, Check::InCheck(system), std::move(fn)});
 }
 
 Check::Value Answer(float first) {
@@ -43,21 +43,21 @@ Check::Value Answer(float first) {
 // A veto chain whose check-mode answers go to the check helper under the call-in's keys.
 // KT1 hot
 template<class Fn, class... Args> bool Veto(const Chain<Fn>& chain, const char* callIn, int id1, int id2, Args&&... args) {
-	return AskVeto(chain, [&](const auto& system, bool yes) {
+	return AskVeto(chain, Check::Gate(), [&](const auto& system, bool yes) {
 		Check::Native(system.c_str(), callIn, id1, id2, 0, Answer(yes ? 1.0f : 0.0f));
 	}, args...);
 }
 
 } // namespace
 
-void AllowChain::AddCommand(const char* system, bool check, int order, CommandFn fn) { Add(chains.command, system, check, order, std::move(fn)); }
-void AllowChain::AddUnitCreation(const char* system, bool check, int order, CreationFn fn) { Add(chains.creation, system, check, order, std::move(fn)); }
-void AllowChain::AddUnitTransfer(const char* system, bool check, int order, TransferFn fn) { Add(chains.transfer, system, check, order, std::move(fn)); }
-void AllowChain::AddBuildStep(const char* system, bool check, int order, UnitStepFn fn) { Add(chains.build, system, check, order, std::move(fn)); }
-void AllowChain::AddCaptureStep(const char* system, bool check, int order, UnitStepFn fn) { Add(chains.capture, system, check, order, std::move(fn)); }
-void AllowChain::AddFeatureBuildStep(const char* system, bool check, int order, FeatureStepFn fn) { Add(chains.featureBuild, system, check, order, std::move(fn)); }
-void AllowChain::AddWeaponTarget(const char* system, bool check, int order, TargetFn fn) { Add(chains.target, system, check, order, std::move(fn)); }
-void AllowChain::AddPreDamage(const char* system, bool check, int order, DamageFn fn) { Add(chains.damage, system, check, order, std::move(fn)); }
+void AllowChain::AddCommand(const char* system, int order, CommandFn fn) { Add(chains.command, system, order, std::move(fn)); }
+void AllowChain::AddUnitCreation(const char* system, int order, CreationFn fn) { Add(chains.creation, system, order, std::move(fn)); }
+void AllowChain::AddUnitTransfer(const char* system, int order, TransferFn fn) { Add(chains.transfer, system, order, std::move(fn)); }
+void AllowChain::AddBuildStep(const char* system, int order, UnitStepFn fn) { Add(chains.build, system, order, std::move(fn)); }
+void AllowChain::AddCaptureStep(const char* system, int order, UnitStepFn fn) { Add(chains.capture, system, order, std::move(fn)); }
+void AllowChain::AddFeatureBuildStep(const char* system, int order, FeatureStepFn fn) { Add(chains.featureBuild, system, order, std::move(fn)); }
+void AllowChain::AddWeaponTarget(const char* system, int order, TargetFn fn) { Add(chains.target, system, order, std::move(fn)); }
+void AllowChain::AddPreDamage(const char* system, int order, DamageFn fn) { Add(chains.damage, system, order, std::move(fn)); }
 void AllowChain::Reset() { chains = Chains(); }
 
 AllowChain::Call::Call() : mark(Check::Mark()) {}
@@ -81,6 +81,7 @@ bool AllowChain::AskFeatureBuildStep(const CUnit* builder, const CFeature* f, fl
 
 bool AllowChain::AskUnitCreation(const UnitDef* def, const CUnit* builder, const BuildInfo* info, bool& drop) {
 	for (const auto& item : chains.creation) {
+		const Check::Running running(item.value.system.c_str(), item.value.check);
 		bool itemDrop = true;
 		const bool yes = item.value.fn(def, builder, info, itemDrop);
 		if (item.value.check) {
@@ -99,6 +100,7 @@ bool AllowChain::AskUnitCreation(const UnitDef* def, const CUnit* builder, const
 // KT1 hot
 bool AllowChain::AskWeaponTarget(unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority) {
 	for (const auto& item : chains.target) {
+		const Check::Running running(item.value.system.c_str(), item.value.check);
 		if (!item.value.check) {
 			if (!item.value.fn(attackerID, targetID, weaponNum, weaponDefID, priority)) return false;
 			continue;
@@ -124,6 +126,7 @@ AllowChain::Damaged AllowChain::AskPreDamaged(const PreDamage& d, float& damage,
 	if (chains.damage.Empty()) return native;
 	const float incoming = damage;
 	for (const auto& item : chains.damage) {
+		const Check::Running running(item.value.system.c_str(), item.value.check);
 		float own = item.value.check ? incoming : damage;
 		float impulse = 1.0f;
 		item.value.fn(d, own, impulse);

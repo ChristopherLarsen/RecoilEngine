@@ -1,7 +1,8 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 Host: the only way a synced system causes a display effect (SIM-DRAW-PARALLEL 13.4, 13.8). No engine include.
 //
-// Sim side: Emit during the step; the events are published, stamped with the step, at its end (Phases, FrameEnd).
+// Sim side: Emit during the step (a system in check mode emits nothing: Check::MayWrite); the events are published,
+// stamped with the step, at its end (Phases, FrameEnd).
 // Draw side: the draw host calls Replay once per drawn frame, in its Update phase; the events of every step published
 // since the last call come in step order, each step's in emit order. Nothing in SimFrame calls Replay, and nothing in
 // the sim reads the queue back. The sink that plays sounds and effects is draw-side code (Host/DisplaySink.cpp, F06);
@@ -18,7 +19,7 @@ namespace KT1 {
 
 class DisplayEvents {
 public:
-	static void Emit(const Core::SimHost::DisplayEvent& e);
+	static bool Emit(const Core::SimHost::DisplayEvent& e);   // false: skipped (check mode)
 
 	static void Sound(int soundId, const float3& pos, float volume);
 	static void Effect(int generatorId, const float3& pos, const float3& dir, float damage, float radius, int ownerId);

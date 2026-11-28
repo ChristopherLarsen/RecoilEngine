@@ -4,9 +4,10 @@
 // Per system: how many values were compared and how many differed, this step and in the whole game. The lines are the
 // ones tools/engine/lf_proof.py reads:
 //   [KT1CHECK] <System> f=<step> n=<compared> diffs=<k>      a step with differences
-//   [KT1CHECK] <System> total n=<sum> diffs=<sum> unmatched=<u> cumulative
+//   [KT1CHECK] <System> total n=<sum> diffs=<sum> unmatched=<u> writes_skipped=<w> cumulative
 //                                  the game so far: the last one is the result. unmatched: answers with nothing to compare
-//                                  with (CheckPairs.h); a system whose count is not 0 explains it
+//                                  with (CheckPairs.h); a system whose count is not 0 explains it. writes_skipped: writes
+//                                  its native code tried in check mode (WriteGate.h)
 // Values are compared bit for bit as float, the engine's Lua number.
 
 #ifndef KT1_CHECK_TALLY_H
@@ -38,6 +39,7 @@ public:
 	}
 
 	void Unmatched(const std::string& system, int64_t count) { Find(system).unmatched += count; }
+	void Skipped(const std::string& system, int64_t writes) { Find(system).skipped += writes; }
 
 	// fn(line) for every system that differed this step; then the step's counts start over.
 	template<class F> void CloseStep(int step, F&& fn) {
@@ -52,7 +54,7 @@ public:
 	template<class F> void Totals(F&& fn) const {
 		for (const Row& r : rows)
 			fn("[KT1CHECK] " + r.system + " total n=" + std::to_string(r.n) + " diffs=" + std::to_string(r.diffs) +
-				" unmatched=" + std::to_string(r.unmatched) + " cumulative");
+				" unmatched=" + std::to_string(r.unmatched) + " writes_skipped=" + std::to_string(r.skipped) + " cumulative");
 	}
 
 	bool Empty() const { return rows.empty(); }
@@ -61,7 +63,7 @@ public:
 private:
 	struct Row {
 		std::string system;
-		int64_t n = 0, diffs = 0, stepN = 0, stepDiffs = 0, unmatched = 0;
+		int64_t n = 0, diffs = 0, stepN = 0, stepDiffs = 0, unmatched = 0, skipped = 0;
 		int described = 0;
 	};
 

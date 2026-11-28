@@ -2,7 +2,8 @@
 // KT1 rule: SimProbe (version 1). The sim host's test system: it uses every part of the host and changes nothing in a
 // game, except that it refuses one command id no unit has (game-build docs/engine/rules/simhost.md). In check mode that
 // refusal only answers: the Lua twin refuses the same id and reports its answer, and the host compares the two. Its other
-// validators only count (they say yes and change nothing), so they are live in both modes.
+// validators only count and are registered with the switch on. In check mode it also tries one self-destruct order and one
+// display event on the first unit: the host skips both (writes_skipped=2), or the game shows it.
 //
 // Replaces:   nothing. LuaRules/Gadgets/dev_kt1_simprobe.lua records the same things from the Lua call-ins in check mode
 // Switch:     mod option kt1_simprobe: 0 off (default), 1 on, check (on, and the gadget compares both)
@@ -11,7 +12,7 @@
 //               report_every_s   seconds between [SIMPROBE] lines (DESIGN 10)
 // Phases:     FrameStart (order 0): state from the events, and the check stream; the two later phases only count
 // Events:     all
-// State:      per unit: damage taken, unit events; both in the sync checksum
+// State:      per unit: damage taken, unit events; both in the sync checksum (switch on)
 // Display:    one [SIMPROBE] log line per report, through DisplayEvents
 // Timer:      KT1::SimProbe
 // Lua:        Spring.KT1.SimProbe.Take / Commands / State / Counts / DenyCommand (KT1SimProbeLua.cpp)
@@ -43,7 +44,7 @@ namespace {
 constexpr size_t MAX_RECORDS = 1 << 20;   // DESIGN: check-mode records held for a gadget that does not take them
 }
 
-SimProbeRule::SimProbeRule() : Rule({"SimProbe", 1, true, "nothing (LuaRules/Gadgets/dev_kt1_simprobe.lua checks it)", false}) {}
+SimProbeRule::SimProbeRule() : Rule({"SimProbe", 1, true, "nothing (LuaRules/Gadgets/dev_kt1_simprobe.lua checks it)", false, true}) {}
 
 void SimProbeRule::LoadConfig(const LuaTable& cfg) {
 	denyCommand = cfg.GetInt("deny_command", 39990);
@@ -63,7 +64,7 @@ void SimProbeRule::RegisterPhases() {
 
 void SimProbeRule::RegisterValidators() {
 	const auto saw = [this](Veto v) { ++asked[static_cast<size_t>(v)]; };
-	AllowChain::AddCommand("SimProbe", CheckMode(), 0, [this, saw](const CUnit* u, const ::Command& c, int, bool, bool) {
+	AllowChain::AddCommand("SimProbe", 0, [this, saw](const CUnit* u, const ::Command& c, int, bool, bool) {
 		saw(Veto::Command);
 		if (CheckMode()) {
 			if (commands.size() < MAX_RECORDS) {
@@ -75,29 +76,42 @@ void SimProbeRule::RegisterValidators() {
 		}
 		return denyCommand == 0 || c.GetID() != denyCommand;
 	});
-	AllowChain::AddUnitCreation("SimProbe", false, 0, [saw](const UnitDef*, const CUnit*, const BuildInfo*, bool&) { saw(Veto::Creation); return true; });
-	AllowChain::AddUnitTransfer("SimProbe", false, 0, [saw](const CUnit*, int, bool) { saw(Veto::Transfer); return true; });
-	AllowChain::AddBuildStep("SimProbe", false, 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::BuildStep); return true; });
-	AllowChain::AddCaptureStep("SimProbe", false, 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::CaptureStep); return true; });
-	AllowChain::AddFeatureBuildStep("SimProbe", false, 0, [saw](const CUnit*, const CFeature*, float) { saw(Veto::FeatureStep); return true; });
-	AllowChain::AddWeaponTarget("SimProbe", false, 0, [saw](unsigned, unsigned, unsigned, unsigned, float*) { saw(Veto::Target); return true; });
-	AllowChain::AddPreDamage("SimProbe", false, 0, [saw](const PreDamage&, float&, float&) { saw(Veto::PreDamage); });
+	if (CheckMode()) return;   // the counting validators: the twin answers for the command validator only
+	AllowChain::AddUnitCreation("SimProbe", 0, [saw](const UnitDef*, const CUnit*, const BuildInfo*, bool&) { saw(Veto::Creation); return true; });
+	AllowChain::AddUnitTransfer("SimProbe", 0, [saw](const CUnit*, int, bool) { saw(Veto::Transfer); return true; });
+	AllowChain::AddBuildStep("SimProbe", 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::BuildStep); return true; });
+	AllowChain::AddCaptureStep("SimProbe", 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::CaptureStep); return true; });
+	AllowChain::AddFeatureBuildStep("SimProbe", 0, [saw](const CUnit*, const CFeature*, float) { saw(Veto::FeatureStep); return true; });
+	AllowChain::AddWeaponTarget("SimProbe", 0, [saw](unsigned, unsigned, unsigned, unsigned, float*) { saw(Veto::Target); return true; });
+	AllowChain::AddPreDamage("SimProbe", 0, [saw](const PreDamage&, float&, float&) { saw(Veto::PreDamage); });
 }
 
 void SimProbeRule::FrameStart(const SimContext& c) {
+	int first = -1;
 	c.events.ForEachRaised([&](const Event& e) {
 		++seen[static_cast<size_t>(c.phase)];
 		state.Apply(e);
-		if (!CheckMode()) return;
+		if (!c.check) return;
+		if (first < 0 && e.type == Core::SimHost::EventType::UnitCreated) first = e.id;
 		if (stream.size() < MAX_RECORDS) stream.push_back(e);
 		else ++dropped;
 	});
+	if (first >= 0 && !tried) TryWrites(c, first);
+}
+
+// Check mode only: neither may reach the game (KT1Register.h).
+void SimProbeRule::TryWrites(const SimContext& c, int unitID) {
+	tried = true;
+	c.Order(unitID, ::Command(CMD_SELFD));
+	Core::SimHost::DisplayEvent e;
+	e.SetText("[SIMPROBE] a check-mode display event arrived");
+	c.Emit(e);
 }
 
 void SimProbeRule::Count(const SimContext& c) {
 	for (size_t t = 0; t < Core::SimHost::EVENT_TYPES; ++t)
 		seen[static_cast<size_t>(c.phase)] += c.events.Size(static_cast<Core::SimHost::EventType>(t));
-	if (c.phase == Phase::FrameEnd && c.frame % reportEvery == 0) Report(c.frame);
+	if (c.phase == Phase::FrameEnd && !c.check && c.frame % reportEvery == 0) Report(c.frame);
 }
 
 void SimProbeRule::Report(int frame) {

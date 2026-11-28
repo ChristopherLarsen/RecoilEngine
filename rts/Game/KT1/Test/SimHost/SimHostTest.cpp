@@ -12,6 +12,7 @@
 #include "Game/KT1/Core/SimHost/StateHash.h"
 #include "Game/KT1/Core/SimHost/UnitColumns.h"
 #include "Game/KT1/Core/SimHost/Validators.h"
+#include "Game/KT1/Core/SimHost/WriteGate.h"
 #include "Game/KT1/Core/SimProbe/SimProbeCore.h"
 
 #include <functional>
@@ -170,18 +171,19 @@ KT1_CASE("SIMHOST-CHAIN", "validators run by (order, name); the first live no en
 	AddValidator(chain, -5, "late", "l", true);
 	AddValidator(chain, 20, "tail", "t", true);
 	std::string seen;
+	WriteGate gate;
 	int checked = 0;
 	const auto count = [&](const std::string&, bool) { ++checked; };
-	KT1_CHECK(AskVeto(chain, count, seen));
+	KT1_CHECK(AskVeto(chain, gate, count, seen));
 	KT1_CHECK_EQ(seen, std::string("lazt"));
 	AddValidator(chain, 10, "mid", "m", false);
 	seen.clear();
-	KT1_CHECK(!AskVeto(chain, count, seen));
+	KT1_CHECK(!AskVeto(chain, gate, count, seen));
 	KT1_CHECK_EQ(seen, std::string("lam"));
 	KT1_CHECK_EQ(checked, 0);
 	const Chain<Fn> none;
 	seen.clear();
-	KT1_CHECK(AskVeto(none, count, seen) && seen.empty());
+	KT1_CHECK(AskVeto(none, gate, count, seen) && seen.empty());
 }
 
 KT1_CASE("SIMHOST-CHAIN-CHECK", "a check-mode validator never refuses; its answer goes to the comparison") {
@@ -190,7 +192,8 @@ KT1_CASE("SIMHOST-CHAIN-CHECK", "a check-mode validator never refuses; its answe
 	AddValidator(chain, 2, "live", "v", true);
 	AddValidator(chain, 3, "other", "o", true, true);
 	std::string seen, answers;
-	KT1_CHECK(AskVeto(chain, [&](const std::string& system, bool yes) { answers += system + (yes ? "=yes " : "=no "); }, seen));
+	WriteGate gate;
+	KT1_CHECK(AskVeto(chain, gate, [&](const std::string& system, bool yes) { answers += system + (yes ? "=yes " : "=no "); }, seen));
 	KT1_CHECK_EQ(seen, std::string("pvo"));
 	KT1_CHECK_EQ(answers, std::string("probe=no other=yes "));
 }
@@ -218,7 +221,7 @@ namespace {
 	};
 	std::string Counts(int n, int diffs, int unmatched) {
 		return "[KT1CHECK] S total n=" + std::to_string(n) + " diffs=" + std::to_string(diffs) + " unmatched=" +
-			std::to_string(unmatched) + " cumulative";
+			std::to_string(unmatched) + " writes_skipped=0 cumulative";
 	}
 }
 
@@ -350,6 +353,32 @@ KT1_CASE("SIMHOST-DISPLAY-CAP", "with no replay the published events stay bounde
 	KT1_CHECK_EQ(first, 10);
 }
 
+KT1_CASE("SIMHOST-GATE", "check mode is compute-only: its writes are skipped and counted, a validator's too") {
+	CheckTally tally;
+	WriteGate gate;
+	int written = 0;
+	const auto write = [&]() { if (gate.Allow(tally)) ++written; };
+	write();   // no system running
+	{
+		const WriteGate::Scope probe(gate, "S", true);
+		write();   // the order
+		{
+			const WriteGate::Scope live(gate, "Live", false);
+			write();   // a nested live system writes
+		}
+		write();   // the display event
+	}
+	write();
+	KT1_CHECK_EQ(written, 3);
+	Chain<std::function<bool()>> chain;
+	chain.Add(0, "S", {"S", true, [&]() { write(); return false; }});
+	KT1_CHECK(AskVeto(chain, gate, [](const std::string&, bool) {}));
+	KT1_CHECK_EQ(written, 3);
+	std::string out;
+	tally.Totals([&](const std::string& s) { out += s; });
+	KT1_CHECK_EQ(out, std::string("[KT1CHECK] S total n=0 diffs=0 unmatched=0 writes_skipped=3 cumulative"));
+}
+
 KT1_CASE("SIMPROBE-STATE", "units are tracked from creation to death, and a reused id starts blank") {
 	KT1::Core::SimProbe::State s;
 	s.Init(32);
@@ -404,7 +433,7 @@ KT1_CASE("SIMHOST-CHECK", "check lines: a step line only on differences, totals 
 	t.CloseStep(3, add);
 	KT1_CHECK(lines.empty());
 	t.Totals(add);
-	KT1_CHECK_EQ(lines, std::string("[KT1CHECK] Abc total n=60 diffs=30 unmatched=0 cumulative;"
-		"[KT1CHECK] Zed total n=5 diffs=0 unmatched=0 cumulative;"));
+	KT1_CHECK_EQ(lines, std::string("[KT1CHECK] Abc total n=60 diffs=30 unmatched=0 writes_skipped=0 cumulative;"
+		"[KT1CHECK] Zed total n=5 diffs=0 unmatched=0 writes_skipped=0 cumulative;"));
 	KT1_CHECK(CheckTally::SameBits(1.5f, 1.5f) && !CheckTally::SameBits(0.0f, -0.0f));
 }

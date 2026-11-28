@@ -1,8 +1,9 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 Host: native validators for the engine's Allow* call-ins, run before the Lua gadget handler's.
 //
-// A system registers at game setup (orders can arrive before the first step), saying whether it is in check mode:
-//   KT1::AllowChain::AddCommand("Orders", SwitchMode() == Mode::Check, 0, [this](const CUnit* u, const Command& c, ...) {...});
+// A system registers at game setup (orders can arrive before the first step), under its registered name:
+//   KT1::AllowChain::AddCommand("Orders", 0, [this](const CUnit* u, const Command& c, ...) {...});
+// Whether its validators are in check mode is the system's switch, asked of the registry.
 // Order within a chain: (order, system name).
 //
 // Live (switch on): in a veto chain the first "no" ends it and Lua is not asked, as when an earlier gadget says no. When
@@ -13,7 +14,7 @@
 // gadget ahead of it in layer order for side effects in that call-in, and lists what it found in its rule doc. A
 // validator with a side effect says so there.
 //
-// Check mode: a validator never decides and changes nothing. Its answer is compared with the answer of the ONE Lua handler
+// Check mode: a validator never decides and writes nothing (Check::MayWrite is false inside it). Its answer is compared with the answer of the ONE Lua handler
 // it replaces, not with the chain's result: that handler, in check mode, reports it from inside the call, on every path out:
 //   Spring.KT1.Check.Answer("Orders", "AllowCommand", unitID, cmdID, 0, allow)
 // with the same system name and these keys and answers, as the handler receives them:
@@ -66,14 +67,14 @@ public:
 	// No veto: every live one runs, each sees the damage the one before left; impulse factors multiply.
 	using DamageFn = std::function<void(const PreDamage&, float& damage, float& impulseMult)>;
 
-	static void AddCommand(const char* system, bool check, int order, CommandFn fn);
-	static void AddUnitCreation(const char* system, bool check, int order, CreationFn fn);
-	static void AddUnitTransfer(const char* system, bool check, int order, TransferFn fn);
-	static void AddBuildStep(const char* system, bool check, int order, UnitStepFn fn);
-	static void AddCaptureStep(const char* system, bool check, int order, UnitStepFn fn);
-	static void AddFeatureBuildStep(const char* system, bool check, int order, FeatureStepFn fn);
-	static void AddWeaponTarget(const char* system, bool check, int order, TargetFn fn);
-	static void AddPreDamage(const char* system, bool check, int order, DamageFn fn);
+	static void AddCommand(const char* system, int order, CommandFn fn);
+	static void AddUnitCreation(const char* system, int order, CreationFn fn);
+	static void AddUnitTransfer(const char* system, int order, TransferFn fn);
+	static void AddBuildStep(const char* system, int order, UnitStepFn fn);
+	static void AddCaptureStep(const char* system, int order, UnitStepFn fn);
+	static void AddFeatureBuildStep(const char* system, int order, FeatureStepFn fn);
+	static void AddWeaponTarget(const char* system, int order, TargetFn fn);
+	static void AddPreDamage(const char* system, int order, DamageFn fn);
 	static void Reset();   // game shutdown
 
 	// KT1 hook: SimHost (CEventHandler). A Call lives across one call-in: check-mode answers the replaced Lua has not

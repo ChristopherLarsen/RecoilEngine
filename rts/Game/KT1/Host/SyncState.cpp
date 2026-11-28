@@ -3,6 +3,7 @@
 
 #include "SyncState.h"
 
+#include "Check.h"
 #include "Game/KT1/Core/SimHost/Ordered.h"
 #ifdef SYNCCHECK
 #include "System/Sync/SyncChecker.h"
@@ -21,6 +22,7 @@ Core::SimHost::Ordered<Column> columns;
 } // namespace
 
 void SyncState::Add(const char* system, const char* column, Writer writer) {
+	if (Check::InCheck(system)) return;   // shadow state: not part of sync in check mode
 	columns.Add(0, std::string(system) + "/" + column, Column{std::move(writer), 0});
 }
 

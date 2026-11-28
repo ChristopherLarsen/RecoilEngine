@@ -44,10 +44,12 @@ private:
 	void RegisterPhases();
 	void RegisterValidators();
 	void FrameStart(const SimContext& c);
+	void TryWrites(const SimContext& c, int unitID);
 	void Count(const SimContext& c);
 	void Report(int frame);
 
 	int reportEvery = 1;
+	bool tried = false;   // the check-mode order and display event
 };
 
 } // namespace SimProbe
