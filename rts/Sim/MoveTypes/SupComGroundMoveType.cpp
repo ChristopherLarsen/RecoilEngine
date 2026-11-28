@@ -745,7 +745,9 @@ bool CSupComGroundMoveType::HasFurtherPoint() const
 // SupComCollisionNoDeeper, default 1 (DESIGN: no released value names it)
 void CSupComGroundMoveType::ClipCollisionForce(float3& force) const
 {
-	static const bool on = SupComSimSwitch::Get("SupComCollisionNoDeeper", true);
+	// SupComNoDeeper (default 0, combined-engine rule: off until the matrix turns it on) gates every no-deeper clip of fixes 20 and 21;
+	// the per-clip switches below (default 1) only narrow it down when it is on
+	static const bool on = SupComSimSwitch::Get("SupComNoDeeper", false) && SupComSimSwitch::Get("SupComCollisionNoDeeper", true);
 	if (!on || force.SqLength2D() <= 0.0f)
 		return;
 	const float3 next = owner->pos + force;
@@ -1303,7 +1305,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 			{
 				// SupComNoDeeperFreeDepthOnly (default 0, test): only a step that goes deeper is dropped, added overlap is allowed;
 				// SupComNoDeeperLog (default 0) logs each free step that would add depth or overlap
-				static const bool on21 = SupComSimSwitch::Get("SupComNoDeeperFree", true);
+				static const bool on21 = SupComSimSwitch::Get("SupComNoDeeper", false) && SupComSimSwitch::Get("SupComNoDeeperFree", true);
 				static const bool depthOnly = SupComSimSwitch::Get("SupComNoDeeperFreeDepthOnly", false);
 				static const bool log21 = SupComSimSwitch::Get("SupComNoDeeperLog", false);
 				const float3 nx = owner->pos + resultantForces;
