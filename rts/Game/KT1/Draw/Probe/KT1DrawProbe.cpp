@@ -8,6 +8,7 @@
 //             Unsynced: draw only.
 // Reads:      DrawView and FrameFacts only.
 // Timer:      KT1::DrawProbe
+// Config:     gamedata/kt1/drawprobe.lua: half_size; hovered, selected and teams[1..4] as {r, g, b, a}, 0..255
 // Lua (unsynced handles only):
 //   Spring.KT1.DrawProbe.Facts()            -> the frame facts: { frame, step, stepFraction, zoomLevel, zoomDist,
 //                                              pointer = { x, y, kind, unit, feature, ground = {x,y,z}, overMiniMap },
@@ -15,12 +16,14 @@
 //   Spring.KT1.DrawProbe.SetPointer(x, y)   read the pointer there instead of the mouse; no arguments: the mouse again
 //   Spring.KT1.DrawProbe.Stats()            -> { frames, instances, visible, uploaded, ranges, differences }
 
+#include <algorithm>
 #include <cstdint>
 
 #include "Game/KT1/Draw/Common/InstanceBatch.h"
 #include "Game/KT1/Host/DrawPhases.h"
 #include "Game/KT1/KT1Register.h"
 #include "Lua/LuaHandle.h"
+#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/GL/SubState.h"
 #include "Rendering/Shaders/Shader.h"
@@ -35,13 +38,23 @@ struct ProbeInstance {
 	uint8_t rgba[4];
 };
 
+constexpr int CHANNELS = 4;         // DESIGN: r, g, b, a
+constexpr int CHANNEL_MAX = 255;    // DESIGN: a byte
+constexpr int TEAM_COLOURS = 4;     // DESIGN: teams beyond these take the colours again
+using Colour = uint8_t[CHANNELS];
+
 struct ProbeConfig {
 	float halfSize = 0.5f;              // DESIGN: quad half size as a share of the unit's radius
-	uint8_t hovered[4] = {255, 255, 255, 220};   // DESIGN
-	uint8_t selected[4] = {255, 220, 40, 200};   // DESIGN
-	uint8_t team[4][4] = {{60, 140, 255, 160}, {255, 80, 60, 160}, {80, 220, 100, 160}, {200, 110, 255, 160}};   // DESIGN
-	int teamColours = 4;   // DESIGN: the rows of `team`
+	Colour hovered = {255, 255, 255, 220};   // DESIGN
+	Colour selected = {255, 220, 40, 200};   // DESIGN
+	Colour team[TEAM_COLOURS] = {{60, 140, 255, 160}, {255, 80, 60, 160}, {80, 220, 100, 160}, {200, 110, 255, 160}};   // DESIGN
 };
+
+// {r, g, b, a}; a channel the table leaves out keeps its default
+void ReadColour(const LuaTable& t, Colour& out) {
+	for (int i = 0; i < CHANNELS; i++)
+		out[i] = static_cast<uint8_t>(std::clamp(t.GetInt(i + 1, out[i]), 0, CHANNEL_MAX));
+}
 
 const char* const VS = R"(#version 330
 layout (location = 0) in vec2 corner;
@@ -102,7 +115,16 @@ public:
 	// engine state
 	DrawProbe() : Rule({"DrawProbe", 1, false, "nothing (draw host test system)", false, true}) {}
 
+	~DrawProbe() override;
+
 	// Rule
+	void LoadConfig(const LuaTable& cfg) override {
+		config.halfSize = cfg.GetFloat("half_size", config.halfSize);
+		ReadColour(cfg.SubTable("hovered"), config.hovered);
+		ReadColour(cfg.SubTable("selected"), config.selected);
+		const LuaTable teams = cfg.SubTable("teams");
+		for (int t = 0; t < TEAM_COLOURS; t++) ReadColour(teams.SubTable(t + 1), config.team[t]);
+	}
 	void Start() override { DrawPhases::Add(this); }
 	void PushLua(lua_State* L) override;
 
@@ -170,7 +192,7 @@ private:
 		UnitView u;
 		for (const int id : facts.VisibleUnits()) {
 			if (!ctx.view.Unit(id, u)) { store.Remove(id); continue; }
-			const uint8_t* c = config.team[u.team % config.teamColours];
+			const uint8_t* c = config.team[u.team % TEAM_COLOURS];
 			if (facts.IsSelected(id)) c = config.selected;
 			if (facts.Pointer().hit.unitId == id) c = config.hovered;
 			store.Set(id, {u.drawMidPos.x, u.drawMidPos.y, u.drawMidPos.z, u.radius * config.halfSize, {c[0], c[1], c[2], c[3]}});
@@ -186,6 +208,11 @@ private:
 };
 
 DrawProbe* probe = nullptr;   // the one instance, for the Lua functions
+
+// the registry destroys the rules between games
+DrawProbe::~DrawProbe() {
+	if (probe == this) probe = nullptr;
+}
 
 int DrawProbe::LuaFacts(lua_State* L) {
 	if (CLuaHandle::GetHandleSynced(L)) return 0;   // draw-side state never reaches synced code

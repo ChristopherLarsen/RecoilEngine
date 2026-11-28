@@ -12,9 +12,9 @@
 
 #include "Game/Game.h"
 #include "Game/InMapDrawModel.h"
+#include "Game/KT1/Core/Common/Rate.h"
 #include "Game/KT1/Host/DisplayEvents.h"
 #include "Sim/Misc/GeometricObjects.h"
-#include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Projectiles/ExplosionGenerator.h"
 #include "System/Log/ILog.h"
 #include "System/Sound/ISoundChannels.h"
@@ -42,8 +42,8 @@ void Play(const DisplayEvent& e) {
 			LOG("%s", e.text);
 		} break;
 		case DisplayKind::DebugLine: {
-			const int steps = static_cast<int>(e.value * GAME_SPEED + 0.5f);   // DESIGN: seconds to sim steps, to the nearest (0.5)
-			geometricObjects->AddLine(ToFloat3(e.a), ToFloat3(e.b), e.size, 0, steps);
+			// at least one step: the engine never removes a line of lifetime 0
+			geometricObjects->AddLine(ToFloat3(e.a), ToFloat3(e.b), e.size, 0, Core::Rate::Every(e.value));
 		} break;
 		case DisplayKind::Ping: {
 			if (!skipping) inMapDrawerModel->AddPoint(ToFloat3(e.a), e.text, e.unit);
