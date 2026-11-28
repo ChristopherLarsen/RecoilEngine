@@ -33,8 +33,7 @@ namespace KT1 {
 		bool synced;             // a synced rule runs in GameFrame and may change sim state; an unsynced one may not
 		const char* replaces;    // the Lua gadget it replaced ("LuaRules/Gadgets/kt1_census.lua"); that gadget stands down when this is on
 		bool defaultOn;          // the mod option's value when the game does not set it
-		// check mode (kt1_<key>=check, LUA-FREE §3.2) runs this rule and its Lua together: only a rule that then computes
-		// and compares without applying its results may allow it. Others refuse check and run off (logged).
+		// the rule honours the check-mode contract (KT1Register.h); kt1_<key>=check on a rule without it stops the engine
 		bool checkSafe = false;
 	};
 

@@ -97,8 +97,9 @@ void Registry::EnsureInit() {
 			mode = (v == "1" || v == "true") ? Rule::Mode::On : (v == "check" ? Rule::Mode::Check : Rule::Mode::Off);
 		}
 		if (mode == Rule::Mode::Check && !r->info.checkSafe) {
-			LOG_L(L_WARNING, "[KT1] %s does not support check mode (it would apply its results twice): runs off", r->info.name);
-			mode = Rule::Mode::Off;
+			// a proof run that believes it is checking and is not is the worst case: stop, never fall back (KT1Register.h)
+			LOG_L(L_FATAL, "[KT1] %s: %s=check, but the rule does not support check mode (RuleInfo.checkSafe; KT1Register.h)", r->info.name, r->option.c_str());
+			std::abort();
 		}
 		r->mode = mode;
 		const bool on = (mode != Rule::Mode::Off);
