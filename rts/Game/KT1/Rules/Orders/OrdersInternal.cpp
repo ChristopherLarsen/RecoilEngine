@@ -5,22 +5,11 @@
 
 namespace KT1::Orders::Internal {
 
-const Core::Orders::OrdersConfig& Config() {
-	static const Core::Orders::OrdersConfig defaults;
-	return defaults;
-}
 Core::Orders::State* State() { return nullptr; }
 
-void ReadQueue(int, int, std::vector<Core::Orders::OrderView>& out) { out.clear(); }
-Core::Orders::CommandKind KindOf(int) { return Core::Orders::CommandKind::Other; }
-Core::Orders::OrderView ViewOf(const ::Command&) { return {}; }
-
-bool Give(int, int, std::span<const float>, std::uint8_t) { return false; }
 bool Remove(int, std::uint32_t) { return false; }
 void InsertAhead(int, int, std::span<const float>, Core::Orders::OwnKind, int) {}
 void SetMoveGoal(int, float, float, float, float) {}
-
-void Refuse(int, const char*, int) {}
 
 void SetFireState(int, Core::Orders::FireState) {}
 void NoteGiven(int, const ::Command&) {}
