@@ -14,7 +14,7 @@ namespace KT1 {
 
 class Fakes {
 public:
-	static bool IsDef(const UnitDef* def);   // read once per def
+	static bool IsDef(const UnitDef* def);   // every def read once, at the first question
 	static bool Is(const CUnit* unit);
 	static bool Sees(const char* system);    // the registered system's RuleInfo.seesFakes
 	static void Reset();                     // game shutdown: the next game's defs are read again

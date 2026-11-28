@@ -9,23 +9,28 @@
 #include "Game/KT1/KT1Registry.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
+#include "Sim/Units/UnitDefHandler.h"
 
 namespace KT1 {
 namespace {
 
-std::vector<int8_t> defFlag;   // by unit def id: -1 not read yet, else 0 or 1
+std::vector<uint8_t> defFlag;   // by unit def id; empty until the first question of a game (the defs are loaded by then)
+
+void ReadDefs() {
+	const std::vector<UnitDef>& defs = unitDefHandler->GetUnitDefsVec();
+	defFlag.assign(defs.size(), 0);
+	for (size_t id = 0; id < defs.size(); ++id) {
+		const auto it = defs[id].customParams.find("spc_blip");
+		defFlag[id] = (it != defs[id].customParams.end() && it->second == "1") ? 1 : 0;
+	}
+}
 
 } // namespace
 
 // KT1 hot
 bool Fakes::IsDef(const UnitDef* def) {
-	const size_t id = static_cast<size_t>(def->id);
-	if (id >= defFlag.size()) defFlag.resize(id + 1, -1);
-	if (defFlag[id] < 0) {
-		const auto it = def->customParams.find("spc_blip");
-		defFlag[id] = (it != def->customParams.end() && it->second == "1") ? 1 : 0;
-	}
-	return defFlag[id] != 0;
+	if (defFlag.empty()) ReadDefs();
+	return defFlag[def->id] != 0;
 }
 
 bool Fakes::Is(const CUnit* unit) { return IsDef(unit->unitDef); }
