@@ -226,7 +226,7 @@ CaptureCue CaptureStep(CueState& state, const CueParams& params, int32_t target,
 	}
 	state.captureProgress[i] = progress;
 	if (phase == 1 && state.step - state.captureGrew[i] >= params.captureStallSteps) {
-		phase = 2;
+		phase = 2;   // DESIGN: x, y, z
 		cue = CaptureCue::Stall;
 	}
 	return cue;

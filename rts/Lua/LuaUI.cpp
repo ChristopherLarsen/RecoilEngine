@@ -297,6 +297,19 @@ bool CLuaUI::ConfigureLayout(const string& command)
 
 
 
+// KT1 hook: Cues (the sound cues reach the sound manager's globals as they did from synced Lua's messages)
+bool CLuaUI::KT1CallGlobal(const char* name, const std::function<int(lua_State*)>& push)
+{
+	LUA_CALL_IN_CHECK(L, false);
+	luaL_checkstack(L, 12, __func__);
+	const LuaHashString cmdStr(name);
+	if (!cmdStr.GetGlobalFunc(L))
+		return false; // the manager is not loaded
+
+	const int args = push(L);
+	return RunCallIn(L, cmdStr, args, 0);
+}
+
 static inline float fuzzRand(float fuzz)
 {
 	return (1.0f + fuzz) - ((2.0f * fuzz) * guRNG.NextFloat());
