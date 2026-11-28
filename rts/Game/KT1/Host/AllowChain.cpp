@@ -11,6 +11,7 @@
 #include "Sim/Units/CommandAI/Command.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
+#include "Sim/Units/UnitHandler.h"
 
 namespace KT1 {
 namespace {
@@ -41,6 +42,10 @@ Check::Value Answer(float first) {
 	return v;
 }
 
+// no unit: not a fake
+bool IsFake(const CUnit* u) { return u != nullptr && Fakes::Is(u); }
+bool IsFake(unsigned unitID) { return IsFake(unitHandler.GetUnit(unitID)); }
+
 // A veto chain whose check-mode answers go to the check helper under the call-in's keys.
 // KT1 hot
 template<class Fn, class... Args> bool Veto(const Chain<Fn>& chain, const char* callIn, int id1, int id2, Args&&... args) {
@@ -65,26 +70,34 @@ AllowChain::Call::Call() : mark(Check::Mark()) {}
 AllowChain::Call::~Call() { Check::CloseScope(mark); }
 
 bool AllowChain::AskCommand(const CUnit* u, const Command& c, int playerNum, bool fromSynced, bool fromLua) {
-	return Veto(chains.command, "AllowCommand", u->id, c.GetID(), u, c, playerNum, fromSynced, fromLua);
+	if (chains.command.Empty()) return true;
+	return Veto(chains.command, "AllowCommand", u->id, c.GetID(), u, c, playerNum, fromSynced, fromLua, Faked{IsFake(u)});
 }
 bool AllowChain::AskUnitTransfer(const CUnit* u, int newTeam, bool capture) {
-	return Veto(chains.transfer, "AllowUnitTransfer", u->id, newTeam, u, newTeam, capture);
+	if (chains.transfer.Empty()) return true;
+	return Veto(chains.transfer, "AllowUnitTransfer", u->id, newTeam, u, newTeam, capture, Faked{IsFake(u)});
 }
 bool AllowChain::AskBuildStep(const CUnit* builder, const CUnit* u, float part) {
-	return Veto(chains.build, "AllowUnitBuildStep", builder->id, u->id, builder, u, part);
+	if (chains.build.Empty()) return true;
+	return Veto(chains.build, "AllowUnitBuildStep", builder->id, u->id, builder, u, part, Faked{IsFake(builder), IsFake(u)});
 }
 bool AllowChain::AskCaptureStep(const CUnit* builder, const CUnit* u, float part) {
-	return Veto(chains.capture, "AllowUnitCaptureStep", builder->id, u->id, builder, u, part);
+	if (chains.capture.Empty()) return true;
+	return Veto(chains.capture, "AllowUnitCaptureStep", builder->id, u->id, builder, u, part,
+		Faked{IsFake(builder), IsFake(u)});
 }
 bool AllowChain::AskFeatureBuildStep(const CUnit* builder, const CFeature* f, float part) {
-	return Veto(chains.featureBuild, "AllowFeatureBuildStep", builder->id, f->id, builder, f, part);
+	if (chains.featureBuild.Empty()) return true;
+	return Veto(chains.featureBuild, "AllowFeatureBuildStep", builder->id, f->id, builder, f, part, Faked{IsFake(builder)});
 }
 
 bool AllowChain::AskUnitCreation(const UnitDef* def, const CUnit* builder, const BuildInfo* info, bool& drop) {
+	if (chains.creation.Empty()) return true;
+	const Faked faked{Fakes::IsDef(def), IsFake(builder)};
 	for (const auto& item : chains.creation) {
 		const Check::Running running(item.value.system.c_str(), item.value.check);
 		bool itemDrop = true;
-		const bool yes = item.value.fn(def, builder, info, itemDrop);
+		const bool yes = item.value.fn(def, builder, info, itemDrop, faked);
 		if (item.value.check) {
 			Check::Value v = Answer(yes ? 1.0f : 0.0f);
 			v.v[1] = itemDrop ? 1.0f : 0.0f;
@@ -100,15 +113,17 @@ bool AllowChain::AskUnitCreation(const UnitDef* def, const CUnit* builder, const
 
 // KT1 hot
 bool AllowChain::AskWeaponTarget(unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority) {
+	if (chains.target.Empty()) return true;
+	const Faked faked{IsFake(attackerID), IsFake(targetID)};
 	for (const auto& item : chains.target) {
 		const Check::Running running(item.value.system.c_str(), item.value.check);
 		if (!item.value.check) {
-			if (!item.value.fn(attackerID, targetID, weaponNum, weaponDefID, priority)) return false;
+			if (!item.value.fn(attackerID, targetID, weaponNum, weaponDefID, priority, faked)) return false;
 			continue;
 		}
 		const float incoming = (priority != nullptr) ? *priority : 0.0f;
 		float own = incoming;
-		const bool yes = item.value.fn(attackerID, targetID, weaponNum, weaponDefID, (priority != nullptr) ? &own : nullptr);
+		const bool yes = item.value.fn(attackerID, targetID, weaponNum, weaponDefID, (priority != nullptr) ? &own : nullptr, faked);
 		Check::Value v = Answer(yes ? 1.0f : 0.0f);
 		v.v[1] = own;
 		v.count = (yes && priority != nullptr) ? Check::Value::BOTH : 1;
@@ -126,13 +141,13 @@ AllowChain::Damaged AllowChain::AskPreDamaged(const PreDamage& d, float& damage,
 	Damaged native;
 	if (chains.damage.Empty()) return native;
 	const float incoming = damage;
-	const bool fake = Fakes::Is(d.unit);
+	const Faked faked{IsFake(d.unit), IsFake(d.attacker)};
 	for (const auto& item : chains.damage) {
-		if (fake && !item.value.seesFakes) continue;   // Lua gadgets are not asked either
+		if (faked.first && !item.value.seesFakes) continue;   // Lua gadgets are not asked either
 		const Check::Running running(item.value.system.c_str(), item.value.check);
 		float own = item.value.check ? incoming : damage;
 		float impulse = 1.0f;
-		item.value.fn(d, own, impulse);
+		item.value.fn(d, own, impulse, faked);
 		if (!item.value.check) {
 			native.ran = true;
 			damage = own;
