@@ -34,7 +34,7 @@ struct Rgb {
 // what the adapter reads of one unit
 struct IconUnitFacts {
 	int32_t id = -1;
-	int32_t defId = 0;
+	int32_t defId = 0;                 // an index into the classes; below 0: the type is not known
 	int32_t team = 0;
 	int32_t unitSlot = 0;              // its per-object uniform index
 	Relation relation = Relation::Enemy;

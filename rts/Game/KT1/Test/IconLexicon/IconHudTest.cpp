@@ -112,3 +112,13 @@ KT1_CASE("ICOHUD-FOR", "condition from health and fuel, activity and cloak for o
 	b = BadgesFor(style, fighter, u);
 	KT1_CHECK(b.condition == Condition::None && b.activity == Activity::None && !b.cloaked && b.veterancy == 3);
 }
+
+KT1_CASE("ICOHUD-FUEL", "low fuel needs a capacity; the def's low share or the style's; unknown fuel reads full") {
+	const IconStyleConfig style;
+	KT1_CHECK(!FuelLow(style, "", "", true, 0.0f));
+	KT1_CHECK(!FuelLow(style, "0", "", true, 0.0f));
+	KT1_CHECK(FuelLow(style, "100", "", true, 18.0f));
+	KT1_CHECK(!FuelLow(style, "100", "", true, 19.0f));
+	KT1_CHECK(FuelLow(style, "100", "0.5", true, 40.0f));
+	KT1_CHECK(!FuelLow(style, "100", "0.5", false, 0.0f));
+}

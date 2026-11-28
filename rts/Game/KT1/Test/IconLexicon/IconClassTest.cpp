@@ -145,3 +145,18 @@ KT1_CASE("ICOCLS-BOX", "the box is the extent plus the rim on every side; unmeas
 	KT1_CHECK_EQ(doubled.w, 36.0f);
 	KT1_CHECK_EQ(doubled.lift, 5.0f);
 }
+
+KT1_CASE("ICOCLS-NUMBER", "a custom parameter is a number only when all of it is; the body size is the shape group's") {
+	float value = 7.0f;
+	KT1_CHECK(!ParseNumber("", value));
+	KT1_CHECK(!ParseNumber("2x", value));
+	KT1_CHECK_EQ(value, 7.0f);
+	KT1_CHECK(ParseNumber("1.5", value));
+	KT1_CHECK_EQ(value, 1.5f);
+	const IconConfig config;
+	float body[2] = {0.0f, 0.0f};
+	BodyOf(Shape::Rect, config, body);
+	KT1_CHECK(body[0] == 13.0f && body[1] == 7.0f);
+	BodyOf(Shape::Triangle, config, body);
+	KT1_CHECK(body[0] == 11.0f && body[1] == 11.0f);
+}

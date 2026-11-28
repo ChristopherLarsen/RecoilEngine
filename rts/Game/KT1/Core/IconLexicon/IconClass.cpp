@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstdlib>
 #include <cmath>
 #include <cstdint>
 
@@ -76,6 +77,15 @@ std::string_view GroupName(Shape shape, const IconSizeConfig& sizes) {
 
 } // namespace
 
+bool ParseNumber(std::string_view text, float& out) {
+	const std::string copy(text);
+	char* end = nullptr;
+	const float value = std::strtof(copy.c_str(), &end);
+	if (copy.empty() || *end != '\0') return false;
+	out = value;
+	return true;
+}
+
 Shape ShapeFor(std::string_view outline, std::string_view glyph, int tier, bool command) {
 	if (command || tier == TIER_EXPERIMENTAL) return Shape::Circle;
 	if (glyph == "facLand" || glyph == "facAir" || glyph == "facSea") return Shape::Rect;
@@ -140,6 +150,12 @@ float NearestStep(const IconSizeConfig& sizes, float value) {
 		}
 	}
 	return best;
+}
+
+void BodyOf(Shape shape, const IconConfig& config, float (&body)[2]) {
+	const IconGroupSize* group = FindGroup(config.sizes, GroupName(shape, config.sizes));
+	if (group == nullptr) group = FindGroup(config.sizes, config.sizes.unmeasured);
+	for (int axis = 0; axis < AXES; ++axis) body[axis] = group != nullptr ? group->body[axis] : 0.0f;
 }
 
 IconBox BoxFor(Shape shape, float scale, const IconConfig& config) {

@@ -51,11 +51,14 @@ struct IconClass {
 	float size = 1.0f;                 // multiple of the base size (HUD contexts)
 };
 
+bool ParseNumber(std::string_view text, float& out);   // the whole text as a number; false: out unchanged
 IconClass ClassFor(const IconDefFacts& def, const IconConfig& config);
 std::string MapKey(const IconDefFacts& def);   // the atlas key of a def without a usable icon_key
 Shape ShapeFor(std::string_view outline, std::string_view glyph, int tier, bool command);
 int Lod(float px, const IconStyleConfig& style);                      // detail level 0..4
 float NearestStep(const IconSizeConfig& sizes, float value);          // the scale option's step; a tie goes up
+
+void BodyOf(Shape shape, const IconConfig& config, float (&body)[2]);   // the filled shape at scale one
 
 // the drawn box of a shape at scale s: the extent plus the rim on every side
 struct IconBox {

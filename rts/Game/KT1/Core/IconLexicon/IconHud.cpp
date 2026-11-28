@@ -4,6 +4,7 @@
 
 #include "IconHud.h"
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 
@@ -86,6 +87,13 @@ void AddBadges(std::string& out, const IconAtlasConfig& atlas, const Badges& bad
 }
 
 } // namespace
+
+bool FuelLow(const IconStyleConfig& style, std::string_view capacity, std::string_view lowShare, bool known, float fuel) {
+	float full = 0.0f, low = 0.0f;
+	if (!ParseNumber(capacity, full) || full <= 0.0f) return false;
+	if (!ParseNumber(lowShare, low)) low = style.fuel_low_fraction;
+	return std::clamp((known ? fuel : full) / full, 0.0f, 1.0f) < low;
+}
 
 Badges BadgesFor(const IconStyleConfig& style, const IconClass& cls, const IconUnitFacts& unit) {
 	Badges badges;
