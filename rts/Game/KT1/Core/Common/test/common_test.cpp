@@ -363,6 +363,7 @@ int main() {
 		probe[0] = 1;
 		CHECK(AllocCount() >= before + 1, "the allocation counter sees heap use");
 	}
+	CHECK(!Rate::IsSet(), "no default rate: the host must set it");
 	for (const int rate: {30, 10}) {
 		sps = rate;
 		Rate::SetStepsPerSecond(rate);
