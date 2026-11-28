@@ -2955,12 +2955,17 @@ void CGroundMoveType::HandleUnitCollisions(
 		static const bool standingMarginOn = SupComSimSwitch::Get("SupComStandingMargin", true);
 		// pathing fix 10 (L11628/L11630: fix 9 broke PTH-004-A and MOV-018-F, and PTH-002-J/PTH-004-B stayed red: movers no longer slid
 		// between ring engineers or into a crowd of arrived units): the standing rule is for a unit straight ahead (within 60 degrees
-		// of the heading) that is not in the crowd at the mover's own goal. STANDING_GOAL_CROWD 12 squares: PLACEHOLDER (mechanism value)
+		// of the heading) that is not in the crowd at the mover's own goal (12 squares; replaced by PTH-008 R3 below)
 		static const bool standingAheadOn = SupComSimSwitch::Get("SupComStandingAhead", true);
 		const float3 toCollidee = (collidee->pos - collider->pos).SafeNormalize2D();
 		// pathing fix 11 (L11654 PTH-006-E: the mover lining up at the held gap turned off the 60 degrees and the contact flickered): an
 		// actual overlap needs no heading test, the margin does; the goal crowd is excluded for both
-		const bool standingAhead = (!standingAheadOn || ((isCollision || toCollidee.dot(flatFrontDir) > 0.5f) && collidee->pos.SqDistance2D(goalPos) > Square(12.0f * SQUARE_SIZE)));
+		// PTH-008 v1 R3, R6 (G0-PTHSLIDE [crowd_short]: a crowd 4 to 16 cells short of the goal was gone round by every unit, none stopped
+		// short; no arrival-by-proximity distance): with SupComGoalCrowdNone (default 0 for the combined run kt1-big-1128; 1 turns it on) a standing unit near the goal is an obstacle like any
+		// other; 0 (default) excludes the crowd within 12 squares of the goal as before (pathing fix 10's mechanism value)
+		static const bool goalCrowdNoneOn = SupComSimSwitch::Get("SupComGoalCrowdNone", false);
+		const bool outsideGoalCrowd = (goalCrowdNoneOn || collidee->pos.SqDistance2D(goalPos) > Square(12.0f * SQUARE_SIZE));
+		const bool standingAhead = (!standingAheadOn || ((isCollision || toCollidee.dot(flatFrontDir) > 0.5f) && outsideGoalCrowd));
 		const bool standingNear = (collideeMobile && !collidee->IsMoving() && collidee->moveType->progressState != AMoveType::Active && standingAhead
 			&& (isCollision || (standingMarginOn && static_cast<float3>(separationVect).SqLength2D() < Square(colliderParams.y + collideeParams.y + SQUARE_SIZE * 0.5f))));
 		if (standingNear)
