@@ -1,45 +1,25 @@
-// Engine-free tests for KT1 Core/Common (LUA-FREE-WORKPACKAGES F02). Run: ./run.sh
-// Each suite runs once at 30 and once at 10 steps per second. "No allocation in steady state" is checked by counting
-// calls to the global operator new between a warm-up and the end of a steady run (AllocCount).
+/* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
+// KT1 Core/Common (LUA-FREE-WORKPACKAGES F02), engine-free. Every suite runs at 30 and at 10 steps per second.
+// "No allocation in steady state" compares KT1::Test::AllocationCount() after a warm-up and after a steady run.
 
-#include "../Column.h"
-#include "../DenseIndex.h"
-#include "../DetMath.h"
-#include "../DueWheel.h"
-#include "../EventBuffer.h"
-#include "../FixedPool.h"
-#include "../Rate.h"
-#include "../SortedIdList.h"
+#include "../KT1Test.h"
 
-#include <cstdio>
-#include <cstdlib>
-#include <new>
+#include "Game/KT1/Core/Common/Column.h"
+#include "Game/KT1/Core/Common/DenseIndex.h"
+#include "Game/KT1/Core/Common/DetMath.h"
+#include "Game/KT1/Core/Common/DueWheel.h"
+#include "Game/KT1/Core/Common/EventBuffer.h"
+#include "Game/KT1/Core/Common/FixedPool.h"
+#include "Game/KT1/Core/Common/Rate.h"
+#include "Game/KT1/Core/Common/SortedIdList.h"
+
 #include <set>
-#include <type_traits>
 #include <vector>
 
 using namespace KT1::Core;
+using KT1::Test::AllocationCount;
 
-// ---- allocation counter ---------------------------------------------------------------------------------------------
-static long long allocs = 0;
-void* operator new(std::size_t n) {
-	++allocs;
-	if (void* p = std::malloc(n ? n : 1))
-		return p;
-	throw std::bad_alloc();
-}
-void* operator new[](std::size_t n) { return operator new(n); }
-void operator delete(void* p) noexcept { std::free(p); }
-void operator delete[](void* p) noexcept { std::free(p); }
-void operator delete(void* p, std::size_t) noexcept { std::free(p); }
-void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
-static long long AllocCount() { return allocs; }
-
-// ---- checks ---------------------------------------------------------------------------------------------------------
-static int fails = 0;
-static int checks = 0;
-static int sps = 30;
-#define CHECK(c, msg) do { ++checks; if (!(c)) { ++fails; std::printf("FAIL [%d sps] %s (line %d)\n", sps, msg, __LINE__); } } while (0)
+#define CHECK(c, msg) KT1_CHECK_MSG(c, msg)
 
 // a small deterministic generator for the mixed sequences (not the engine's RNG)
 struct Lcg {
@@ -49,7 +29,8 @@ struct Lcg {
 };
 
 // ---- Rate -----------------------------------------------------------------------------------------------------------
-static void TestRate() {
+KT1_RATE_CASE("COMMON-RATE", "seconds become steps at the sim rate") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	CHECK(Rate::StepsPerSecond() == sps, "rate set");
 	CHECK(Rate::Every(0.5) == sps / 2, "0.5 s period is half the rate");
 	CHECK(Rate::Every(1.0) == sps, "1 s period is the rate");
@@ -65,7 +46,8 @@ static void TestRate() {
 }
 
 // ---- DenseIndex + Column --------------------------------------------------------------------------------------------
-static void TestDenseIndex() {
+KT1_RATE_CASE("COMMON-DENSEINDEX", "dense index and column: slots, swap-remove, ascending ids, no steady allocation") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	DenseIndex index;
 	index.Init(64);
 	Column<int> hp;
@@ -131,7 +113,7 @@ static void TestDenseIndex() {
 	CHECK(valuesOk, "mixed: values follow ids, unused slots blank");
 
 	// steady state: no allocation
-	const long long before = AllocCount();
+	const long long before = AllocationCount();
 	long long sum = 0;
 	for (int i = 0; i < 20000; ++i) {
 		const int id = rng.Below(64);
@@ -141,12 +123,13 @@ static void TestDenseIndex() {
 			for (const int a: index.AscendingIds()) sum += a;
 		for (const int v: hp.Live(index)) sum += v;
 	}
-	CHECK(AllocCount() == before, "DenseIndex/Column: no allocation in steady state");
+	CHECK(AllocationCount() == before, "DenseIndex/Column: no allocation in steady state");
 	CHECK(sum > 0, "steady run did work");
 }
 
 // ---- SortedIdList ---------------------------------------------------------------------------------------------------
-static void TestSortedIdList() {
+KT1_RATE_CASE("COMMON-SORTEDIDLIST", "sorted id list: order, no duplicates, no steady allocation") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	SortedIdList list;
 	list.Init(32);
 	for (int id: {7, 2, 9, 2, 4})
@@ -156,7 +139,7 @@ static void TestSortedIdList() {
 	CHECK(list.Contains(9) && !list.Contains(4), "contains");
 
 	Lcg rng{static_cast<uint32_t>(sps) * 7u};
-	const long long before = AllocCount();
+	const long long before = AllocationCount();
 	for (int i = 0; i < 20000; ++i) {
 		const int id = rng.Below(32);
 		if (rng.Below(2) == 0) list.Insert(id); else list.Erase(id);
@@ -165,13 +148,14 @@ static void TestSortedIdList() {
 	for (int i = 1; i < list.Size(); ++i)
 		ascending = ascending && list.Ids()[i - 1] < list.Ids()[i];
 	CHECK(ascending, "mixed: ascending");
-	CHECK(AllocCount() == before, "SortedIdList: no allocation in steady state");
+	CHECK(AllocationCount() == before, "SortedIdList: no allocation in steady state");
 }
 
 // ---- EventBuffer ----------------------------------------------------------------------------------------------------
 struct Hit { int32_t target; int32_t attacker; double damage; };
 
-static void TestEventBuffer() {
+KT1_RATE_CASE("COMMON-EVENTBUFFER", "event buffer: push order across a flip, no steady allocation") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	EventBuffer<Hit> hits;
 	hits.Init(16);
 	hits.Push({3, 1, 10.0});
@@ -188,7 +172,7 @@ static void TestEventBuffer() {
 	CHECK(hits.HighWater() == 3, "high water");
 
 	// steady state: one step of events every step for 10 s of game time
-	const long long before = AllocCount();
+	const long long before = AllocationCount();
 	const int steps = Rate::Steps(10.0);
 	bool order = true;
 	for (int step = 0; step < steps; ++step) {
@@ -200,14 +184,15 @@ static void TestEventBuffer() {
 			order = order && hits.Ready()[i].target == i && hits.Ready()[i].attacker == step;
 	}
 	CHECK(order, "per-step order over 10 s");
-	CHECK(AllocCount() == before, "EventBuffer: no allocation in steady state");
+	CHECK(AllocationCount() == before, "EventBuffer: no allocation in steady state");
 }
 
 // ---- DueWheel -------------------------------------------------------------------------------------------------------
 static std::vector<int> Ids(std::span<const int32_t> s) { return {s.begin(), s.end()}; }
 
 // wrap: an 8-step ring; dues before, at and after the ring's end, and far past it
-static void TestDueWheelWrap() {
+KT1_RATE_CASE("COMMON-DUEWHEEL-WRAP", "due wheel: due order across the ring's end and far dues") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	{
 		DueWheel w;
 		w.Init(8, 8, 8);
@@ -241,7 +226,8 @@ static void TestDueWheelWrap() {
 }
 
 // past dues go to the next step; cancel in the ring and far
-static void TestDueWheelCancel() {
+KT1_RATE_CASE("COMMON-DUEWHEEL-CANCEL", "due wheel: past dues and cancel") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	{
 		DueWheel w;
 		w.Init(4, 4, 4, 100);
@@ -256,7 +242,8 @@ static void TestDueWheelCancel() {
 }
 
 // periodic visits: unit u every Rate::Every(period_s), first visit at step u % period; checked against arithmetic
-static void TestDueWheelPeriodic() {
+KT1_RATE_CASE("COMMON-DUEWHEEL-PERIODIC", "due wheel: periodic visits exact over 20 s, no steady allocation") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	{
 		const int units = 300;
 		const double periods_s[] = {0.5, 1.0, 2.0};   // three classes of unit
@@ -270,7 +257,7 @@ static void TestDueWheelPeriodic() {
 		const int steps = Rate::Steps(20.0);
 		bool exact = true, sorted = true;
 		long long visits = 0;
-		const long long before = AllocCount();
+		const long long before = AllocationCount();
 		for (int step = 0; step < steps; ++step) {
 			const auto due = w.Take();
 			int last = -1, n = 0;
@@ -290,12 +277,13 @@ static void TestDueWheelPeriodic() {
 		CHECK(exact, "periodic: each unit exactly on its steps, over 20 s");
 		CHECK(sorted, "periodic: ascending ids each step");
 		CHECK(visits > 0, "periodic: visits");
-		CHECK(AllocCount() == before, "DueWheel: no allocation in steady state");
+		CHECK(AllocationCount() == before, "DueWheel: no allocation in steady state");
 	}
 }
 
 // ---- DetMath --------------------------------------------------------------------------------------------------------
-static void TestDetMath() {
+KT1_RATE_CASE("COMMON-DETMATH", "deterministic maths in the Lua's evaluation order") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	using namespace DetMath;
 	using F = LuaNumber;
 	static_assert(std::is_same_v<LuaNumber, float>, "the engine's Lua number is float (luaconf.h)");
@@ -338,7 +326,8 @@ static void TestDetMath() {
 
 // the engine builds with -fsingle-precision-constant: a bare literal is a float. Rate converts config seconds in double
 // to integer steps; the values synced code computes with (StepSeconds, Seconds) are float, as the Lua's 1 / 30 is.
-static void TestRateTypes() {
+KT1_RATE_CASE("COMMON-RATE-TYPES", "step seconds are the Lua number (float); conversions give integer steps") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	const double one = 1, ten = 10;
 	CHECK(0.1 != one / ten, "the tests build with the engine's float-constant flag");
 	static_assert(std::is_same_v<decltype(Rate::StepSeconds()), float>, "StepSeconds is the Lua number");
@@ -354,7 +343,8 @@ static void TestRateTypes() {
 // ---- FixedPool ------------------------------------------------------------------------------------------------------
 struct Shot { int32_t owner = -1; double x = 0.0; };
 
-static void TestFixedPool() {
+KT1_RATE_CASE("COMMON-FIXEDPOOL", "fixed pool: handles, reuse, no steady allocation") {
+	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	FixedPool<Shot> pool;
 	pool.Init(3);
 	const auto a = pool.Acquire(), b = pool.Acquire(), c = pool.Acquire();
@@ -373,7 +363,7 @@ static void TestFixedPool() {
 	Lcg rng{static_cast<uint32_t>(sps) * 13u};
 	std::vector<int> held;
 	held.reserve(256);
-	const long long before = AllocCount();
+	const long long before = AllocationCount();
 	for (int step = 0; step < Rate::Steps(30.0); ++step) {
 		for (int i = 0; i < 4; ++i) {
 			const auto h = big.Acquire();
@@ -387,33 +377,21 @@ static void TestFixedPool() {
 		}
 	}
 	CHECK(big.Size() == static_cast<int>(held.size()), "pool count");
-	CHECK(AllocCount() == before, "FixedPool: no allocation in steady state");
+	CHECK(AllocationCount() == before, "FixedPool: no allocation in steady state");
 }
 
-int main() {
-	{
-		const long long before = AllocCount();
-		std::vector<int> probe(4);
-		probe[0] = 1;
-		CHECK(AllocCount() >= before + 1, "the allocation counter sees heap use");
-	}
-	CHECK(!Rate::IsSet(), "no default rate: the host must set it");
-	for (const int rate: {30, 10}) {
-		sps = rate;
+KT1_CASE("COMMON-NO-DEFAULT-RATE", "there is no default sim rate: the host must set it") {
+	KT1_CHECK(!Rate::IsSet());
+	for (const int rate: KT1::Test::STEP_RATES) {
 		Rate::SetStepsPerSecond(rate);
-		TestRate();
-		TestDenseIndex();
-		TestSortedIdList();
-		TestEventBuffer();
-		TestDueWheelWrap();
-		TestDueWheelCancel();
-		TestDueWheelPeriodic();
-		TestDetMath();
-		TestRateTypes();
-		TestFixedPool();
 		Rate::Clear();
-		CHECK(!Rate::IsSet(), "Clear unsets the rate");
+		KT1_CHECK_MSG(!Rate::IsSet(), "Clear unsets the rate");
 	}
-	std::printf("KT1 Core/Common: %d checks, %d failed (30 and 10 steps per second)\n", checks, fails);
-	return fails == 0 ? 0 : 1;
+}
+
+KT1_CASE("COMMON-ALLOC-COUNT", "the allocation counter sees heap use") {
+	const long long before = AllocationCount();
+	std::vector<int> probe(4);
+	probe[0] = 1;
+	KT1_CHECK(AllocationCount() >= before + 1);
 }

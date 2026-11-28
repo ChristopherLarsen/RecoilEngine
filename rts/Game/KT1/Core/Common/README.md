@@ -17,5 +17,5 @@ and its allocation rule.
 
 Steady state allocates nothing: storage is sized at `Init`. The tests count every `operator new` to prove it.
 
-Tests: `test/run.sh` (engine-free, a few seconds; the engine's own compiler in its build image). Every suite runs at 30 and
-at 10 steps per second.
+Tests: `../../Test/Common/`, run by game-build `tools/engine/core_tests.py` (engine-free). Every suite runs at 30
+and at 10 steps per second.
