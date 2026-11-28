@@ -20,7 +20,7 @@ constexpr double TOTAL_EVERY_S = 10.0;   // KT1 lint: allow double (a Rate argum
 
 Core::SimHost::CheckTally tally;
 Core::SimHost::CheckPairs pairs(tally);
-Core::SimHost::WriteGate gate;
+Core::SimHost::WriteGate writeGate;
 
 void Line(const std::string& s) { LOG("%s", s.c_str()); }
 
@@ -41,11 +41,11 @@ bool Check::InCheck(const char* system) {
 	return r != nullptr && r->SwitchMode() == Rule::Mode::Check;
 }
 
-bool Check::MayWrite() { return gate.Allow(tally); }
+bool Check::MayWrite() { return writeGate.Allow(tally); }
 
-Core::SimHost::WriteGate& Check::Gate() { return gate; }
+Core::SimHost::WriteGate& Check::Gate() { return writeGate; }
 
-Check::Running::Running(const char* system, bool check) : Core::SimHost::WriteGate::Scope(gate, system, check) {}
+Check::Running::Running(const char* system, bool check) : Core::SimHost::WriteGate::Scope(writeGate, system, check) {}
 
 void Check::Native(const char* system, const char* what, int id1, int id2, int id3, const Value& value) {
 	pairs.Native(CheckKey{system, what, {id1, id2, id3}}, value, Describe);
