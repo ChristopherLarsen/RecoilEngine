@@ -98,7 +98,9 @@ void PushPointer(lua_State* L, const PointerFacts& p) {
 
 class DrawProbe : public Rule, public DrawSystem {
 public:
-	DrawProbe() : Rule({"DrawProbe", 1, false, "nothing (draw host test system)", false}) {}
+	// checkSafe: check only compares the GPU buffer with the CPU store; it reads DrawView and FrameFacts and writes no
+	// engine state
+	DrawProbe() : Rule({"DrawProbe", 1, false, "nothing (draw host test system)", false, true}) {}
 
 	// Rule
 	void Start() override { DrawPhases::Add(this); }
