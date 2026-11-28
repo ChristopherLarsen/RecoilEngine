@@ -8,6 +8,7 @@
 #include "Map/ReadMap.h"
 #include "System/Config/ConfigHandler.h"
 #include "System/EventHandler.h"
+#include "Sim/Projectiles/ExplosionGenerator.h"
 
 #include <cstdlib>
 
@@ -39,7 +40,7 @@ namespace SupComZoomLevel {
 	static int decalMax = MAX_LEVEL;
 	static int reflMax = MAX_LEVEL;
 
-	void Init() { skipMask = unsigned(configHandler->GetInt("SupComZoomSkip")); started = false; curLevel = 0; }
+	void Init() { skipMask = unsigned(configHandler->GetInt("SupComZoomSkip")); started = false; curLevel = 0; CCustomExplosionGenerator::ReloadCullConfig(); }
 
 	static int Raw(float d) {
 		for (int i = 0; i < MAX_LEVEL; i++)
@@ -57,6 +58,7 @@ namespace SupComZoomLevel {
 		shadowMax = configHandler->GetInt("SupComShadowMaxLevel");
 		decalMax = configHandler->GetInt("SupComDecalMaxLevel");
 		reflMax = configHandler->GetInt("SupComReflTexMaxLevel");
+		CCustomExplosionGenerator::ReloadCullConfig(); // KardashevCegCull / Scale take effect on the next spawn
 		const float d = camHandler->GetCurrentController().GetSupComDist();
 		const float3 cp = camera->GetPos();
 		curDist = (d >= 0.0f) ? d : (cp.y - CGround::GetHeightReal(cp.x, cp.z, false));
