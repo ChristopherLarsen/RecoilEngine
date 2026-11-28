@@ -888,7 +888,7 @@ void CLosHandler::Update()
 		const bool cut = (it != opts.end() && it->second == "1");
 		for (ILosType* lt: losTypes)
 			lt->kt1Cut = cut;
-		LOG("[KT1-LOSCUT] %s", cut ? "on (delta update, unused sensor types skipped)" : "off");
+		LOG("[KT1] LosCut v1 %s", cut ? "synced (Sim::Los delta update, unused sensor types skipped) mode=on" : "off (the engine's own Sim::Los path) mode=off");   // the run harness reads "[KT1] <Name> vN synced"
 		for (CUnit* u: activeUnits)
 			KT1MarkSensors(u);
 	}
