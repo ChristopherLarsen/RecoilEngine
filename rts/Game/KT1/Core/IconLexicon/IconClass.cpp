@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstdint>
 
 namespace KT1::Core::IconLexicon {
 
@@ -14,6 +15,7 @@ namespace {
 
 constexpr float HALF = 0.5f;       // DESIGN: a centre is half a size in
 constexpr float SIDES = 2.0f;      // REQ UI-424 v5 R2: the rim is on every side
+constexpr int AXES = 2;            // DESIGN: width and height
 constexpr int MAX_BARS = 3;        // REQ UI-424 v5 R7: one, two or three bars; an experimental shows three
 
 // icon_tier: "X" is experimental, a number is itself, anything else is 1 (icon_lex Fields)
@@ -47,7 +49,7 @@ uint8_t DrawGroupOf(const IconDefFacts& def, std::string_view outline, Domain do
 	if (!def.command.empty() || def.tier == "X") return 4;    // DESIGN (ICON-02 section 9): the draw groups
 	if (outline == "wall") return 0;
 	if (domain == Domain::Build) return 1;
-	return domain == Domain::Air ? 3 : 2;
+	return domain == Domain::Air ? 3 : 2;           // DESIGN (ICON-02 section 9): air above ground and naval
 }
 
 bool InAtlas(const IconAtlasConfig& atlas, std::string_view key) {
@@ -87,7 +89,7 @@ std::string MapKey(const IconDefFacts& def) {
 	const int tier = TierOf(def.tier);
 	const std::string_view glyph = Or(def.glyph, "none");
 	std::string shape(Or(def.outline, "land"));
-	if (shape == "sub") shape = tier == 1 ? "sub1" : tier == 2 ? "sub2" : "sub3";
+	if (shape == "sub") shape = tier == 1 ? "sub1" : tier == 2 ? "sub2" : "sub3";   // DESIGN: the atlas has a capsule per tier
 	const int bars = IsDirectFire(glyph) ? std::min(tier, MAX_BARS) : 0;
 	return shape + "|" + std::string(glyph) + "|" + std::to_string(bars) + "|" + (tier == TIER_EXPERIMENTAL ? "1" : "0");
 }
@@ -103,7 +105,7 @@ IconClass ClassFor(const IconDefFacts& def, const IconConfig& config) {
 	cls.command = !def.command.empty();
 	cls.domain = DomainOf(outline);
 	cls.shape = ShapeFor(outline, glyph, tier, cls.command);
-	cls.tier = static_cast<uint8_t>(std::clamp(tier, 0, 255));
+	cls.tier = static_cast<uint8_t>(std::clamp(tier, 0, static_cast<int>(UINT8_MAX)));
 	cls.bars = static_cast<uint8_t>(std::clamp(tier, 1, MAX_BARS));
 	cls.drawGroup = DrawGroupOf(def, outline, cls.domain);
 	cls.mark = glyph != "none" || cls.command;
@@ -146,10 +148,10 @@ IconBox BoxFor(Shape shape, float scale, const IconConfig& config) {
 	const IconGroupSize* group = FindGroup(sizes, GroupName(shape, sizes));
 	if (group == nullptr) group = unmeasured;
 	if (group == nullptr) return {};
-	float extent[2] = {group->extent[0], group->extent[1]};
+	float extent[AXES] = {group->extent[0], group->extent[1]};
 	if (extent[0] <= 0.0f && extent[1] <= 0.0f) {
 		// no measured extent (OPEN-UI424-1): the body plus the unmeasured group's bar strip
-		for (int axis = 0; axis < 2; ++axis) {
+		for (int axis = 0; axis < AXES; ++axis) {
 			float strip = 0.0f;
 			if (unmeasured != nullptr && unmeasured->extent[axis] > 0.0f) strip = unmeasured->extent[axis] - unmeasured->body[axis];
 			extent[axis] = group->body[axis] + strip;
