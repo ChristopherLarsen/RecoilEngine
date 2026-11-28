@@ -39,7 +39,7 @@ KT1_RATE_CASE("COMMON-RATE", "seconds become steps at the sim rate") {
 	CHECK(Rate::Steps(0.0) == 0, "0 s delay is this step");
 	CHECK(Rate::Steps(2.0) == 2 * sps, "2 s delay");
 	CHECK(Rate::Steps(-1.0) == 0, "a delay never under 0");
-	CHECK(Rate::Seconds(Rate::Every(3.0)) == 3.0, "steps back to seconds");
+	CHECK(Rate::Seconds(Rate::Every(3.0)) == 3, "steps back to seconds");
 	// rounding is half away from zero: 0.25 s is 7.5 steps at 30 (8) and 2.5 at 10 (3)
 	CHECK(Rate::Every(0.25) == (sps == 30 ? 8 : 3), "0.25 s rounds half away from zero");
 	CHECK(Rate::Every(0.1) == sps / 10, "0.1 s");
@@ -324,15 +324,20 @@ KT1_RATE_CASE("COMMON-DETMATH", "deterministic maths in the Lua's evaluation ord
 	CHECK(std::fabs(hp - F(90)) < F(1) / 1000, "rate-agnostic decay");
 }
 
-// the engine builds with -fsingle-precision-constant: a bare literal is a float. Rate works in double (config seconds);
-// these fail if its maths went through a float literal (the old StepSeconds `1.0 / sps` was a float division).
-KT1_RATE_CASE("COMMON-DOUBLE-CONSTANTS", "Core maths stays double under the engine's float-constant flag") {
+// the engine builds with -fsingle-precision-constant: a bare literal is a float. Rate converts config seconds in double
+// to integer steps; the values synced code computes with (StepSeconds, Seconds) are float, as the Lua's 1 / 30 is.
+KT1_RATE_CASE("COMMON-RATE-TYPES", "step seconds are the Lua number (float); conversions give integer steps") {
 	[[maybe_unused]] const int sps = testCase.StepsPerSecond();
 	const double one = 1, ten = 10;
 	CHECK(0.1 != one / ten, "the tests build with the engine's float-constant flag");
-	CHECK(Rate::StepSeconds() == one / Rate::StepsPerSecond(), "StepSeconds is a double division");
-	CHECK(Rate::Seconds(1) == one / Rate::StepsPerSecond(), "Seconds is a double division");
-	CHECK(DetMath::HALF == static_cast<float>(1) / 2, "HALF");
+	static_assert(std::is_same_v<decltype(Rate::StepSeconds()), float>, "StepSeconds is the Lua number");
+	static_assert(std::is_same_v<decltype(Rate::Seconds(1)), float>, "Seconds is the Lua number");
+	const float onef = 1;
+	CHECK(Rate::StepSeconds() == onef / Rate::StepsPerSecond(), "StepSeconds is the float 1 / rate");
+	CHECK(Rate::Seconds(1) == onef / Rate::StepsPerSecond(), "Seconds is a float division");
+	CHECK(DetMath::HALF == onef / 2, "HALF");
+	// config seconds are converted in double: 0.1 s of a double config value at 30 is 3 steps, not lround(0.1f * 30)
+	CHECK(Rate::Every(one / ten * 5) == Rate::StepsPerSecond() / 2, "0.5 s from a double config value");
 }
 
 // ---- FixedPool ------------------------------------------------------------------------------------------------------
