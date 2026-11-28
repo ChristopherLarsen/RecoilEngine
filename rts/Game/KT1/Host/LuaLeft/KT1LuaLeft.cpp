@@ -2,9 +2,9 @@
 // KT1 system: LuaLeft (version 1). How much Lua is left, in every run's infolog (LUA-FREE-WORKPACKAGES F08).
 //
 // Replaces:   nothing stands down; it gives the totals of perf_sprof / perf_wprof without their cost.
-// Switch:     mod option kt1_lualeft (DESIGN default on: the line belongs in every perf run; 0 = no timing, no lines)
-// Config:     gamedata/kt1/lualeft.lua
-//               report_period_s   seconds of game time per report (DESIGN 10)
+// Switch:     mod option kt1_lualeft (default off until the pin flips it, plan 3.3; 0 = no timing, no lines)
+// Config:     none read yet; the report period is Core Config::reportPeriodS (DESIGN 10 s of game time).
+//             A file comes with F04's ReadConfig, so this file builds with or without F04.
 // Core:       Core/LuaLeft (the adding up, engine-free; tests Test/LuaLeft)
 // Hooks:      CLuaHandle::RunCallInTraceback (every call into Lua) and CLuaHandle::CollectGarbage
 // Timer:      KT1::LuaLeft (the report only)
@@ -24,7 +24,6 @@
 #include "Game/KT1/KT1Register.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaHashString.h"
-#include "Lua/LuaParser.h"
 #include "Rendering/GlobalRendering.h"
 #include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Misc/GlobalSynced.h"
@@ -147,13 +146,9 @@ GcScope::~GcScope() {
 namespace {
 	class LuaLeftRule : public Rule {
 	public:
-		LuaLeftRule() : Rule({"LuaLeft", 1, false, "perf_sprof / perf_wprof totals (they stay)", true}) {
+		LuaLeftRule() : Rule({"LuaLeft", 1, false, "perf_sprof / perf_wprof totals (they stay)", false, true}) {   // check-safe: it only measures
 			self = this;
 			periodSteps = StepsFor(float(Config{}.reportPeriodS));
-		}
-
-		void LoadConfig(const LuaTable& cfg) override {
-			periodSteps = StepsFor(cfg.GetFloat("report_period_s", float(Config{}.reportPeriodS)));
 		}
 	};
 }
