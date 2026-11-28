@@ -18,7 +18,7 @@ const Node* Node::Find(std::string_view key) const {
 	return nullptr;
 }
 
-static constexpr int MAX_DEPTH = 64;   // config files are a few levels deep
+static constexpr int MAX_DEPTH = 64;   // DESIGN: config files are a few levels deep
 
 static bool Fail(std::string& error, const char* what) {
 	error = std::string("not valid JSON: ") + what;

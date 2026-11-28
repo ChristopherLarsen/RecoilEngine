@@ -276,7 +276,7 @@ public:
 		cfg.switchHeight = t.GetFloat("switch_height", cfg.switchHeight);
 		cfg.hysteresis = std::clamp(t.GetFloat("hysteresis", cfg.hysteresis), 0.0f, 0.5f);   // DESIGN: allowed range
 		cfg.grid = std::clamp(t.GetInt("grid", cfg.grid), 8, 512);   // DESIGN: allowed range
-		cfg.refreshFrames = std::max(1, t.GetInt("refresh_frames", 30));   // DESIGN: 30 drawn frames, the .lua config's value
+		cfg.refreshFrames = std::max(1, t.GetInt("refresh_frames", 30));   // DESIGN: the .lua config's value; KT1 lint: allow frame-literal a count of drawn frames, as that file gives it
 		cfg.waterLevel = t.GetFloat("water_level", cfg.waterLevel);
 		const LuaTable wc = t.SubTable("water_color");
 		for (int i = 0; i < 4; ++i) cfg.waterColor[i] = wc.GetFloat(i + 1, cfg.waterColor[i]);   // DESIGN: 4 colour components
@@ -294,11 +294,11 @@ public:
 		cfg.weaponCutoff = t.GetFloat("weapon_cutoff", cfg.weaponCutoff);
 	}
 	void ConfigValues(Data::Values& v) const override {
-		v.Add("water_color", cfg.waterColor, 4);
-		v.Add("ramp_dark", cfg.rampDark, 3);
-		v.Add("ramp_light", cfg.rampLight, 3);
+		v.Add("water_color", cfg.waterColor, 4);   // DESIGN: colour components
+		v.Add("ramp_dark", cfg.rampDark, 3);   // DESIGN: colour components
+		v.Add("ramp_light", cfg.rampLight, 3);   // DESIGN: colour components
 		// the .lua file counts drawn frames, the .json file seconds: compared at 60 drawn frames a second
-		v.Add("refresh_s", cfg.refreshFrames > 0 ? static_cast<float>(cfg.refreshFrames) / static_cast<float>(60) : cfg.refreshS);
+		v.Add("refresh_s", cfg.refreshFrames > 0 ? static_cast<float>(cfg.refreshFrames) / static_cast<float>(60) : cfg.refreshS);   // DESIGN: 60 drawn frames a second
 		v.Add("switch_height", cfg.switchHeight);
 		v.Add("hysteresis", cfg.hysteresis);
 		v.Add("grid", cfg.grid);

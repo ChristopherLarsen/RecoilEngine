@@ -105,6 +105,7 @@ class UnitAnim : public Rule {
 public:
 	UnitAnim() : Rule({"UnitAnim", 1, true, "scripts/pm/anim.lua (Loop), pm/loco.lua, pm/aim.lua (Tick, poll)", false}) {}
 
+	// KT1 lint: allow-file file-size the .lua loader and its compare (LoadConfig, ConfigValues) go in the wave 4 data sweep
 	void LoadConfig(const LuaTable& t) override {
 		idleTicksN = std::max(1, t.GetInt("idle_ticks", 2));
 		restDelay = KT1::ConfigFrames(t, "rest_delay_s", "rest_delay", 90);
@@ -136,7 +137,7 @@ public:
 		wakeEvery = cfg.wakeEvery;
 		spinRate = cfg.spinRate;
 		fullUnits = cfg.fullUnits;
-		maxMs = static_cast<int>(std::lround(cfg.maxTickS * 1000.0f));
+		maxMs = static_cast<int>(std::lround(cfg.maxTickS * 1000.0f));   // DESIGN: milliseconds a second
 		return report;
 	}
 

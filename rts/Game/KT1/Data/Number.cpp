@@ -62,7 +62,7 @@ NumberError ReadNumber(std::string_view token, int& value) {
 	if (!IsWholeNumber(token)) return NumberError::NotWhole;
 	const std::string text(token);
 	errno = 0;
-	const long long v = std::strtoll(text.c_str(), nullptr, 10);
+	const long long v = std::strtoll(text.c_str(), nullptr, 10);   // DESIGN: decimal text
 	if (errno == ERANGE || v < std::numeric_limits<int>::min() || v > std::numeric_limits<int>::max()) return NumberError::TooLarge;
 	value = static_cast<int>(v);
 	return NumberError::Ok;

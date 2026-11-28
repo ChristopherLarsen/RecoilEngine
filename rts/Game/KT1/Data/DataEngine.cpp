@@ -78,7 +78,7 @@ public:
 // Looks at the unsynced systems' files once per poll period (dev archive only).
 class FilePoll : public CEventClient {
 public:
-	FilePoll() : CEventClient("[KT1DataPoll]", 199992, false) {
+	FilePoll() : CEventClient("[KT1DataPoll]", 199992, false) {   // DESIGN: event client order, late among the clients
 		autoLinkEvents = true;
 		RegisterLinkedEvents(this);
 		eventHandler.AddClient(this);
