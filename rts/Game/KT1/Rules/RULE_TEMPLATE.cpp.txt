@@ -15,6 +15,7 @@
 
 #include <memory>
 
+#include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaParser.h"
@@ -38,6 +39,8 @@ private:
 
 } // namespace
 
-std::unique_ptr<Rule> MakeNAME() { return std::make_unique<NAME>(); }
+KT1_REGISTER_SYSTEM(NAME, ORDER, NAME)   // NAME as in RuleInfo.name; ORDER from KT1Register.h's table
+// Also in this folder: sources.cmake with `kt1_system(NAMES NAME SOURCES KT1NAME.cpp)`; in the game:
+// gamedata/kt1/options/<name>.lua with the kt1_<name> switch, and gamedata/kt1/<name>.lua for tuning.
 
 } // namespace KT1

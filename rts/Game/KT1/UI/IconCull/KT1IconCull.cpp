@@ -23,6 +23,7 @@
 #include <string>
 
 #include "Game/KT1/KT1Registry.h"
+#include "Game/KT1/KT1Register.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/IconHandler.h"
@@ -93,6 +94,6 @@ namespace IconCull {
 	}
 }
 
-std::unique_ptr<Rule> MakeIconCull() { return std::make_unique<IconCull::IconCullRule>(); }
+KT1_REGISTER_SYSTEM(IconCull, 1000, IconCull::IconCullRule)
 
 } // namespace KT1

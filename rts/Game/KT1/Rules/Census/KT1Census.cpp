@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "Game/KT1/KT1Registry.h"
+#include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
@@ -122,6 +123,6 @@ private:
 
 } // namespace
 
-std::unique_ptr<Rule> MakeCensus() { return std::make_unique<Census>(); }
+KT1_REGISTER_SYSTEM(Census, 100, Census)
 
 } // namespace KT1
