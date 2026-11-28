@@ -8,6 +8,7 @@
 
 #include "Check.h"
 #include "Fakes.h"
+#include "KT1Trace.h"
 
 #include "Game/GameHelper.h"
 #include "Sim/Features/Feature.h"
@@ -91,7 +92,10 @@ public:
 		return false;
 	}
 	int GetReadAllyTeam() const override { return AllAccessTeam; }
-	void GameOver(const std::vector<unsigned char>&) override { Check::Total(); }
+	void GameOver(const std::vector<unsigned char>&) override {
+		Check::Total();
+		Trace::Close();
+	}
 
 	void UnitCreated(const CUnit* u, const CUnit* builder) override {
 		Event e = UnitEvent(EventType::UnitCreated, u);

@@ -8,6 +8,7 @@
 #include "CommandHooks.h"
 #include "DisplayEvents.h"
 #include "Fakes.h"
+#include "KT1Trace.h"
 #include "Game/KT1/Draw/Common/DisplayListen.h"
 #include "Game/KT1/Draw/Common/DrawFeed.h"
 #include "Phases.h"
@@ -28,6 +29,7 @@ void ResetSimHost() {
 	SimEvents::Reset();
 	Phases::Reset();
 	Fakes::Reset();
+	Trace::Reset();
 }
 
 } // namespace KT1

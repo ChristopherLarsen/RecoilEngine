@@ -8,6 +8,7 @@
 
 #include "Check.h"
 #include "DisplayEvents.h"
+#include "KT1Trace.h"
 #include "Fakes.h"
 #include "SimEvents.h"
 #include "SyncState.h"
@@ -60,6 +61,7 @@ void Phases::Run(Core::SimHost::Phase phase, int frame) {
 	}
 	if (phase != Core::SimHost::Phase::FrameEnd) return;
 	Check::CloseStep(frame);
+	Trace::CloseStep(frame);
 	SyncState::Close();
 	SimEvents::Compact();
 	DisplayEvents::Publish(frame);
