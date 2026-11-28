@@ -21,6 +21,7 @@ namespace KT1 {
 
 namespace {
 constexpr int FIRST_ORDER = 10;          // DESIGN: before every Lua handle, so native drawing lies under script drawing
+// KT1 lint: allow frame-literal a bit shift, not a frame count
 constexpr int LAST_ORDER = 1 << 30;      // DESIGN: after every other client
 
 void RunPhase(DrawPhase phase);

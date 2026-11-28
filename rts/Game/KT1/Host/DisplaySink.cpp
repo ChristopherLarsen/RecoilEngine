@@ -42,7 +42,7 @@ void Play(const DisplayEvent& e) {
 			LOG("%s", e.text);
 		} break;
 		case DisplayKind::DebugLine: {
-			const int steps = static_cast<int>(e.value * GAME_SPEED + 0.5f);   // seconds to sim steps, rounded
+			const int steps = static_cast<int>(e.value * GAME_SPEED + 0.5f);   // DESIGN: seconds to sim steps, to the nearest (0.5)
 			geometricObjects->AddLine(ToFloat3(e.a), ToFloat3(e.b), e.size, 0, steps);
 		} break;
 		case DisplayKind::Ping: {
