@@ -12,8 +12,8 @@
 //             events (UnitCreated, UnitDestroyed, UnitUnloaded, UnitGiven)
 // State:      per unit (Core/OrderRules/GuardLogic.h), in the sync checksum when live
 // Live:       a group whose rows change Orders' state acts only while system Orders holds that state
-// Check:      each group's answer and each rewritten order (OrderRulesAdapter.h has the keys). RuleInfo.checkSafe stays
-//             false until the replaced gadgets answer those keys
+// Check:      each group's answer and each rewritten order (OrderRulesAdapter.h has the keys). Compute-only: every
+//             engine write asks Check::MayWrite or goes through SimContext
 // Lua (synced handles only):
 //   Spring.KT1.OrderRules.Handles(gadget)     -> the engine answers that gadget's order calls now (it returns true)
 //   Spring.KT1.OrderRules.Passing(row, on)    the Lua gives the order row `row` would give: the row lets it through
@@ -131,7 +131,8 @@ namespace {
 
 class OrderRulesRule : public Rule {
 public:
-	OrderRulesRule() : Rule({NAME, 1, true, "ord_orders.lua: AllowCommand, AllowUnitBuildStep, AllowUnitTransportLoad/Unload; ord_refuse.lua; ord_edge; ord_known_target; ord_reclaim_still; ord_transfer; mov_goal_cell; mov_shift_keep; mov_short_order; mov_air_unload_gap; mov_air_idle_water", false}) {}
+	// the last two: on by default (no), honours the check-mode contract (yes)
+	OrderRulesRule() : Rule({NAME, 1, true, "ord_orders.lua: AllowCommand, AllowUnitBuildStep, AllowUnitTransportLoad/Unload; ord_refuse.lua; ord_edge; ord_known_target; ord_reclaim_still; ord_transfer; mov_goal_cell; mov_shift_keep; mov_short_order; mov_air_unload_gap; mov_air_idle_water", false, true}) {}
 
 	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
 		return Data::ParseInto(text, strictness, table.config);
