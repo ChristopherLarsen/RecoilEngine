@@ -22,7 +22,7 @@
 #include <vector>
 
 #include "Lua/LuaAllocState.h"
-#include "Lua/LuaInclude.h"
+#include "lib/lua/include/LuaInclude.h"
 #include "Lua/LuaUtils.h"
 #include "lib/lua/include/LuaUser.h"
 #include "Sim/Misc/GlobalSynced.h"
