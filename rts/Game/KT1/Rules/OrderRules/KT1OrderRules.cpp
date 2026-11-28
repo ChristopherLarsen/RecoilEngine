@@ -8,6 +8,9 @@
 // Switch:     mod option kt1_orderrules = 0 / 1 / check; unset: the family's kt1_fam_orders
 // Config:     data/kt1/orderrules.json (Core/OrderRules/OrderRuleRow.h has the keys, defaults and labels)
 // Allow:      AllowCommand, AllowUnitBuildStep, AllowFeatureBuildStep, AllowUnitTransportLoad, AllowUnitTransportUnload
+// Phases:     FrameStart 2000 idle aircraft over water, 2400 repeated trims of transferred factories; AfterUnits the
+//             events (UnitCreated, UnitDestroyed, UnitUnloaded, UnitGiven)
+// State:      per unit (Core/OrderRules/GuardLogic.h), in the sync checksum when live
 // Live:       a group whose rows change Orders' state acts only while system Orders holds that state
 // Check:      each group's answer and each rewritten order (OrderRulesAdapter.h has the keys). RuleInfo.checkSafe stays
 //             false until the replaced gadgets answer those keys
@@ -138,6 +141,7 @@ public:
 		table.Compile();
 		table.state.Init(MAX_UNITS);
 		RegisterValidators();
+		RegisterFrameWork(table);
 		LOG("[KT1] %s: %d rows", NAME, static_cast<int>(table.compiled.size()));
 	}
 
@@ -201,6 +205,8 @@ private:
 		const OrderRulesRule* r = Self(L);
 		bool handles = false;
 		if (r != nullptr && r->SwitchMode() == Mode::On) {
+			// ord_transfer has no row: its work sets the fire state, which is Orders'
+			handles = gadget == "ord_transfer" && Orders::Internal::State() != nullptr;
 			for (const auto& list : r->table.groups) {
 				for (const Group& g : list) handles = handles || (g.gadget == gadget && Natively(g, false));
 			}
