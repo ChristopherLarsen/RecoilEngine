@@ -90,7 +90,8 @@ private:
 		char name[NAME_LEN] = {};
 		Side side = UNSYNCED;
 		int gadgets = 0, widgets = 0;
-		bool counted = false;
+		bool counted = false;      // read in this window
+		bool recent = false;       // read in the window before
 	};
 	struct RowSlot {
 		char name[NAME_LEN] = {};

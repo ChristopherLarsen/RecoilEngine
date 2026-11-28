@@ -15,6 +15,7 @@ namespace {
 	constexpr uint32_t HASH_MIX = 31u;        // DESIGN: any odd multiplier, spreads one name over the states
 
 	// Per-unit call-ins whose name does not start with "Unit" (DESIGN: the unit is among the first arguments).
+	// Draw call-ins (DrawUnit, DrawShield) run per drawn frame, not per sim step: not in the count.
 	constexpr const char* PER_UNIT[] = {
 		"AllowCommand", "CommandFallback", "AllowUnitCreation", "AllowUnitTransfer", "AllowUnitBuildStep",
 		"AllowUnitCaptureStep", "AllowUnitTransport", "AllowUnitTransportLoad", "AllowUnitTransportUnload",
@@ -75,16 +76,15 @@ int Meter::Row(int state, uint32_t hash, const char* callIn) {
 
 // KT1 hot
 void Meter::Push(int row, Side side, bool gc, int64_t nowNs) {
-	if (depth == MAX_DEPTH) { ++overflow; ++acc.lostCalls; return; }
+	if (depth == MAX_DEPTH) { ++overflow; return; }
 	stack[depth++] = Frame{row, side, gc, nowNs, 0};
 }
 
 // KT1 hot
 void Meter::Enter(int row, Side side, int64_t nowNs, int step) {
 	++acc.calls[side];
-	if (row < 0) {
-		++acc.lostCalls;
-	} else if (rows[row].perUnit) {
+	if (row < 0 || depth == MAX_DEPTH) ++acc.lostCalls;
+	if (row >= 0 && rows[row].perUnit) {
 		++acc.unitCalls;
 		if (step != lastUnitStep) { lastUnitStep = step; ++acc.unitCallSteps; }
 	}
@@ -92,7 +92,10 @@ void Meter::Enter(int row, Side side, int64_t nowNs, int step) {
 }
 
 // KT1 hot
-void Meter::EnterGc(Side side, int64_t nowNs) { Push(-1, side, true, nowNs); }
+void Meter::EnterGc(Side side, int64_t nowNs) {
+	if (depth == MAX_DEPTH) ++acc.lostCalls;
+	Push(-1, side, true, nowNs);
+}
 
 // KT1 hot
 void Meter::Leave(int64_t nowNs) {
@@ -140,7 +143,10 @@ void Meter::StartWindow(int step, int drawFrame) {
 	lastUnitStep = -1;
 	started = true;
 	for (int i = 0; i < rowCount; ++i) { rows[i].selfNs = 0; rows[i].calls = 0; }
-	for (int i = 0; i < stateCount; ++i) states[i].counted = false;
+	for (int i = 0; i < stateCount; ++i) {
+		states[i].recent = states[i].counted;
+		states[i].counted = false;
+	}
 	for (AllocSlot& s : allocSlots) {
 		if (!s.seen) s = AllocSlot{};             // its context is gone
 		s.seen = false;
@@ -171,9 +177,10 @@ Report Meter::Close(int step, int drawFrame, int periodSteps) {
 	r.simSteps = step - startStep;
 	r.drawFrames = drawFrame - startDraw;
 	r.partial = r.simSteps < periodSteps;
-	// a state keeps its last count: one that made no call in this window still holds its gadgets
+	// a state unheard of for two windows is gone (LuaUI switched off): its gadgets and widgets drop out
 	for (int i = 0; i < stateCount; ++i) {
 		const StateSlot& s = states[i];
+		if (!s.counted && !s.recent) continue;
 		if (s.side == SYNCED) r.gadgetsSynced += s.gadgets;
 		else r.gadgetsUnsynced += s.gadgets;
 		r.widgets += s.widgets;

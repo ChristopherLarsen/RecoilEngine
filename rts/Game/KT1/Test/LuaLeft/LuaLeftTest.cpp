@@ -163,6 +163,17 @@ KT1_CASE("LL-DEEP", "calls nested past the stack unwind, and the outermost call'
 	KT1_CHECK_EQ(r.lostCalls, 3u);
 }
 
+KT1_CASE("LL-LOST", "a call without a row or past the stack is lost once") {
+	auto m = std::make_unique<Meter>();
+	m->StartWindow(0, 0);
+	for (int i = 0; i < MAX_DEPTH; ++i) m->Enter(-1, SYNCED, 0, 1);
+	m->Enter(-1, SYNCED, 0, 1);                   // no row and too deep
+	m->EnterGc(SYNCED, 0);                        // a collection too deep
+	for (int i = 0; i < MAX_DEPTH + 2; ++i) m->Leave(0);
+	KT1_CHECK(m->Idle());
+	KT1_CHECK_EQ(m->Close(1, 1, 1).lostCalls + 0, uint64_t(MAX_DEPTH + 2));
+}
+
 KT1_CASE("LL-ALLOCS", "allocations are counter growth per side; new and gone contexts are handled") {
 	auto m = std::make_unique<Meter>();
 	int a = 0, b = 0, c = 0;
@@ -198,9 +209,15 @@ KT1_CASE("LL-COUNTS", "gadget and widget counts are read once a window and summe
 	KT1_CHECK_EQ(r.gadgetsSynced, 102);
 	KT1_CHECK_EQ(r.gadgetsUnsynced, 60);
 	KT1_CHECK_EQ(r.widgets, 190);
-	const Report r2 = m->Close(2, 2, 1);
 	KT1_CHECK(m->CountsWanted(s));
-	KT1_CHECK_EQ(r2.gadgetsSynced, 102);          // a silent state keeps its count
+	m->SetCounts(s, 100, 0);
+	const Report r2 = m->Close(2, 2, 1);
+	KT1_CHECK_EQ(r2.gadgetsSynced, 102);          // quiet for one window: still there
+	m->SetCounts(s, 100, 0);
+	const Report r3 = m->Close(3, 3, 1);
+	KT1_CHECK_EQ(r3.gadgetsSynced, 100);          // quiet for two: closed
+	KT1_CHECK_EQ(r3.widgets, 0);
+	KT1_CHECK(!IsPerUnitCallIn("DrawUnit"));
 }
 
 KT1_CASE("LL-UNIT-NAMES", "per-unit call-ins are told from per-step and batched ones") {
