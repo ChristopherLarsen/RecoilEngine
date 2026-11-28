@@ -28,7 +28,7 @@ struct FarViewConfig {
 	float rampLight[3] = {0.80f, 0.80f, 0.68f};   // DESIGN
 	float contourStep = 0.10f;      // DESIGN: contour spacing as a share of the height range
 	float edgeGain = 16.0f;         // DESIGN: sharpness of a contour line
-	bool drawModels = true;         // REQ (RND-005 v2 R5, owner ruling 2026-11-27 "match original"): the cartographic frame draws unit and feature meshes
+	bool drawModels = true;         // DESIGN (owner 2026-11-27; RND-005 withdrawn): the cartographic frame draws unit and feature meshes
 	bool drawFx = true;             // DESIGN: projectiles, particles and ground flashes draw in the far view
 	float fxCutoff = -1.0f;         // DESIGN: a value > 0 culls effects past this view depth
 	float weaponCutoff = -1.0f;     // DESIGN: the same for weapon projectiles
