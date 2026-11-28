@@ -34,7 +34,8 @@ constexpr const char* NAME = "TemplatePanel";
 
 class TemplatePanel : public Rule, public DrawSystem {
 public:
-	TemplatePanel() : Rule({NAME, 1, false, "<the widget it replaces>", false}) {}
+	// the last two: on by default (no), honours the check-mode contract (yes: it writes nothing the game reads)
+	TemplatePanel() : Rule({NAME, 1, false, "<the widget it replaces>", false, true}) {}
 
 	// Rule
 	void LoadConfig(const LuaTable& cfg) override { config.max_rows = cfg.GetInt("max_rows", config.max_rows); }

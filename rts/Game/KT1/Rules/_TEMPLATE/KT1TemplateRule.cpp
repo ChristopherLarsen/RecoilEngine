@@ -12,16 +12,19 @@
 // Switch:     mod option kt1_templaterule = 0 (default) / 1 / check
 // Config:     gamedata/kt1/templaterule.lua (KT1TemplateRuleConfig.h has the keys, defaults and labels)
 // Phases:     FrameStart  tracks units from the events
-//             AfterMove   visits the units due this step
+//             AfterUnits  visits the units due this step
 //             FrameEnd    publishes Snapshot<Core::Template::Dot>
 // Events:     UnitFinished, UnitDestroyed
-// State:      per unit: charge, due step (Core/_TEMPLATE/TemplateRuleCore.h); both in the sync checksum
-// Display:    none from the sim step; a sound, effect or log line would go through DisplayEvents
-// Check:      check mode: the Lua keeps running and hands its value to Compare, which reports through Host/Check
+// State:      per unit: charge, due step (Core/_TEMPLATE/TemplateRuleCore.h); both in the sync checksum when live
+// Display:    none from the sim step; a sound, effect or log line would go through DisplayEvents (never in check mode)
+// Allow:      none; a validator is added with AllowChain::Add<CallIn>(NAME, Checking(), order, fn)
+// Check:      the contract in KT1Register.h (RuleInfo.checkSafe): the Lua stays authoritative; this rule keeps its own
+//             state outside the sync checksum, publishes nothing, and gives Host/Check each value it computes
+//             (Check::Native "charge", unit id). The replaced gadget, in check mode, answers for the same visit:
+//             Spring.KT1.Check.Answer("TemplateRule", "charge", unitID, 0, 0, charge)
 // Timer:      KT1::TemplateRule
 // Lua (synced handles only):
 //   Spring.KT1.TemplateRule.Charge(unitID)             -> charge, or nothing for an untracked unit
-//   Spring.KT1.TemplateRule.Compare(unitID, charge)    check mode: compares bit for bit
 // Rule:       <the rule, step by step, as the requirement states it; cite the requirement id and version>
 // Determinism: due ids ascending (DueWheel); events in raise order; float maths in Core in the Lua's order.
 // Doc:        game-build docs/engine/rules/<system>.md
@@ -56,7 +59,8 @@ constexpr const char* NAME = "TemplateRule";
 
 class TemplateRule : public Rule {
 public:
-	TemplateRule() : Rule({NAME, 1, true, "LuaRules/Gadgets/<gadget>.lua", false}) {}
+	// the last two: on by default (no), honours the check-mode contract (yes)
+	TemplateRule() : Rule({NAME, 1, true, "LuaRules/Gadgets/<gadget>.lua", false, true}) {}
 
 	// game setup, only for an enabled rule: read the config, size the state, register phases and synced columns
 	void LoadConfig(const LuaTable& cfg) override {
@@ -65,24 +69,24 @@ public:
 		config.cap = cfg.GetFloat("cap", config.cap);
 		params = {Core::Rate::Every(config.period_s), config.gain, config.cap};
 		state.Init(MAX_UNITS, params);
+		RegisterPhases();
+		if (Checking()) return;   // shadow state: not synced state, and nothing for the draw side
 		snapshot.Init(MAX_UNITS);
 		SnapshotBoard::Get().Publish(snapshot);
-		RegisterPhases();
 		SyncState::Add(NAME, "charge", state.units.index, state.charge);
 		SyncState::Add(NAME, "due", state.units.index, state.dueStep);
 	}
 
-	void PushLua(lua_State* L) override {
-		LuaPushRawNamedCFunc(L, "Charge", LCharge);
-		LuaPushRawNamedCFunc(L, "Compare", LCompare);
-	}
+	void PushLua(lua_State* L) override { LuaPushRawNamedCFunc(L, "Charge", LCharge); }
 
 private:
+	bool Checking() const { return SwitchMode() == Mode::Check; }
+
 	void RegisterPhases() {
 		const auto mask = MaskOf(EventType::UnitFinished) | MaskOf(EventType::UnitDestroyed);
 		Phases::Add(NAME, Phase::FrameStart, 0, mask, [this](const SimContext& c) { Track(c); });
-		Phases::Add(NAME, Phase::AfterMove, 0, 0, [this](const SimContext& c) { state.Visit(state.TakeDue(), c.ids, params); });
-		Phases::Add(NAME, Phase::FrameEnd, 0, 0, [this](const SimContext& c) { Publish(c); });
+		Phases::Add(NAME, Phase::AfterUnits, 0, 0, [this](const SimContext& c) { Visit(c); });
+		if (!Checking()) Phases::Add(NAME, Phase::FrameEnd, 0, 0, [this](const SimContext& c) { Publish(c); });
 	}
 
 	// KT1 hot
@@ -91,6 +95,17 @@ private:
 			if (e.type == EventType::UnitFinished) state.Add(e.id, params);
 			else state.Remove(e.id);
 		});
+	}
+
+	// KT1 hot
+	void Visit(const SimContext& c) {
+		const auto due = state.TakeDue();
+		state.Visit(due, c.ids, params);
+		if (!Checking()) return;
+		for (const int32_t id : due) {
+			const Core::DenseIndex::Slot slot = state.units.index.SlotOf(id);
+			if (slot != Core::DenseIndex::NONE && c.ids.Contains(id)) Check::Native(NAME, "charge", id, 0, 0, state.charge[slot]);
+		}
 	}
 
 	// the draw side's copy of this step: publish only what a draw system reads
@@ -119,17 +134,6 @@ private:
 		if (slot == Core::DenseIndex::NONE) return 0;
 		lua_pushnumber(L, r->state.charge[slot]);
 		return 1;
-	}
-
-	static int LCompare(lua_State* L) {
-		TemplateRule* r = Self(L);
-		if (r == nullptr || r->SwitchMode() != Mode::Check) return 0;
-		const int id = luaL_checkint(L, 1);
-		const float lua = luaL_checkfloat(L, 2);
-		const Core::DenseIndex::Slot slot = r->state.units.index.SlotOf(id);
-		if (slot == Core::DenseIndex::NONE) Check::Add(NAME, 1, 1, "unit not tracked");
-		else Check::Float(NAME, "charge", id, r->state.charge[slot], lua);
-		return 0;
 	}
 
 	TemplateRuleConfig config;

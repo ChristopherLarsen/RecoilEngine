@@ -16,7 +16,8 @@
 // Config:     gamedata/kt1/templatedraw.lua (KT1TemplateDrawConfig.h has the keys, defaults and labels)
 // Reads:      DrawView (Snapshot<Core::Template::Dot>) and FrameFacts only. No Sim/ include; no pointer kept.
 // Draws:      WorldAlpha: one camera-facing quad per published unit in view, one instanced draw, only changes uploaded
-// Check:      check mode reads the GPU buffer back each frame and counts differing instances
+// Check:      check mode (RuleInfo.checkSafe) reads the GPU buffer back each frame and counts differing instances; it
+//             draws beside the Lua, so pixel proofs compare the switch off and on, never check
 // Timer:      KT1::TemplateDraw
 // Doc:        game-build docs/engine/rules/<system>.md
 
@@ -68,7 +69,8 @@ void main() { frag = vColor; }
 
 class TemplateDraw : public Rule, public DrawSystem {
 public:
-	TemplateDraw() : Rule({NAME, 1, false, "<the drawing it replaces>", false}) {}
+	// the last two: on by default (no), honours the check-mode contract (yes)
+	TemplateDraw() : Rule({NAME, 1, false, "<the drawing it replaces>", false, true}) {}
 
 	// Rule
 	void LoadConfig(const LuaTable& cfg) override {
