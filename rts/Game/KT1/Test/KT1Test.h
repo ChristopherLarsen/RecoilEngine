@@ -1,7 +1,7 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 engine-free Core tests (LUA-FREE-WORKPACKAGES F03): case registration and checks. Standard library only.
 // Run: python -I tools/engine/core_tests.py (game-build). No engine build, no list to edit: the driver compiles
-// KT1/Core/**/*.cpp, KT1/Test/*.cpp and every KT1/Test/**/*Test.cpp into one binary.
+// KT1/Core/**/*.cpp, KT1/Test/*.cpp, every KT1/Test/**/*Test.cpp and the .cpp files marked engine-free into one binary.
 //
 //   Test/<System>/<Name>Test.cpp:
 //     KT1_CASE("SYS-ONE", "what must hold") { KT1_CHECK(a < b); KT1_CHECK_EQ(Sum(v), 6); }
@@ -36,6 +36,9 @@ namespace KT1::Test {
 		void Fail(const char* file, int line, const std::string& what);
 		void Fail(const std::string& what);
 		bool Failed() const { return failures > 0; }
+		// one check of the macros below, passed or not
+		void CountCheck() { ++checks; }
+		int Checks() const { return checks; }
 		// the rate of this pass of a rate case, 0 in a plain case
 		int StepsPerSecond() const { return stepsPerSecond; }
 		// the first failure and how many followed it
@@ -44,6 +47,7 @@ namespace KT1::Test {
 	private:
 		std::string first;
 		int failures = 0;
+		int checks = 0;
 		int stepsPerSecond;
 	};
 
@@ -83,10 +87,14 @@ namespace KT1::Test {
 #define KT1_RATE_CASE(id, text) KT1_TEST_CASE_(KT1_TEST_JOIN(kt1Case, __COUNTER__), id, text, true)
 
 // A failed check is recorded and the case goes on. Wrap a condition or value that holds a bare comma in parentheses.
-#define KT1_CHECK_MSG(condition, message) do { if (!(condition)) testCase.Fail(__FILE__, __LINE__, (message)); } while (0)
+#define KT1_CHECK_MSG(condition, message) do { \
+		testCase.CountCheck(); \
+		if (!(condition)) testCase.Fail(__FILE__, __LINE__, (message)); \
+	} while (0)
 #define KT1_CHECK(condition) KT1_CHECK_MSG(condition, #condition)
 #define KT1_CHECK_EQ(actual, expected) do { \
 		const auto& kt1Actual = (actual); const auto& kt1Expected = (expected); \
+		testCase.CountCheck(); \
 		if (!(kt1Actual == kt1Expected)) testCase.Fail(__FILE__, __LINE__, KT1::Test::Differ(#actual, kt1Actual, kt1Expected)); \
 	} while (0)
 

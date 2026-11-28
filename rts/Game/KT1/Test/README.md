@@ -10,6 +10,9 @@ In game-build:
 ## Adding tests
 
 - A test file is `Test/<System>/<Name>Test.cpp`. The driver finds it: no list, no CMake line.
+- The code under test: every `Core/**/*.cpp` is compiled, and any other KT1 `.cpp` with a line starting
+  `// KT1 engine-free` (put it in the file's top comment; such a file includes no engine header, `Data/` for example).
+  A `.cpp` without that line is left out, so an adapter beside it can include the engine. `simdjson.h` is available.
 - Cases: `KT1_CASE("SYS-ID", "what must hold")` and `KT1_RATE_CASE(...)`; checks: `KT1_CHECK`, `KT1_CHECK_EQ`,
   `KT1_CHECK_MSG` (`KT1Test.h`). Ids are unique across all systems.
 - A rate case runs at 30 and at 10 steps per second with `KT1::Core::Rate` already set; `testCase.StepsPerSecond()`
