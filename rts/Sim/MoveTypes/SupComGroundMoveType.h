@@ -65,6 +65,7 @@ public:
 	bool OnSeabed() const;
 	float GetContactLift() const override { return contactLift; }
 	bool HeadingLocked() const override;
+	void ClipCollisionForce(float3& force) const override;
 	bool WantReverseTurnGo(const float3& wpDir, const float3& ffDir) const;
 	bool HoldForTurn(int dir) const;
 	bool GetHeadingFree() const { return headingFree; }

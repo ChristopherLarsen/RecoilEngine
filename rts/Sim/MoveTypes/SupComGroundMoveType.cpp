@@ -738,6 +738,25 @@ bool CSupComGroundMoveType::HasFurtherPoint() const
 	return false;
 }
 
+// pathing fix 20 (PTH-004-E v3 "its path never crosses an impassable cell"; L11965 trace on kt1-big-1128: a unit held at a structure in a
+// one-cell gap crept 0.1 elmos every 20 frames into the wall corner, 0.72 elmos deep for 247 frames, though its own steps were refused):
+// the collision pass's push (the static block's strafe and bounce) is held to the rule the unit's own steps keep (the PTH-004-E step
+// test in UpdateOwnerPos): a push that takes the footprint deeper into impassable squares, or adds overlap, is dropped. Switch
+// SupComCollisionNoDeeper, default 1 (DESIGN: no released value names it)
+void CSupComGroundMoveType::ClipCollisionForce(float3& force) const
+{
+	// SupComNoDeeper (default 0, combined-engine rule: off until the matrix turns it on) gates every no-deeper clip of fixes 20 and 21;
+	// the per-clip switches below (default 1) only narrow it down when it is on
+	static const bool on = SupComSimSwitch::Get("SupComNoDeeper", false) && SupComSimSwitch::Get("SupComCollisionNoDeeper", true);
+	if (!on || force.SqLength2D() <= 0.0f)
+		return;
+	const float3 next = owner->pos + force;
+	if (!FootprintBlocked(next))
+		return;
+	if (FootprintDepth(next) > FootprintDepth(owner->pos) + 1e-3f || FootprintOverlapArea(next) > FootprintOverlapArea(owner->pos) + 1e-3f)
+		force = ZeroVector;
+}
+
 float CSupComGroundMoveType::FootprintDepth(const float3& pos) const
 {
 	// how far the footprint reaches into impassable squares: over the blocked squares it overlaps, the largest
@@ -1218,6 +1237,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		owner->SetVelocityAndSpeed(ZeroVector);
 		resultantForces = scPushBack;
 		scPushBack = ZeroVector;
+		{ static const bool on21 = SupComSimSwitch::Get("SupComNoDeeperPushBack", true); if (on21) ClipCollisionForce(resultantForces); } // switch SupComNoDeeperPushBack, default 1 // pathing fix 21 (PTH-004-E): the push back obeys the no-deeper rule of fix 20
 		UpdateTurnRate();
 		return;
 	}
@@ -1259,6 +1279,9 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				resultantForces = ZeroVector;
 				owner->SetVelocityAndSpeed(ZeroVector);
 			}
+			// pathing fix 21 (PTH-004-E, L11984 seeds 1 and 3: 22 held frames 1.85 elmos deep after fix 20): a slide that starts on
+			// impassable squares may not go deeper or add overlap either (the test above only covers a slide from a clear spot)
+			{ static const bool on21 = SupComSimSwitch::Get("SupComNoDeeperSlide", true); if (on21) ClipCollisionForce(resultantForces); } // switch SupComNoDeeperSlide, default 1
 
 			scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
 			scPhase = PHASE_DRIVE;
@@ -1278,6 +1301,40 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 	if (scBlockedFrames >= BLOCKED_HANDOVER_FRAMES) {
 		if (FootprintBlocked(owner->pos) && progressState == Active) {
 			CGroundMoveType::UpdateUnitPosition();
+			// pathing fix 21 (PTH-004-E): the stock step that is to free the footprint may not take it deeper or add overlap
+			{
+				// SupComNoDeeperFreeDepthOnly (default 0, test): only a step that goes deeper is dropped, added overlap is allowed;
+				// SupComNoDeeperLog (default 0) logs each free step that would add depth or overlap
+				static const bool on21 = SupComSimSwitch::Get("SupComNoDeeper", false) && SupComSimSwitch::Get("SupComNoDeeperFree", true);
+				static const bool depthOnly = SupComSimSwitch::Get("SupComNoDeeperFreeDepthOnly", false);
+				static const bool log21 = SupComSimSwitch::Get("SupComNoDeeperLog", false);
+				const float3 nx = owner->pos + resultantForces;
+				const float d0 = FootprintDepth(owner->pos), d1 = FootprintDepth(nx), a0 = FootprintOverlapArea(owner->pos), a1 = FootprintOverlapArea(nx);
+				const bool deeper = (d1 > d0 + 1e-3f), more = (a1 > a0 + 1e-3f);
+				if (log21 && resultantForces.SqLength2D() > 0.0f && FootprintBlocked(nx) && (deeper || more))
+					LOG("[SupComNoDeeper] f=%d unit %d free step (%.2f, %.2f) at (%.2f, %.2f) cells: depth %.2f -> %.2f, area %.1f -> %.1f", gs->frameNum, owner->id,
+						resultantForces.x, resultantForces.z, owner->pos.x / SQUARE_SIZE, owner->pos.z / SQUARE_SIZE, d0, d1, a0, a1);
+				if (on21 && resultantForces.SqLength2D() > 0.0f && FootprintBlocked(nx) && (deeper || (!depthOnly && more))) {
+					// L12032 (PTH-003-C): the stock step of a unit touching a wall (depth 0) slides along it with a 0.06 elmo inward
+					// part; dropping the whole step held the unit there for good. Switch SupComNoDeeperFreeAxis (default 1): the step's
+					// x or z part alone is kept when it does not go deeper or add overlap (x first, then z); else the step is dropped
+					static const bool axis21 = SupComSimSwitch::Get("SupComNoDeeperFreeAxis", true);
+					const float3 full = resultantForces;
+					resultantForces = ZeroVector;
+					if (axis21) {
+						const float3 parts[2] = {float3(full.x, 0.0f, 0.0f), float3(0.0f, 0.0f, full.z)};
+						for (const float3& part: parts) {
+							if (part.SqLength2D() <= 0.0f)
+								continue;
+							const float3 px = owner->pos + part;
+							if (!FootprintBlocked(px) || (FootprintDepth(px) <= d0 + 1e-3f && (depthOnly || FootprintOverlapArea(px) <= a0 + 1e-3f))) {
+								resultantForces = part;
+								break;
+							}
+						}
+					}
+				}
+			} // pathing fix 21: switch SupComNoDeeperFree, default 1
 
 			scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
 			scPhase = PHASE_DRIVE;

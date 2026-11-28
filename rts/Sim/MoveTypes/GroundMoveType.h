@@ -160,6 +160,7 @@ private:
 	virtual bool HoldLastLeg() { return false; } // supcom: no next waypoint while on the last leg to the goal is not a failed path
 	/// supcom: true while something else owns the unit's heading (ChangeHeading then does nothing)
 	virtual bool HeadingLocked() const { return false; }
+	virtual void ClipCollisionForce(float3& force) const {} // supcom: a move type may drop a collision push (PTH-004-E)
 
 	float3 GetObstacleAvoidanceDir(const float3& desiredDir);
 	float3 Here() const;
