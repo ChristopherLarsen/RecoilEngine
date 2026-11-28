@@ -439,14 +439,102 @@ void ReadRules(lua_State* L, int a) {
 int Rules(lua_State* L) { ReadRules(L, 1); return 0; }
 
 // Spring.SupComTgtInit(mode, insetElmos, skipFrames, overkill, defs { [wdID] = {...} }, ranks { [wdID] = { [udID] = rank } })
+void InitImpl(int m, double ins, int skip, bool over) {
+	inset = ins; skipFrames = skip; overkill = over;
+	Reset();
+	wdefs.assign(weaponDefHandler->NumWeaponDefs() + 1, WDef());
+	ranks.assign(wdefs.size(), {});
+	mode = m;
+}
+
+void SetRankImpl(int wd, int ud, int rk) {
+	if (wd < 0 || wd >= (int)ranks.size() || ud < 0 || ud > 65535)
+		return;
+	auto& r = ranks[wd];
+	if ((int)r.size() <= ud)
+		r.resize(ud + 1, 0);
+	r[ud] = (unsigned char)std::clamp(rk, 0, 255);
+}
+
+void AddImpl(int u, int n, int wd, int firstScan) {
+	if (u < 0 || wd < 0 || wd >= (int)wdefs.size() || !wdefs[wd].used)
+		return;
+	Grow(u);
+	Gun g;
+	g.n = n;
+	g.wd = wd;
+	g.nextScan = firstScan;
+	auto& list = guns[u];
+	list.push_back(g);
+	std::stable_sort(list.begin(), list.end(), [](const Gun& a, const Gun& b) { return a.n < b.n; });
+}
+
+void DestroyedImpl(int u, int nf) {
+	if (u < 0)
+		return;
+	Grow(u);
+	if (!deadFlag[u]) {
+		deadFlag[u] = 1;
+		deadNow.push_back(u);
+	}
+	const std::vector<int> sh = shooters[u];
+	shooters[u].clear();
+	for (int s: sh)
+		Wake(s, nf);
+	for (Gun& g: guns[u]) {
+		if (g.reg >= 0 && g.reg < (int)shooters.size()) {
+			auto& v = shooters[g.reg];
+			v.erase(std::remove(v.begin(), v.end(), u), v.end());
+		}
+	}
+	nextVisit[u] = -1;
+	guns[u].clear();
+	focus[u] = -1;
+	focusUnits.erase(u);
+	inflight[u] = 0.0;
+}
+
+void FireStateImpl(int u, int f) {
+	if (u < 0 || u >= (int)guns.size() || guns[u].empty())
+		return;
+	for (Gun& g: guns[u]) {
+		if (g.nextScan > f)
+			g.nextScan = f;
+	}
+	Wake(u, f + 1);
+}
+
+void FocusImpl(int u, int t) {
+	if (u < 0)
+		return;
+	Grow(u);
+	focus[u] = t;
+	if (t >= 0) focusUnits.insert(u); else focusUnits.erase(u);
+}
+
+void InflightImpl(int t, double d) {
+	if (t < 0)
+		return;
+	Grow(t);
+	inflight[t] = d;
+}
+
+const Gun* GunOf(int u, int n) {
+	if (u < 0 || u >= (int)guns.size())
+		return nullptr;
+	for (const Gun& g: guns[u]) {
+		if (g.n == n)
+			return &g;
+	}
+	return nullptr;
+}
+
 int Init(lua_State* L) {
 	const int m = luaL_checkint(L, 1);
 	ReadRules(L, 2);
 	luaL_checktype(L, 5, LUA_TTABLE);
 	luaL_checktype(L, 6, LUA_TTABLE);
-	Reset();
-	wdefs.assign(weaponDefHandler->NumWeaponDefs() + 1, WDef());
-	ranks.assign(wdefs.size(), {});
+	InitImpl(0, inset, skipFrames, overkill);
 	for (lua_pushnil(L); lua_next(L, 5) != 0; lua_pop(L, 1)) {
 		const int id = lua_tointeger(L, -2);
 		if (id < 0 || id >= (int)wdefs.size() || !lua_istable(L, -1))
@@ -471,16 +559,8 @@ int Init(lua_State* L) {
 		const int id = lua_tointeger(L, -2);
 		if (id < 0 || id >= (int)ranks.size() || !lua_istable(L, -1))
 			continue;
-		auto& r = ranks[id];
-		for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
-			const int ud = lua_tointeger(L, -2);
-			const int rk = lua_tointeger(L, -1);
-			if (ud < 0 || ud > 65535)
-				continue;
-			if ((int)r.size() <= ud)
-				r.resize(ud + 1, 0);
-			r[ud] = (unsigned char)std::clamp(rk, 0, 255);
-		}
+		for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1))
+			SetRankImpl(id, lua_tointeger(L, -2), lua_tointeger(L, -1));
 	}
 	mode = m;
 	return 0;
@@ -488,19 +568,7 @@ int Init(lua_State* L) {
 
 // Spring.SupComTgtAdd(unitID, weaponNum (1-based), weaponDefID, firstScanFrame)
 int Add(lua_State* L) {
-	const int u = luaL_checkint(L, 1);
-	const int n = luaL_checkint(L, 2) - 1;
-	const int wd = luaL_checkint(L, 3);
-	if (u < 0 || wd < 0 || wd >= (int)wdefs.size() || !wdefs[wd].used)
-		return 0;
-	Grow(u);
-	Gun g;
-	g.n = n;
-	g.wd = wd;
-	g.nextScan = luaL_checkint(L, 4);
-	auto& list = guns[u];
-	list.push_back(g);
-	std::stable_sort(list.begin(), list.end(), [](const Gun& a, const Gun& b) { return a.n < b.n; });
+	AddImpl(luaL_checkint(L, 1), luaL_checkint(L, 2) - 1, luaL_checkint(L, 3), luaL_checkint(L, 4));
 	return 0;
 }
 
@@ -509,66 +577,25 @@ int WakeL(lua_State* L) { Wake(luaL_checkint(L, 1), luaL_checkint(L, 2)); return
 
 // Spring.SupComTgtDestroyed(unitID, nextFrame)
 int Destroyed(lua_State* L) {
-	const int u = luaL_checkint(L, 1);
-	const int nf = luaL_checkint(L, 2);
-	if (u < 0)
-		return 0;
-	Grow(u);
-	if (!deadFlag[u]) {
-		deadFlag[u] = 1;
-		deadNow.push_back(u);
-	}
-	const std::vector<int> sh = shooters[u];
-	shooters[u].clear();
-	for (int s: sh)
-		Wake(s, nf);
-	for (Gun& g: guns[u]) {
-		if (g.reg >= 0 && g.reg < (int)shooters.size()) {
-			auto& v = shooters[g.reg];
-			v.erase(std::remove(v.begin(), v.end(), u), v.end());
-		}
-	}
-	nextVisit[u] = -1;
-	guns[u].clear();
-	focus[u] = -1;
-	focusUnits.erase(u);
-	inflight[u] = 0.0;
+	DestroyedImpl(luaL_checkint(L, 1), luaL_checkint(L, 2));
 	return 0;
 }
 
 // Spring.SupComTgtFireState(unitID, frame): a fire-state order makes the unit's guns look at once
 int FireState(lua_State* L) {
-	const int u = luaL_checkint(L, 1);
-	const int f = luaL_checkint(L, 2);
-	if (u < 0 || u >= (int)guns.size() || guns[u].empty())
-		return 0;
-	for (Gun& g: guns[u]) {
-		if (g.nextScan > f)
-			g.nextScan = f;
-	}
-	Wake(u, f + 1);
+	FireStateImpl(luaL_checkint(L, 1), luaL_checkint(L, 2));
 	return 0;
 }
 
 // Spring.SupComTgtFocus(unitID, targetID | nil)
 int Focus(lua_State* L) {
-	const int u = luaL_checkint(L, 1);
-	if (u < 0)
-		return 0;
-	Grow(u);
-	const int t = lua_isnumber(L, 2)? lua_tointeger(L, 2): -1;
-	focus[u] = t;
-	if (t >= 0) focusUnits.insert(u); else focusUnits.erase(u);
+	FocusImpl(luaL_checkint(L, 1), lua_isnumber(L, 2)? lua_tointeger(L, 2): -1);
 	return 0;
 }
 
 // Spring.SupComTgtInflight(targetID, damage | nil)
 int Inflight(lua_State* L) {
-	const int t = luaL_checkint(L, 1);
-	if (t < 0)
-		return 0;
-	Grow(t);
-	inflight[t] = lua_isnumber(L, 2)? lua_tonumber(L, 2): 0.0;
+	InflightImpl(luaL_checkint(L, 1), lua_isnumber(L, 2)? lua_tonumber(L, 2): 0.0);
 	return 0;
 }
 
@@ -597,6 +624,35 @@ int Stats(lua_State* L) {
 }
 
 } // namespace
+
+// The native API (LUA-FREE S19): the same operations as the Spring.SupComTgt* calls, for the KT1 Targeting rule. A value
+// the Lua passed as a Lua number (float) must be passed as that float here, or the step differs from the Lua-fed one.
+void SupComTargeting::Init(int m, double insetElmos, int skipSteps, bool over) { InitImpl(m, insetElmos, skipSteps, over); }
+void SupComTargeting::SetRules(double insetElmos, int skipSteps, bool over) { inset = insetElmos; skipFrames = skipSteps; overkill = over; }
+void SupComTargeting::SetWeapon(int wd, const WeaponRules& r) {
+	if (wd < 0 || wd >= (int)wdefs.size())
+		return;
+	WDef& w = wdefs[wd];
+	w.used = true;
+	w.scan = std::max(1, r.scan);
+	w.track = r.track; w.rangeMin = r.rangeMin;
+	w.retarget = r.retarget; w.direct = r.direct;
+	w.air = r.air; w.surface = r.surface; w.under = r.under; w.seafloor = r.seafloor;
+	w.above = r.above; w.below = r.below; w.noGround = r.noGround;
+}
+void SupComTargeting::SetRank(int wd, int ud, int rank) { SetRankImpl(wd, ud, rank); }
+void SupComTargeting::AddGun(int u, int n0, int wd, int firstScan) { AddImpl(u, n0, wd, firstScan); }
+void SupComTargeting::WakeUnit(int u, int frame) { Wake(u, frame); }
+void SupComTargeting::UnitGone(int u, int nextFrame) { DestroyedImpl(u, nextFrame); }
+void SupComTargeting::FireStateChanged(int u, int frame) { FireStateImpl(u, frame); }
+void SupComTargeting::SetFocus(int u, int t) { FocusImpl(u, t); }
+void SupComTargeting::SetInflight(int t, double damage) { InflightImpl(t, damage); }
+int SupComTargeting::TargetOf(int u, int n0) { const Gun* g = GunOf(u, n0); return (g != nullptr)? g->target: -1; }
+int SupComTargeting::NextScanOf(int u, int n0) { const Gun* g = GunOf(u, n0); return (g != nullptr)? g->nextScan: -1; }
+void SupComTargeting::Stats(int& scans, int& candidates, int& holds) {
+	scans = stScans; candidates = stCand; holds = stHolds;
+	stScans = stCand = stHolds = 0;
+}
 
 void SupComTargeting::Update(int f)
 {
