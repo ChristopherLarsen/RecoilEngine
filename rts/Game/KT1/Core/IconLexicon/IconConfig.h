@@ -67,6 +67,7 @@ struct IconStyleConfig {
 	float bar_pitch = 2.0f;                // DESIGN: px between bar centres
 	int bars = 3;                          // DESIGN: room for this many is always kept
 	float mark_radius = 1.5f;              // DESIGN: the role mark
+	float fuel_low_fraction = 0.19f;       // DESIGN (2026-11-10, hud.Fuel): the low-fuel share where the unit sets none
 	template<class S> void Describe(S& s) {
 		s.Field("relation_self", relation_self);
 		s.Field("relation_ally", relation_ally);
@@ -87,6 +88,7 @@ struct IconStyleConfig {
 		s.Field("bar_pitch", bar_pitch);
 		s.Field("bars", bars);
 		s.Field("mark_radius", mark_radius);
+		s.Field("fuel_low_fraction", fuel_low_fraction);
 	}
 };
 
@@ -99,11 +101,11 @@ struct IconViewConfig {
 	float flicker_colour[3] = {1.0f, 0.18f, 0.12f};   // DESIGN
 	float contact_air_above = 40.0f;          // DESIGN: a contact this far above ground or water reads as air, elmos
 	float contact_sub_below = -8.0f;          // DESIGN: a contact below this height reads as submerged
-	int contact_spread_frames = 4;            // DESIGN: drawn frames over which every contact's shape is read once
 	float heading_ahead = 64.0f;              // DESIGN: elmos ahead of a unit for its screen heading (rotate only)
 	float hover_pad_px = 48.0f;               // DESIGN: reach of the near hover search beyond the largest box
 	int hover_frames = 10;                    // DESIGN: drawn frames between hover reads under a still cursor
 	int max_instances = 16384;                // DESIGN: icons drawn at most
+	int refresh_frames = 300;                 // DESIGN (icon_lex): drawn frames after which the set is remade anyway
 	float click_slop_px = 4.0f;               // DESIGN: pointer movement below this is a click
 	float double_click_px = 6.0f;             // DESIGN: the second click within this many pixels
 	std::string engine_icon = "lex3_none";    // DESIGN: the transparent engine icon type put on every def while icons draw
@@ -118,11 +120,11 @@ struct IconViewConfig {
 		s.Field("flicker_colour", flicker_colour);
 		s.Field("contact_air_above", contact_air_above);
 		s.Field("contact_sub_below", contact_sub_below);
-		s.Field("contact_spread_frames", contact_spread_frames);
 		s.Field("heading_ahead", heading_ahead);
 		s.Field("hover_pad_px", hover_pad_px);
 		s.Field("hover_frames", hover_frames);
 		s.Field("max_instances", max_instances);
+		s.Field("refresh_frames", refresh_frames);
 		s.Field("click_slop_px", click_slop_px);
 		s.Field("double_click_px", double_click_px);
 		s.Field("engine_icon", engine_icon);
@@ -135,12 +137,10 @@ struct IconViewConfig {
 struct IconMinimapConfig {
 	float size_px = 6.0f;                // REQ ICO-011: a unit's minimap icon
 	float big_px = 11.0f;                // REQ ICO-011: commanders and experimentals
-	int contact_spread_frames = 4;       // DESIGN: drawn frames over which every contact is read once
 	int refresh_hz = 5;                  // DESIGN (owner 2026-11-21): MiniMapRefreshRate this session; 0: the engine's choice
 	template<class S> void Describe(S& s) {
 		s.Field("size_px", size_px);
 		s.Field("big_px", big_px);
-		s.Field("contact_spread_frames", contact_spread_frames);
 		s.Field("refresh_hz", refresh_hz);
 	}
 };

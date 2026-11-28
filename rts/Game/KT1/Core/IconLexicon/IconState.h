@@ -34,7 +34,7 @@ struct Rgb {
 // what the adapter reads of one unit
 struct IconUnitFacts {
 	int32_t id = -1;
-	int32_t defId = 0;
+	int32_t defId = 0;                 // an index into the classes; below 0: the type is not known
 	int32_t team = 0;
 	int32_t unitSlot = 0;              // its per-object uniform index
 	Relation relation = Relation::Enemy;
@@ -95,6 +95,9 @@ struct IconState {
 	Column<uint8_t> kind;              // IconKind as drawn
 	Column<int32_t> place;             // index into order; -1: no instance
 	Column<float> flickerUntil;        // draw seconds; 0: not flickering
+	Column<Rgb> ownColour;             // the instance's colour without the flicker
+	std::vector<int32_t> lit;          // the units whose flicker window is open
+	int32_t limit = 0;                 // instances at most
 
 	std::vector<int32_t> order;              // unit ids in draw order
 	std::vector<IconInstance> instances;     // parallel to order

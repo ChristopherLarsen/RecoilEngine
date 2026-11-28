@@ -17,6 +17,8 @@ namespace FarView {
 	// `weapon` is a weapon projectile (its own cutoff), else a CEG particle or a ground flash. Called by
 	// rts/Rendering/Env/Particles/ProjectileDrawer.cpp ("// KT1 hook: FarView fx" lines). Always false in the full view.
 	bool FxCulled(float viewDepth, bool weapon);
+	// the last drawn frame was the far view (Spring.KT1.FarView.IsFar; the icon set forces icons on then)
+	bool IsFar();
 }
 }
 

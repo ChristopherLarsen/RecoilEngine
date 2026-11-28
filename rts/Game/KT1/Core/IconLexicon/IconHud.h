@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "IconState.h"
 
@@ -25,6 +26,10 @@ struct Badges {
 
 // condition from health (and fuel for own aircraft), activity and cloak for own and allied units, veterancy for all
 Badges BadgesFor(const IconStyleConfig& style, const IconClass& cls, const IconUnitFacts& unit);
+
+// an aircraft's low-fuel badge: capacity and low share are the def's parameters (low empty: the style's), fuel its rules
+// parameter (not known: full). False for a def without a capacity.
+bool FuelLow(const IconStyleConfig& style, std::string_view capacity, std::string_view lowShare, bool known, float fuel);
 
 // markup for one upright icon `px` wide: the fill tinted, the line work, then the badges. Empty for a key not in the atlas.
 std::string HudRml(const IconConfig& config, const IconClass& cls, int px, const Paint& paint, const Badges& badges);

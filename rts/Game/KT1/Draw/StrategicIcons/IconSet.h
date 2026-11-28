@@ -1,6 +1,6 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 draw: the one icon set both "icons" and "minimapunits" draw from, and what the HUD asks of it (LUA-FREE H01,
-// UNITDRAW §4.4; steps D01 and D02 write the bodies). System "icons" owns and updates it in the draw Update phase:
+// UNITDRAW §4.4; steps D01 and D02 write the bodies). System "Icons" owns it and updates it before its ScreenEffects draw, from this frame's facts:
 // rebuilt on unit create, destroy, sight, radar, selection, hover, cloak, option and switch changes, never per frame.
 // Inputs from other families come through DrawContext: the selection and the pointer from FrameFacts.
 // Lua: Spring.KT1.Icons (IconsBridge.h).
@@ -10,9 +10,12 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 
 #include "Game/KT1/Core/IconLexicon/HudOptions.h"
+#include "Game/KT1/Core/IconLexicon/IconHud.h"
 #include "Game/KT1/Core/IconLexicon/IconState.h"
+#include "Game/KT1/Host/DrawView.h"
 
 namespace KT1::Icons {
 
@@ -34,6 +37,20 @@ int Hovered();                                             // the unit under the
 void SetPaused(bool paused);                               // draw nothing (tests, cost comparison)
 bool Paused();
 bool FlickerTest(int unitId);                              // start the damage flicker; false: the unit has no icon
+
+// the HUD's icon markup (WG.iconLex HudRml and UnitHudRml): "" for no def, no unit, or a key not in the atlas;
+// team below 0: the viewer's
+std::string Markup(int defId, int px, int team, const Core::IconLexicon::Badges& badges);
+std::string UnitMarkup(int unitId, int px);               // with the unit's live badges
+// for the minimap layer, which reads the units itself: false while the set's system does not run or cannot draw
+bool Running();
+// what the set reads of one unit (`selected` left false); false: dead or not seen
+bool ReadUnit(const DrawView& view, const ViewerView& who, int id, Core::IconLexicon::IconUnitFacts& out);
+Core::IconLexicon::Paint TeamPaint(const DrawView& view, const ViewerView& who, int team, bool minimap);
+const std::string* EngineIconType(int defId);             // the def's engine icon type before the swap; null: not swapped
+const char* Kind(int unitId);                             // "full", "contact", or null: no icon
+int KindCount();
+const char* Failure();                                    // why nothing draws; null: it draws
 
 } // namespace KT1::Icons
 

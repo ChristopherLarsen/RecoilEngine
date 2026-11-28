@@ -443,6 +443,8 @@ bool Draw() {
 	return true;
 }
 
+bool IsFar() { return farNow; }
+
 bool FxCulled(float viewDepth, bool weapon) {
 	if (!active || !farNow) return false;
 	const float cut = weapon ? cfg.weaponCutoff : cfg.fxCutoff;
