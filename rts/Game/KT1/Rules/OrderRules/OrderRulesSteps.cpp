@@ -9,6 +9,7 @@
 #include "Game/KT1/Core/Orders/QueueHandling.h"
 #include "Game/KT1/Host/Fakes.h"
 #include "Game/KT1/Rules/Orders/OrdersInternal.h"
+#include "Lua/LuaHandle.h"
 #include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Misc/GlobalSynced.h"
 #include "Sim/Units/CommandAI/Command.h"
@@ -26,6 +27,8 @@ using Rows::CompiledRow;
 using Rows::Condition;
 
 namespace Internal = Orders::Internal;
+
+constexpr int CLIENT_ORDER = LUA_HANDLE_ORDER_RULES + 1;   // DESIGN: after the Lua, as KT1OrdersTurn.cpp's client
 
 // the builder's current order is the player's one-target reclaim of this unit
 bool DirectReclaim(const CUnit& builder, const CUnit& target) {

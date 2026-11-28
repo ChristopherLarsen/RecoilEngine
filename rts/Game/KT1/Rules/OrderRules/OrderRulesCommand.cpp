@@ -254,7 +254,7 @@ bool AskCommandRow(Table& table, const CompiledRow& row, const CommandAsk& ask) 
 	switch (row.condition) {
 		case Condition::AttackMovePoint: {
 			if (!IsPoint(c)) return true;
-			const bool armed = Rows::AttackMoveRewrite(ask.def) == CommandKind::AttackMove;
+			const bool armed = Rows::AttackMoveRewrite(ask.def) == CommandKind::AMove;
 			const std::array<float, POINT> point{c.GetParam(X), c.GetParam(Y), c.GetParam(Z)};
 			Reissue(table, row, u.id, armed ? Core::Orders::CUSTOM_AMOVE : CMD_MOVE, point, c.GetOpts());
 			return false;

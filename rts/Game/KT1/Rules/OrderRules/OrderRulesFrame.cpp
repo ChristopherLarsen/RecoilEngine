@@ -272,13 +272,13 @@ void RegisterFrameWork(Table& table) {
 	if (water != options->end() && water->second == "0") table.config.air_idle_water = false;
 	constexpr auto EVENTS = MaskOf(EventType::UnitCreated) | MaskOf(EventType::UnitDestroyed)
 		| MaskOf(EventType::UnitUnloaded) | MaskOf(EventType::UnitGiven);
-	Phases::Add(NAME, Phase::FrameStart, Internal::PHASE_IDLE_WATER, 0, [&table](const SimContext& c) {
+	Phases::Add(NAME, Phase::FrameStart, Orders::PHASE_IDLE_WATER, 0, [&table](const SimContext& c) {
 		table.state.BeginStep();
 		LookAtLanders(table, c);
 	});
-	Phases::Add(NAME, Phase::AfterUnits, Internal::PHASE_IDLE_WATER, EVENTS,
+	Phases::Add(NAME, Phase::AfterUnits, Orders::PHASE_IDLE_WATER, EVENTS,
 		[&table](const SimContext& c) { TakeEvents(table, c); });
-	Phases::Add(NAME, Phase::FrameStart, Internal::PHASE_TRANSFER, 0,
+	Phases::Add(NAME, Phase::FrameStart, Orders::PHASE_TRANSFER, 0,
 		[&table](const SimContext& c) { RepeatTrims(table, c); });
 	SyncState::Add(NAME, "guards", [&table](Core::SimHost::StateHash& h) { HashState(table, h); });
 }
