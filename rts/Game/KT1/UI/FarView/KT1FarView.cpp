@@ -1,5 +1,5 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 rule: FarView (version 2: the cartographic look of RND-005 R3/R5/R10, the player's toggle, auto switch by config). Far above the map, the world pass draws only a low-resolution map mesh textured with a pre-baked
+// KT1 rule: FarView (version 3: unit and feature meshes in the far frame, RND-005 v2 R5; version 2: the cartographic look of RND-005 R3/R5/R10, the player's toggle, auto switch by config). Far above the map, the world pass draws only a low-resolution map mesh textured with a pre-baked
 // map image; strategic icons, order lines, selection and Lua overlays are drawn as before (game-build docs/engine/FAR-VIEW-DESIGN.md).
 //
 // Why:        at the PERF-BENCH-4K FAR camera (37,683 elmos) the new pin's far plane (98,304) puts the whole map in view and the full
@@ -42,6 +42,8 @@
 #include "Map/ReadMap.h"
 #include "Rendering/DepthBufferCopy.h"
 #include "Rendering/Env/Particles/ProjectileDrawer.h"
+#include "Rendering/Features/FeatureDrawer.h"
+#include "Rendering/Units/UnitDrawer.h"
 #include "Rendering/GL/SubState.h"
 #include "Rendering/GL/VAO.h"
 #include "Rendering/GL/VBO.h"
@@ -127,6 +129,7 @@ struct Cfg {
 	float rampLight[3] = {0.80f, 0.80f, 0.68f};   // PARITY: G0-FARVIEW cartographic_terrain.builtin_ramp_light_rgb
 	float contourStep = 0.10f;      // PARITY: G0-FARVIEW cartographic_terrain.builtin_contour_step_percent (10%)
 	float edgeGain = 16.0f;         // PARITY: G0-FARVIEW cartographic_terrain.contour_edge_gain
+	bool drawModels = true;         // REQ (RND-005 v2 R5, owner ruling 2026-11-27 "match original"): the cartographic frame draws unit and feature meshes
 	bool drawFx = true;             // REQ (owner 2026-11-26, D-Z3 withdrawn): projectiles, particles and ground flashes draw in the far view
 	float fxCutoff = -1.0f;         // REQ (released sweep 5b51164): no far-view cull by default; each layer keeps its own cut-off; a value > 0 is a cap (owner decision)
 	float weaponCutoff = -1.0f;     // DESIGN: weapon projectiles are not culled here; the VFX side sizes and cuts the shot's look (gfx_shots)
@@ -275,9 +278,12 @@ void DrawMesh() {
 	shader->Disable();
 }
 
+int modelsOverride = -1;   // Lua SetModels: -1 config, 0 off, 1 on
+bool models() { return modelsOverride < 0 ? cfg.drawModels : modelsOverride == 1; }
+
 class FarViewRule : public Rule {
 public:
-	FarViewRule() : Rule({"FarView", 2, false, "(engine world pass at full detail)", false}) {}
+	FarViewRule() : Rule({"FarView", 3, false, "(engine world pass at full detail)", false}) {}
 
 	void LoadConfig(const LuaTable& t) override {
 		cfg.switchHeight = t.GetFloat("switch_height", cfg.switchHeight);
@@ -295,6 +301,7 @@ public:
 		for (int i = 0; i < 3; ++i) { cfg.rampDark[i] = rd.GetFloat(i + 1, cfg.rampDark[i]); cfg.rampLight[i] = rl.GetFloat(i + 1, cfg.rampLight[i]); }
 		cfg.contourStep = std::max(0.001f, t.GetFloat("contour_step", cfg.contourStep));
 		cfg.edgeGain = t.GetFloat("contour_edge_gain", cfg.edgeGain);
+		cfg.drawModels = t.GetBool("draw_models", cfg.drawModels);
 		cfg.drawFx = t.GetBool("draw_fx", cfg.drawFx);
 		cfg.fxCutoff = t.GetFloat("fx_cutoff", cfg.fxCutoff);
 		cfg.weaponCutoff = t.GetFloat("weapon_cutoff", cfg.weaponCutoff);
@@ -310,6 +317,7 @@ public:
 		LuaPushRawNamedCFunc(L, "SetManual", LSetManual);
 		LuaPushRawNamedCFunc(L, "IsFar", LIsFar);
 		LuaPushRawNamedCFunc(L, "SetFogTexture", LSetFogTexture);
+		LuaPushRawNamedCFunc(L, "SetModels", LSetModels);
 	}
 
 private:
@@ -326,6 +334,7 @@ private:
 		LuaPushNamedNumber(L, "refreshes", stRefreshes);
 		LuaPushNamedNumber(L, "drawMs", stDrawMs);
 		LuaPushNamedNumber(L, "frames", stFrames);
+		LuaPushNamedBool(L, "models", models());
 		return 1;
 	}
 	static int LSetZoom(lua_State* L) {
@@ -338,6 +347,11 @@ private:
 		if (CLuaHandle::GetHandleSynced(L)) return 0;
 		fogTex = lua_isnumber(L, 1) ? (uint32_t)lua_tointeger(L, 1) : 0;
 		fogFactor = lua_isnumber(L, 2) ? (float)lua_tonumber(L, 2) : 1.0f;
+		return 0;
+	}
+	static int LSetModels(lua_State* L) {   // A/B and tests: true/false overrides draw_models; nil returns to the config
+		if (CLuaHandle::GetHandleSynced(L)) return 0;
+		modelsOverride = lua_isboolean(L, 1) ? (lua_toboolean(L, 1) ? 1 : 0) : -1;
 		return 0;
 	}
 	static int LIsFar(lua_State* L) { lua_pushboolean(L, farNow); return 1; }
@@ -370,6 +384,15 @@ bool Draw() {
 	selectedUnitsHandler.Draw();
 	eventHandler.DrawWorldPreUnit();
 
+	// RND-005 v2 R5 (version 3 of the rule): unit and feature meshes are drawn in the cartographic frame, as in the full opaque pass
+	// (the engine's own screen-size cull and the per-object tint apply); icons are still forced on by the game's icon widget.
+	const bool drawModels = models();
+	if (drawModels) {
+		SCOPED_TIMER("KT1::FarView::Models");
+		unitDrawer->Draw(false);
+		featureDrawer->Draw(false);
+	}
+
 	// Effects (D-Z3 withdrawn): as the full pass draws them, past their cutoffs culled in ProjectileDrawer (FxCulled).
 	// No water surface is drawn far, so one alpha pass covers above and below the water.
 	if (cfg.drawFx) {
@@ -380,6 +403,14 @@ bool Draw() {
 		glDepthFunc(GL_LEQUAL);
 		projectileDrawer->DrawAlpha(true, true, false, false);
 		KT1::Registry::DrawWorld(true);   // unsynced rules' world draw (Ribbons), as in the full alpha pass
+	}
+
+	if (drawModels) {   // translucent model forms (build and placement ghosts, cloaked units), after the opaque layers as in DrawAlphaObjects
+		SCOPED_TIMER("KT1::FarView::Models");
+		glEnable(GL_BLEND);
+		glDepthFunc(GL_LEQUAL);
+		unitDrawer->DrawAlphaPass(false);
+		featureDrawer->DrawAlphaPass(false);
 	}
 
 	stDrawMs += (spring_gettime() - t0).toMilliSecsf();
