@@ -144,7 +144,10 @@ void Registry::EnsureInit() {
 	for (size_t i = 0; i < rules.size(); ++i) {
 		auto& r = rules[i];
 		const std::string familyValue = r->family.empty() ? std::string() : value(Core::Registry::FamilyOption(r->family));
-		const Rule::Mode mode = Core::Registry::Resolve(switches[i], value(r->option), familyValue).mode;
+		const Core::Registry::Resolved resolved = Core::Registry::Resolve(switches[i], value(r->option), familyValue);
+		const Rule::Mode mode = resolved.mode;
+		if (resolved.fromFamily && !r->info.synced && Core::Registry::ParseSwitch(familyValue) == Rule::Mode::Check)
+			LOG("[KT1] %s: %s=check runs this unsynced rule off (no check: the draw proof is the capture A/B)", r->info.name, Core::Registry::FamilyOption(r->family).c_str());
 		if (mode == Rule::Mode::Check && !r->info.checkSafe) {
 			// a proof run that believes it is checking and is not is the worst case: stop, never fall back (KT1Register.h)
 			LOG_L(L_FATAL, "[KT1] %s: %s=check, but the rule does not support check mode (RuleInfo.checkSafe; KT1Register.h)", r->info.name, r->option.c_str());

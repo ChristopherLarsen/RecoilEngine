@@ -5,6 +5,7 @@
 
 #include "AllowChain.h"
 #include "Check.h"
+#include "CommandHooks.h"
 #include "DisplayEvents.h"
 #include "Fakes.h"
 #include "Game/KT1/Draw/Common/DisplayListen.h"
@@ -21,6 +22,7 @@ void ResetSimHost() {
 	Check::Reset();
 	SyncState::Reset();
 	AllowChain::Reset();
+	CommandHooks::Reset();
 	SimEvents::Reset();
 	Phases::Reset();
 	Fakes::Reset();

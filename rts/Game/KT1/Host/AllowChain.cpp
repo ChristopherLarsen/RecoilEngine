@@ -28,6 +28,8 @@ struct Chains {
 	Chain<AllowChain::FeatureStepFn> featureBuild;
 	Chain<AllowChain::TargetFn> target;
 	Chain<AllowChain::DamageFn> damage;
+	Chain<AllowChain::TransportFn> load;
+	Chain<AllowChain::TransportFn> unload;
 };
 
 Chains chains;
@@ -64,6 +66,8 @@ void AllowChain::AddCaptureStep(const char* system, int order, UnitStepFn fn) { 
 void AllowChain::AddFeatureBuildStep(const char* system, int order, FeatureStepFn fn) { Add(chains.featureBuild, system, order, std::move(fn)); }
 void AllowChain::AddWeaponTarget(const char* system, int order, TargetFn fn) { Add(chains.target, system, order, std::move(fn)); }
 void AllowChain::AddPreDamage(const char* system, int order, DamageFn fn) { Add(chains.damage, system, order, std::move(fn)); }
+void AllowChain::AddTransportLoad(const char* system, int order, TransportFn fn) { Add(chains.load, system, order, std::move(fn)); }
+void AllowChain::AddTransportUnload(const char* system, int order, TransportFn fn) { Add(chains.unload, system, order, std::move(fn)); }
 void AllowChain::Reset() { chains = Chains(); }
 
 AllowChain::Call::Call() : mark(Check::Mark()) {}
@@ -89,6 +93,17 @@ bool AllowChain::AskCaptureStep(const CUnit* builder, const CUnit* u, float part
 bool AllowChain::AskFeatureBuildStep(const CUnit* builder, const CFeature* f, float part) {
 	if (chains.featureBuild.Empty()) return true;
 	return Veto(chains.featureBuild, "AllowFeatureBuildStep", builder->id, f->id, builder, f, part, Faked{IsFake(builder)});
+}
+
+bool AllowChain::AskTransportLoad(const CUnit* transporter, const CUnit* cargo, const float3& pos, bool allowed) {
+	if (chains.load.Empty()) return true;
+	return Veto(chains.load, "AllowUnitTransportLoad", transporter->id, cargo->id, transporter, cargo, pos, allowed,
+		Faked{IsFake(transporter), IsFake(cargo)});
+}
+bool AllowChain::AskTransportUnload(const CUnit* transporter, const CUnit* cargo, const float3& pos, bool allowed) {
+	if (chains.unload.Empty()) return true;
+	return Veto(chains.unload, "AllowUnitTransportUnload", transporter->id, cargo->id, transporter, cargo, pos, allowed,
+		Faked{IsFake(transporter), IsFake(cargo)});
 }
 
 bool AllowChain::AskUnitCreation(const UnitDef* def, const CUnit* builder, const BuildInfo* info, bool& drop) {

@@ -32,6 +32,7 @@
 //   AllowFeatureBuildStep   builderID, featureID, 0                allow
 //   AllowWeaponTarget       attackerID, targetID, weaponNum        allow, priority          defPriority, if given one
 //   UnitPreDamaged          unitID, projectileID, weaponDefID      newDamage, impulse (1)   damage
+//   AllowUnitTransportLoad  transporterID, cargoID, 0              allow                    (also ...Unload)
 // AllowUnitCreation: drop is compared only when both refuse. AllowWeaponTarget: priority only when both allow.
 // Never asked (another gadget refused first, or the engine did not call Lua): the native answer counts as "unmatched",
 // not as a difference. The handler answered and no native answer has that key: a difference. Input differs (an earlier
@@ -45,6 +46,7 @@
 
 class CUnit;
 class CFeature;
+class float3;
 struct Command;
 struct UnitDef;
 struct BuildInfo;
@@ -75,6 +77,8 @@ public:
 	using FeatureStepFn = std::function<bool(const CUnit* builder, const CFeature*, float part, Faked)>;
 	// priority is null for a command AI's search; a live change is what Lua then receives
 	using TargetFn = std::function<bool(unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority, Faked)>;
+	// allowed: the engine's own answer so far
+	using TransportFn = std::function<bool(const CUnit* transporter, const CUnit* cargo, const float3& pos, bool allowed, Faked)>;
 	// No veto: every live one runs, each sees the damage the one before left; impulse factors multiply.
 	using DamageFn = std::function<void(const PreDamage&, float& damage, float& impulseMult, Faked)>;
 
@@ -86,6 +90,8 @@ public:
 	static void AddFeatureBuildStep(const char* system, int order, FeatureStepFn fn);
 	static void AddWeaponTarget(const char* system, int order, TargetFn fn);
 	static void AddPreDamage(const char* system, int order, DamageFn fn);
+	static void AddTransportLoad(const char* system, int order, TransportFn fn);
+	static void AddTransportUnload(const char* system, int order, TransportFn fn);
 	static void Reset();   // game shutdown
 
 	// KT1 hook: SimHost (CEventHandler). A Call lives across one call-in: check-mode answers the replaced Lua has not
@@ -109,6 +115,9 @@ public:
 	static bool AskCaptureStep(const CUnit* builder, const CUnit* u, float part);
 	static bool AskFeatureBuildStep(const CUnit* builder, const CFeature* f, float part);
 	static bool AskWeaponTarget(unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority);
+
+	static bool AskTransportLoad(const CUnit* transporter, const CUnit* cargo, const float3& pos, bool allowed);
+	static bool AskTransportUnload(const CUnit* transporter, const CUnit* cargo, const float3& pos, bool allowed);
 
 	struct Damaged {
 		bool ran = false;       // a live validator ran

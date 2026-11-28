@@ -35,9 +35,9 @@
 namespace KT1 {
 namespace {
 
-class Orders : public Rule {
+class OrdersRule : public Rule {
 public:
-	Orders() : Rule({"Orders", 1, true, "LuaRules/Gadgets/ord_orders.lua (TrackMoves walk, 8-frame safety net)", false}) {}
+	OrdersRule() : Rule({"Orders", 1, true, "LuaRules/Gadgets/ord_orders.lua (TrackMoves walk, 8-frame safety net)", false}) {}
 
 	void Start() override {
 		const int n = unitDefHandler->NumUnitDefs();
@@ -55,7 +55,7 @@ public:
 	}
 
 private:
-	static Orders* Self() { return static_cast<Orders*>(Registry::Get().Find("Orders")); }
+	static OrdersRule* Self() { return static_cast<OrdersRule*>(Registry::Get().Find("Orders")); }
 
 	static const CCommandQueue& Queue(const CUnit* u) {
 		const CCommandAI* cai = u->commandAI;
@@ -86,12 +86,12 @@ private:
 	}
 
 	static int LMovers(lua_State* L) {
-		const Orders* o = Self();
+		const OrdersRule* o = Self();
 		if (o == nullptr || !o->Enabled() || !CLuaHandle::GetHandleSynced(L)) return 0;
 		return PushIds(L, [o](const CUnit* u) { return o->Mover(u); });
 	}
 	static int LBusy(lua_State* L) {
-		const Orders* o = Self();
+		const OrdersRule* o = Self();
 		if (o == nullptr || !o->Enabled() || !CLuaHandle::GetHandleSynced(L)) return 0;
 		return PushIds(L, [](const CUnit* u) { return !Queue(u).empty(); });
 	}
@@ -106,6 +106,6 @@ private:
 
 } // namespace
 
-KT1_REGISTER_SYSTEM(Orders, 200, Orders)
+KT1_REGISTER_SYSTEM(Orders, 200, OrdersRule)
 
 } // namespace KT1

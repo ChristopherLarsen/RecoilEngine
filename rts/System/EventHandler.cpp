@@ -4,6 +4,7 @@
 
 #include "Game/GameHelper.h"
 #include "Game/KT1/Host/AllowChain.h" // KT1 hook: SimHost
+#include "Game/KT1/Host/CommandHooks.h" // KT1 hook: SimHost
 #include "Lua/LuaCallInCheck.h"
 #include "Lua/LuaOpenGL.h"  // FIXME -- should be moved
 
@@ -247,6 +248,8 @@ template<typename T, typename F, typename... A> bool ControlIterateDefFalse(T& l
 bool CEventHandler::CommandFallback(const CUnit* unit, const Command& cmd)
 {
 	ZoneScoped;
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (bool remove = false; KT1::CommandHooks::AskFallback(unit, cmd, remove)) return remove; // KT1 hook: SimHost
 	return ControlIterateDefTrue(listCommandFallback, &CEventClient::CommandFallback, unit, cmd);
 }
 
@@ -316,12 +319,16 @@ bool CEventHandler::AllowUnitTransport(const CUnit* transporter, const CUnit* tr
 bool CEventHandler::AllowUnitTransportLoad(const CUnit* transporter, const CUnit* transportee, const float3& loadPos, bool allowed)
 {
 	ZoneScoped;
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (!KT1::AllowChain::AskTransportLoad(transporter, transportee, loadPos, allowed)) return false; // KT1 hook: SimHost
 	return ControlIterateDefTrue(listAllowUnitTransportLoad, &CEventClient::AllowUnitTransportLoad, transporter, transportee, loadPos, allowed);
 }
 
 bool CEventHandler::AllowUnitTransportUnload(const CUnit* transporter, const CUnit* transportee, const float3& unloadPos, bool allowed)
 {
 	ZoneScoped;
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (!KT1::AllowChain::AskTransportUnload(transporter, transportee, unloadPos, allowed)) return false; // KT1 hook: SimHost
 	return ControlIterateDefTrue(listAllowUnitTransportUnload, &CEventClient::AllowUnitTransportUnload, transporter, transportee, unloadPos, allowed);
 }
 

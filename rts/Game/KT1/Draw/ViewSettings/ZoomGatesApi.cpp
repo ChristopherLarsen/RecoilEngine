@@ -12,6 +12,11 @@ bool WholeMap() { return false; }
 GateId Gate(std::string_view) { return NO_GATE; }
 bool GateOpen(GateId) { return true; }
 float GateValue(GateId, float other) { return other; }
+float GateStart(GateId, float other) { return other; }
+float GateEnd(GateId, float other) { return other; }
+bool GateOpenAtDepth(GateId, float) { return true; }
+float DetailFactor(std::string_view) { return 1; }
+bool MinimapLayersOff() { return false; }
 uint32_t Changes() { return 0; }
 
 } // namespace KT1::ZoomGates
