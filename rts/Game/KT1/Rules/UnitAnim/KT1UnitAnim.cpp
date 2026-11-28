@@ -8,7 +8,7 @@
 // Switch:     mod option kt1_unitanim (default off)
 // Config:     gamedata/kt1/unitanim.lua
 //               idle_ticks   still ticks before an idle unit backs off (DESIGN 2)
-//               rest_delay   frames with no aim before a mount turns to rest (DESIGN 90)
+//               rest_delay_s seconds with no aim before a mount turns to rest (or rest_delay, frames at 30 Hz; DESIGN 90)
 //               rest_rate    rad/s back to rest (DESIGN 1.5)
 //               roll_eps     degrees: the body Turn is re-issued past this change (DESIGN 0.05)
 //               wake_every   ticks between dust events of a moving unit (PLACEHOLDER 3)
@@ -33,6 +33,7 @@
 #include <memory>
 #include <vector>
 
+#include "Game/KT1/KT1Config.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1Register.h"
 #include "Lua/LuaHandle.h"
@@ -103,7 +104,7 @@ public:
 
 	void LoadConfig(const LuaTable& cfg) override {
 		idleTicksN = std::max(1, cfg.GetInt("idle_ticks", 2));
-		restDelay = cfg.GetInt("rest_delay", 90);
+		restDelay = KT1::ConfigFrames(cfg, "rest_delay_s", "rest_delay", 90);
 		restRate = cfg.GetFloat("rest_rate", 1.5f);
 		rollEps = cfg.GetFloat("roll_eps", 0.05f);
 		wakeEvery = std::max(1, cfg.GetInt("wake_every", 3));
@@ -149,7 +150,9 @@ public:
 private:
 	static constexpr size_t MAX_EVENTS = 4 * 4096;   // DESIGN: dust beyond this between pulls is dropped (look only)
 
-	static int SleepFrames(float ms) { return std::max(1, (int)math::floor(ms / 33.0f)); }   // base unit_script.lua Sleep
+	static constexpr int FRAME_MS = 1000 / GAME_SPEED;   // base unit_script.lua Sleep: floor(1000 / gameSpeed), 33 at 30 Hz
+	static constexpr double FRAME_LEN = double(int(1000000.0 / GAME_SPEED)) / 1000.0;   // the stagger frame length, ms to 3 decimals: 33.333 at 30 Hz (the old literal), 100 at 10 (anim.lua: floor(1000000 / Game.gameSpeed) / 1000)
+	static int SleepFrames(float ms) { return std::max(1, (int)math::floor(ms / float(FRAME_MS))); }   // base unit_script.lua Sleep
 
 	// ---- the tick (anim.lua Loop body) ----------------------------------------------------------------------------------------
 	void Tick(Unit& U, CUnit* u, int f) {
@@ -170,14 +173,14 @@ private:
 		}
 		if (U.first) {
 			U.first = false;
-			const int frames = (int)math::floor(ms / 33.333f);
-			if (frames > 1) ms = std::max(1.0f, ms - (U.owner->id % frames) * 33.333f);
+			const int frames = (int)math::floor(ms / float(FRAME_LEN));
+			if (frames > 1) ms = std::max(1.0f, ms - (U.owner->id % frames) * float(FRAME_LEN));
 		}
 		U.wakeAt = f + SleepFrames(ms);
 	}
 
 	void Sense(Unit& U, CUnit* u, int f) {
-		const float dt = std::max(1, f - U.lastFrame) / 30.0f;
+		const float dt = std::max(1, f - U.lastFrame) / float(GAME_SPEED);
 		U.dt = dt;
 		U.lastFrame = f;
 		const float x = u->pos.x, y = u->pos.y, z = u->pos.z;
@@ -523,10 +526,10 @@ private:
 		if (w.pit >= 0) { const auto* p = S->SafeGetPiece(w.pit); ep = math::fabs(Wrap(-(p ? (float)p->GetRotation().x : 0.0f) + w.rest - pitch)); if (ep > ptol) ok = false; }
 		if (ok) { lua_pushnumber(L, 0); return 1; }
 		float lb = 0;
-		if (w.yaw >= 0) lb = std::max(lb, (ey - w.tol) / (w.yawRate / 30.0f));
-		if (w.pit >= 0) lb = std::max(lb, (ep - ptol) / (w.pitchRate / 30.0f));
+		if (w.yaw >= 0) lb = std::max(lb, (ey - w.tol) / (w.yawRate / float(GAME_SPEED)));
+		if (w.pit >= 0) lb = std::max(lb, (ep - ptol) / (w.pitchRate / float(GAME_SPEED)));
 		const float skip = math::floor(lb) - 1;
-		lua_pushnumber(L, (skip >= 2 && skip < 1e6f) ? SleepFrames(skip * 33) : 1);
+		lua_pushnumber(L, (skip >= 2 && skip < 1e6f) ? SleepFrames(skip * FRAME_MS) : 1);
 		return 1;
 	}
 	static int LState(lua_State* L) {
