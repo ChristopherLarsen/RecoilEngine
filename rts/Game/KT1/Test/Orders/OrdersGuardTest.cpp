@@ -178,9 +178,13 @@ KT1_CASE("ORD-GUARD-FIXTURE", "a fixture overlays values by the Lua's keys on a 
 	KT1_CHECK_EQ(WithFixture(base, "").queue_min, 50);
 	OrdersConfig c;
 	for (const char* key: {"patrol_check_interval", "patrol_repair_threshold", "load_time", "unload_time", "drop_accuracy",
-	                       "selfdestruct_delay", "give_up_time", "fight_check_interval", "fight_resume_tick",
-	                       "fight_guard_factor", "fight_stop_share"})
+	                       "selfdestruct_delay", "give_up_time", "fight_check_interval"})
 		KT1_CHECK_MSG(SetValue(c, key, 7), key);
-	KT1_CHECK(c.patrol.patrol_check_s == 7 && c.transport.drop_accuracy_mu == 7 && c.amove.stop_share == 7);
+	AMoveConfig amove;
+	for (const char* key: {"fight_resume_tick", "fight_guard_factor", "fight_stop_share"})
+		KT1_CHECK_MSG(SetValue(amove, key, 7), key);
+	KT1_CHECK(c.patrol.patrol_check_s == 7 && c.transport.drop_accuracy_mu == 7 && amove.stop_share == 7);
+	base.fixtures.push_back({"AM", {{"fight_stop_share", 3}}});
+	KT1_CHECK(WithFixture(AMoveConfig{}, base, "AM").stop_share == 3 && WithFixture(AMoveConfig{}, base, "").stop_share == 0.9f);
 	KT1_CHECK(!SetValue(c, "no_such", 1));
 }

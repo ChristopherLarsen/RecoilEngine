@@ -23,6 +23,7 @@
 
 namespace KT1::Core::Orders {
 struct OrdersConfig;
+struct AMoveConfig;
 }
 
 namespace KT1::Core::AMove {
@@ -87,7 +88,7 @@ struct Params {
 	float circleRadius = 0;
 	int32_t directPerCircle = 0;
 };
-Params MakeParams(const Orders::OrdersConfig& config, std::span<const Orders::DefFacts> defs);
+Params MakeParams(const Orders::OrdersConfig& config, const Orders::AMoveConfig& amove, std::span<const Orders::DefFacts> defs);
 // the strip half width of a def; 0: it has none (unarmed, or no primary weapon)
 float GuardRadius(const Orders::DefFacts& def, const Params& p);
 StripShape ShapeFor(float guardRadius, const Params& p);

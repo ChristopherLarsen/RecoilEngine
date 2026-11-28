@@ -22,9 +22,6 @@ float* PlainMember(OrdersConfig& c, std::string_view key) {
 		{"selfdestruct_delay", &c.selfdestruct_delay_s},
 		{"give_up_time", &c.track.give_up_s},
 		{"fight_check_interval", &c.patrol.fight_check_s},
-		{"fight_resume_tick", &c.amove.resume_tick_s},
-		{"fight_guard_factor", &c.amove.guard_factor},
-		{"fight_stop_share", &c.amove.stop_share},
 	};
 	for (const auto& row: rows) {
 		if (row.key == key)
@@ -57,6 +54,30 @@ OrdersConfig WithFixture(const OrdersConfig& base, std::string_view name) {
 		return out;
 	for (const Fixture& fixture: base.fixtures) {
 		if (fixture.name != name)
+			continue;
+		for (const FixtureValue& v: fixture.values)
+			SetValue(out, v.key, v.value);
+		break;
+	}
+	return out;
+}
+
+bool SetValue(AMoveConfig& config, std::string_view key, float value) {
+	if (key == "fight_resume_tick")
+		config.resume_tick_s = value;
+	else if (key == "fight_guard_factor")
+		config.guard_factor = value;
+	else if (key == "fight_stop_share")
+		config.stop_share = value;
+	else
+		return false;
+	return true;
+}
+
+AMoveConfig WithFixture(const AMoveConfig& base, const OrdersConfig& orders, std::string_view name) {
+	AMoveConfig out = base;
+	for (const Fixture& fixture: orders.fixtures) {
+		if (name.empty() || fixture.name != name)
 			continue;
 		for (const FixtureValue& v: fixture.values)
 			SetValue(out, v.key, v.value);
