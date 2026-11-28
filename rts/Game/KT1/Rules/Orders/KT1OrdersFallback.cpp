@@ -18,6 +18,8 @@
 
 #include "OrdersInternal.h"
 
+#include "Game/KT1/Rules/Cargo/CargoApi.h"
+
 #include "Game/KT1/Core/Orders/QueueHandling.h"
 #include "Game/KT1/Host/Check.h"
 #include "Game/KT1/Host/CommandHooks.h"
@@ -202,6 +204,7 @@ void SetMoveGoal(int unit, float x, float y, float z, float radius) {
 // called from Orders' LoadConfig (game setup)
 void RegisterQueueHandling() {
 	waypoint = CO::MakeWaypointParams(Config());
+	Cargo::Init();
 	CommandHooks::AddFallback(SYSTEM, FALLBACK_ORDER, [](const CUnit* u, const Command& c, Faked) { return OnFallback(u, c); });
 	Phases::Add(SYSTEM, Core::SimHost::Phase::FrameStart, WAYPOINT_PHASE, 0, [](const SimContext& c) { InsertDue(c); });
 	if (client == nullptr) client = new CmdDoneClient();
