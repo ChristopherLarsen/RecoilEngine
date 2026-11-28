@@ -88,6 +88,9 @@ public:
 	}
 
 private:
+	// DESIGN: a pair's detection state and the event code Run() returns (rules/intel.md; int_coverage F.NOW): state + ALSO x also
+	static constexpr unsigned char ST_NONE = 0, ST_CONTACT = 1, ST_SEEN = 2;   // DESIGN
+	static constexpr int ALSO = 4;                                              // DESIGN
 	struct RulesT { bool exact = false, waterSeesSub = false, sonarShips = false; float cell = 0.0f; int rate = 1; };
 	struct Def { bool floater = false, jam = false; };
 	struct UnitRec { bool seen = false; int ally = -1; bool cloak = false, fake = false; };   // seen: visited since it was made
@@ -137,7 +140,7 @@ private:
 			bool also;
 			St& s = StOf(ar, u->id);
 			if (InGroup(g, owner)) {
-				now = 2; also = true;                              // an ally's unit
+				now = ST_SEEN; also = true;                              // an ally's unit
 			} else {
 				if (!fieldsRead) {                                 // the owner's fields, once per unit
 					const int ol[1] = { owner };
@@ -159,18 +162,18 @@ private:
 				bool seen = SeesAny("omni", gl, gn, x, z)
 					|| (sub && !r.cloak && rules.waterSeesSub && SeesAny("water_vision", gl, gn, x, z));
 				bool contact = (rok && SeesAny("radar", gl, gn, x, z)) || (sok && SeesAny("sonar", gl, gn, x, z));
-				if (!contact && rok && rules.cell > 0.0f && s.set && (s.now == 1 || s.also))
+				if (!contact && rok && rules.cell > 0.0f && s.set && (s.now == ST_CONTACT || s.also))
 					contact = SeesAny("radar_leave", gl, gn, x, z);      // radar's leaving lag
 				if (!seen && vok)
 					seen = SeesAny("vision", gl, gn, x, z);
-				if (!seen && vok && rules.cell > 0.0f && s.set && s.now == 2)
+				if (!seen && vok && rules.cell > 0.0f && s.set && s.now == ST_SEEN)
 					seen = SeesAny("vision_leave", gl, gn, x, z);
-				now = seen ? 2 : (contact ? 1 : 0);
+				now = seen ? ST_SEEN : (contact ? ST_CONTACT : ST_NONE);
 				also = seen && contact;
 			}
 			if (!s.set || s.now != now || s.also != also) {   // a first visit sends every army, none too (Lua sets the LOS mask then)
 				s.now = now; s.also = also; s.frame = f;
-				ev.push_back(u->id); ev.push_back(a); ev.push_back(now + 4 * (also ? 1 : 0));
+				ev.push_back(u->id); ev.push_back(a); ev.push_back(now + ALSO * (also ? 1 : 0));
 			}
 			s.set = true;
 		}

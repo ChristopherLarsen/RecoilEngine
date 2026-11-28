@@ -11,7 +11,8 @@ namespace KT1::IntelFactsCore {
 
 namespace {
 	// Lua's floor(x * FPS + 0.5) on float numbers: seconds to steps, half up
-	int32_t ToSteps(float seconds, float sps) { return static_cast<int32_t>(std::floor(seconds * sps + 0.5f)); }
+	constexpr float HALF = 0.5f;   // DESIGN: round half up, as the Lua's floor(x + 0.5)
+	int32_t ToSteps(float seconds, float sps) { return static_cast<int32_t>(std::floor(seconds * sps + HALF)); }
 
 	// VI.At: the newest record at or before step t (1-based; the oldest when none is)
 	int At(const Shots& s, float t) {
@@ -40,7 +41,7 @@ Steps Steps::From(const Seconds& s, int32_t stepsPerSecond, bool staggered, int3
 		auto grids = [&](float sec) -> int32_t {
 			const float l = sec * sps;
 			if (l <= 0.0f) return 0;
-			return out.FG * std::max(0, static_cast<int32_t>(std::floor((l - (fg - 1.0f) / 2.0f) / fg + 0.5f)));
+			return out.FG * std::max(0, static_cast<int32_t>(std::floor((l - (fg - 1.0f) * HALF) / fg + HALF)));
 		};
 		out.lagE = grids(s.moveLagEnter);
 		out.lagL = grids(s.moveLagLeave);
@@ -50,16 +51,19 @@ Steps Steps::From(const Seconds& s, int32_t stepsPerSecond, bool staggered, int3
 	return out;
 }
 
+// DESIGN: the index keys pack two cell numbers in one float (int_coverage's vkey, skey, fb, cb), row x KEY_ROW + column
+constexpr float KEY_ROW = 8192.0f, BUCKET_ROW = 65536.0f;   // DESIGN
+
 void Cells(const Geometry& g, float x, float z, Row& o) {
 	o.px = x; o.pz = z;
 	const float a1 = Floor(x / g.fe), b1 = Floor(z / g.fe), a2 = Floor(x / g.ce), b2 = Floor(z / g.ce);   // CMD-010 v6 R7
 	o.fcx = a1; o.fcz = b1; o.ccx = a2; o.ccz = b2;
-	o.vkey = Floor(x / g.VS) * 8192.0f + Floor(z / g.VS);
-	o.skey = Floor(x / g.SS) * 8192.0f + Floor(z / g.SS);
+	o.vkey = Floor(x / g.VS) * KEY_ROW + Floor(z / g.VS);
+	o.skey = Floor(x / g.SS) * KEY_ROW + Floor(z / g.SS);
 	o.fk = (a1 >= 0 && b1 >= 0 && a1 < g.fnx && b1 < g.fnz) ? b1 * g.fnx + a1 : -1.0f;
 	o.ck = (a2 >= 0 && b2 >= 0 && a2 < g.cnx && b2 < g.cnz) ? b2 * g.cnx + a2 : -1.0f;
-	o.fb = Floor(a1 / g.FB) * 65536.0f + Floor(b1 / g.FB);
-	o.cb = Floor(a2 / g.CB) * 65536.0f + Floor(b2 / g.CB);
+	o.fb = Floor(a1 / g.FB) * BUCKET_ROW + Floor(b1 / g.FB);
+	o.cb = Floor(a2 / g.CB) * BUCKET_ROW + Floor(b2 / g.CB);
 }
 
 void Stamp(const Rules& r, Stamped& s, float x, float z, float rE, float f, float c, float& ox, float& oz) {
