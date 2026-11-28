@@ -1,15 +1,11 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 ORDERS: stubs behind OrdersInternal.h (LUA-FREE H01; steps S05, S10 and S12 port them).
+// KT1 ORDERS: stubs behind OrdersInternal.h (LUA-FREE H01): system Orders' state (S05) and the row actions (S11).
 
 #include "OrdersInternal.h"
 
 namespace KT1::Orders::Internal {
 
 Core::Orders::State* State() { return nullptr; }
-
-bool Remove(int, std::uint32_t) { return false; }
-void InsertAhead(int, int, std::span<const float>, Core::Orders::OwnKind, int) {}
-void SetMoveGoal(int, float, float, float, float) {}
 
 void SetFireState(int, Core::Orders::FireState) {}
 void NoteGiven(int, const ::Command&) {}
