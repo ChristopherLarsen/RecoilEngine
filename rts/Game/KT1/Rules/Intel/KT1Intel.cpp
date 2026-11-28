@@ -38,6 +38,13 @@
 //   before each Run with the ally team whose turn the tick is, so each army's states change on its own turn only.
 // Determinism: units ascending id, armies ascending; bool answers of the circle index (order free); no thread, clock or hash order.
 // Events:     returned by Run(), which int_coverage calls once a frame after it placed the frame's circles.
+// LOS apply:  rule IntelLos (mod option kt1_intellos, default off; SYNCED-LUA-TO-ENGINE #3b, Lua-free S07). On: Run sets each
+//             event's LOS mask and state itself, at the event, as int_coverage F.OnState did (a first decision: mask 15; then
+//             los = seen, radar = contRadar = seen or contact, prevLos = seen or (seen before and (a structure or not none))),
+//             and Lua's event loop no longer does. An event that only changes "also" sets nothing (Lua's state did not change).
+//             Check: nothing is set; Run returns a second list, per event the code it would set (16 x mask + the 4 bits, -1 none),
+//             and int_coverage counts the events where the LOS state Lua left differs. On with Rules{los_verify = true}: the same
+//             list of the codes it set, and int_coverage checks the unit's LOS state against each (the on-mode write itself).
 // Doc:        game-build docs/engine/rules/intel.md
 
 #include <algorithm>
@@ -66,13 +73,15 @@ namespace {
 
 class Intel : public Rule {
 public:
-	Intel() : Rule({"Intel", 2, true, "LuaRules/Gadgets/int_coverage.lua (detection loop)", false}) {}
+	Intel() : Rule({"Intel", 3, true, "LuaRules/Gadgets/int_coverage.lua (detection loop)", false}) {}
 
 	void Start() override {
 		const int n = int(unitHandler.MaxUnits());
 		recs.assign(n, UnitRec{});
 		turns = false; turn = -1;
 		for (auto& p : armies) p.second.st.assign(n, St{});
+		const Rule* lr = Registry::Get().Find("IntelLos");
+		los = (lr == nullptr || !lr->Enabled()) ? Los::Off : (lr->SwitchMode() == Mode::Check ? Los::Check : Los::On);
 	}
 
 	void PushLua(lua_State* L) override {
@@ -90,8 +99,10 @@ private:
 	// DESIGN: a pair's detection state and the event code Run() returns (rules/intel.md; int_coverage F.NOW): state + ALSO x also
 	static constexpr unsigned char ST_NONE = 0, ST_CONTACT = 1, ST_SEEN = 2;   // DESIGN
 	static constexpr int ALSO = 4;                                              // DESIGN
-	struct RulesT { bool exact = false, waterSeesSub = false, sonarShips = false; float cell = 0.0f; int rate = 1; };
-	struct Def { bool floater = false, jam = false; };
+	static constexpr int LOS_CODE_FIRST = 16;                                   // DESIGN: IntelLos check code, the first decision (mask set)
+	struct RulesT { bool exact = false, waterSeesSub = false, sonarShips = false, losVerify = false; float cell = 0.0f; int rate = 1; };
+	struct Def { bool floater = false, jam = false, canMove = false; };
+	enum class Los { Off, On, Check };   // rule IntelLos's switch, read at Start
 	struct UnitRec { bool seen = false; int ally = -1; bool cloak = false, fake = false; };   // seen: visited since it was made
 	struct St { unsigned char now = 0; bool also = false, set = false; int frame = -1; };
 	struct Army { std::vector<int> group; std::vector<St> st; };
@@ -121,7 +132,25 @@ private:
 		return ar.st[id];
 	}
 
-	void Decide(const CUnit* u, const UnitRec& r, int f, bool fresh) {
+	// int_coverage F.OnState's two LOS calls for one event, as their Lua functions do them (LuaSyncedCtrl SetUnitLosMask with 15,
+	// then SetUnitLosState with the four bits). Returns the code (16 x first + bits); writes only when apply.
+	static int LosApply(CUnit* u, int a, unsigned char now, bool first, bool canMove, bool apply) {
+		if (first && apply) {
+			// KT1 lint: allow direct-write F01 base has no SimContext (F05); written only with IntelLos on, never in check, as LuaSyncedCtrl does
+			u->losStatus[a] = LOS_ALL_MASK_BITS | (u->losStatus[a] & LOS_ALL_BITS);
+			// KT1 lint: allow direct-write F01 base has no SimContext (F05); written only with IntelLos on, never in check, as LuaSyncedCtrl does
+			u->SetLosStatus(a, u->CalcLosStatus(a));
+		}
+		const unsigned char ls = u->losStatus[a];
+		const bool seen = now == ST_SEEN, radar = seen || now == ST_CONTACT;
+		const bool keepPrev = (ls & LOS_PREVLOS) != 0 && (!canMove || now != ST_NONE);
+		const unsigned char b = (seen ? LOS_INLOS : 0) | (radar ? (LOS_INRADAR | LOS_CONTRADAR) : 0) | ((seen || keepPrev) ? LOS_PREVLOS : 0);
+		// KT1 lint: allow direct-write F01 base has no SimContext (F05); written only with IntelLos on, never in check, as LuaSyncedCtrl does
+		if (apply) u->SetLosStatus(a, (ls & LOS_ALL_MASK_BITS) | b);
+		return (first ? LOS_CODE_FIRST : 0) + b;
+	}
+
+	void Decide(CUnit* u, const UnitRec& r, int f, bool fresh) {
 		using SupComIntIndex::SeesAny;
 		const int owner = u->allyteam;
 		const int d = u->unitDef->id;
@@ -171,8 +200,13 @@ private:
 				also = seen && contact;
 			}
 			if (!s.set || s.now != now || s.also != also) {   // a first visit sends every army, none too (Lua sets the LOS mask then)
+				const bool first = !s.set, change = first || s.now != now;
 				s.now = now; s.also = also; s.frame = f;
 				ev.push_back(u->id); ev.push_back(a); ev.push_back(now + ALSO * (also ? 1 : 0));
+				if (los != Los::Off) {
+					const int code = change ? LosApply(u, a, now, first, df.canMove, los == Los::On) : -1;
+					if (los == Los::Check || rules.losVerify) lcode.push_back(code);
+				}
 			}
 			s.set = true;
 		}
@@ -180,6 +214,7 @@ private:
 
 	void Run(int f) {
 		ev.clear();
+		lcode.clear();
 		if (!rules.exact) return;
 		gaia = teamHandler.GaiaAllyTeamID();
 		const int rate = rules.rate < 1 ? 1 : rules.rate;
@@ -191,7 +226,7 @@ private:
 		}
 		std::sort(ids.begin(), ids.end());                       // the active list is in synced order, not id order
 		for (const int id : ids) {
-			const CUnit* u = unitHandler.GetUnit(id);
+			CUnit* u = unitHandler.GetUnit(id);
 			UnitRec& r = Rec(id);
 			const bool fresh = !r.seen || r.ally != u->allyteam;
 			r.seen = true;
@@ -222,6 +257,7 @@ private:
 		q.exact = Bool(L, 1, "exact");
 		q.waterSeesSub = Bool(L, 1, "water_sees_sub");
 		q.sonarShips = Bool(L, 1, "sonar_ships");
+		q.losVerify = Bool(L, 1, "los_verify");
 		lua_getfield(L, 1, "cell"); q.cell = lua_isnumber(L, -1) ? static_cast<float>(lua_tonumber(L, -1)) : 0.0f; lua_pop(L, 1);
 		lua_getfield(L, 1, "rate"); q.rate = lua_isnumber(L, -1) ? lua_toint(L, -1) : 1; lua_pop(L, 1);
 		return 0;
@@ -237,7 +273,7 @@ private:
 			const int id = lua_toint(L, -2);
 			if (id < 0 || id >= (int)r->defs.size()) continue;
 			const int t = lua_gettop(L);
-			r->defs[id] = Def{ Bool(L, t, "floater"), Bool(L, t, "jam") };
+			r->defs[id] = Def{ Bool(L, t, "floater"), Bool(L, t, "jam"), Bool(L, t, "canMove") };
 		}
 		return 0;
 	}
@@ -291,7 +327,11 @@ private:
 		const std::vector<int>& ev = r->ev;
 		lua_createtable(L, (int)ev.size(), 0);
 		for (size_t i = 0; i < ev.size(); ++i) { lua_pushnumber(L, ev[i]); lua_rawseti(L, -2, (int)i + 1); }
-		return 1;
+		if (r->los == Los::Off || (r->los == Los::On && !r->rules.losVerify)) return 1;
+		const std::vector<int>& lc = r->lcode;                        // check: per event the LOS code IntelLos would set
+		lua_createtable(L, (int)lc.size(), 0);
+		for (size_t i = 0; i < lc.size(); ++i) { lua_pushnumber(L, lc[i]); lua_rawseti(L, -2, (int)i + 1); }
+		return 2;
 	}
 
 	static int LState(lua_State* L) {
@@ -315,10 +355,24 @@ private:
 	std::map<int, Army> armies;         // ascending a: the event order over armies
 	std::vector<UnitRec> recs;          // per unit id
 	std::vector<int> ids, ev;           // scratch; this frame's events
+	Los los = Los::Off;                 // IntelLos: apply the events' LOS state here (On) or report it (Check)
+	std::vector<int> lcode;             // check: per event the LOS code (LosApply), -1 when it sets nothing
+};
+
+// The switch of the LOS apply (kt1_intellos). Holds no state: Intel reads its mode at Start. Check-safe: in check Intel computes only.
+class IntelLos : public Rule {
+public:
+	IntelLos() : Rule(Info()) {}
+	static RuleInfo Info() {
+		RuleInfo i{"IntelLos", 1, true, "LuaRules/Gadgets/int_coverage.lua (F.OnState's LOS calls for the kt1_intel events)", false};
+		i.checkSafe = true;
+		return i;
+	}
 };
 
 } // namespace
 
 KT1_REGISTER_SYSTEM(Intel, 800, Intel)
+KT1_REGISTER_SYSTEM(IntelLos, 4001, IntelLos)   // the after-move range (KT1Register.h); no GameFrame
 
 } // namespace KT1
