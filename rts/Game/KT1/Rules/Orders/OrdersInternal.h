@@ -56,6 +56,9 @@ bool Remove(int unit, std::uint32_t tag);              // an engine remove of on
 // ord_orders.lua Insert: an internal order put in front, remembered as the unit's own step when it took the front
 void InsertAhead(int unit, int commandID, std::span<const float> params, Core::Orders::OwnKind kind, int target);
 void SetMoveGoal(int unit, float x, float y, float z, float radius);
+// S12 (KT1OrdersFallback.cpp; approved by S05/S10 2026-11-28): the waypoint fallback, the cut point and the step
+// insertion. Orders LoadConfig calls it at game setup.
+void RegisterQueueHandling();
 
 // ord_refuse.lua: rules params cmb_refused and cmb_refused_frame (the HUD shows the refusal once)
 void Refuse(int unit, const char* reason, int frame);
