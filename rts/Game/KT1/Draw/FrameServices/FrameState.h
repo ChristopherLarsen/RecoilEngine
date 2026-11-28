@@ -1,7 +1,7 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 draw: FrameState, one copy per drawn frame of what the remaining widgets poll for themselves: the selection, what is
 // under the pointer, the camera, the zoom level and the mouse, each with a change counter (LUA-FREE H01, FRAME §4.1;
-// step V01 writes the bodies). It adds to Draw/Common/FrameFacts.h, which fills first; system "frameservices" is the
+// step V01 writes the bodies). It adds to Draw/Common/FrameFacts.h, which fills first; system "frame" is the
 // first draw Update system, so later systems and every widget of the frame read the same copy.
 // Native readers: FrameServices::State(). Lua: Spring.KT1.Frame (FrameBridge.h).
 

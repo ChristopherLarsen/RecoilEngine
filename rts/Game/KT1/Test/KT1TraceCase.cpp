@@ -42,6 +42,7 @@ namespace {
 			id.c_str(), data.size(), r.steps, static_cast<unsigned long long>(r.inputs),
 			static_cast<unsigned long long>(r.compared), static_cast<unsigned long long>(r.differences), r.firstDiffStep,
 			static_cast<long long>(ms));
+		for (const std::string& s : r.skipped) std::printf("[TRACE] %s skipped column %s\n", id.c_str(), s.c_str());
 		for (const std::string& d : r.described) std::printf("[TRACE] %s diff %s\n", id.c_str(), d.c_str());
 		t.CountCheck();
 		if (!r.error.empty()) t.Fail(r.error);

@@ -59,13 +59,22 @@ TurnInit MakeTurnInit(const OrdersConfig& config, std::span<const DefFacts> defs
 // sets the sim rate, sizes `state` afresh, fills its defs' flags and derives `params`
 void ApplyTurnInit(const TurnInit& init, State& state, TurnParams& params);
 
+enum class TurnEventKind : uint8_t {
+	Join,      // ORDB.Add from UnitCommand
+	Leave,     // UnitDestroyed: out of ORDB, and nothing is kept of it
+};
+struct TurnEvent {
+	TurnEventKind kind = TurnEventKind::Join;
+	UnitId unit = NO_UNIT;
+};
+
 // What the walk reads of one unit at its turn.
 struct TurnUnit {
 	UnitId unit = NO_UNIT;           // u
 	int32_t defId = 0;               // Spring.GetUnitDefID(u); isBuilderDef is State::defs[defId]'s Assists
 	int32_t queueLen = 0;            // the row's B[k + 3] (Spring.GetUnitCommandCount(u)) before its turn
 	int32_t queueLenAfter = 0;       // CommandCount(u) after its turn; not read for a plain unit
-	bool gone = false;               // busy[bi] ~= u after its turn: destroyed during it
+	bool gone = false;               // destroyed during its turn, with no Leave in `during` (the live adapter sends one)
 	uint8_t numQueue = 0;            // entries in queue
 	std::array<OrderView, QUEUE_READ> queue{};   // Spring.GetUnitCommands(u, 8), front first
 	OwnStep own;                     // ours[u]; kind None: nil
@@ -74,6 +83,7 @@ struct TurnUnit {
 	std::vector<GivenWork> given;    // given[u], one per "cmd:target" key
 	bool hasTask = false;            // amove[u] ~= nil
 	uint32_t taskTag = 0;            // amove[u].tag
+	std::vector<TurnEvent> during;   // the joins and leaves while its turn ran, in the order the call-ins came
 };
 // fills queue and numQueue, at most QUEUE_READ entries
 void SetTurnQueue(TurnUnit& unit, std::span<const OrderView> queue);
@@ -148,22 +158,15 @@ template<class Port> void WalkTurns(State& state, const TurnParams& params, Step
 
 // ---- the whole step from recorded values ------------------------------------------------------------------------
 
-enum class TurnEventKind : uint8_t {
-	Join,      // ORDB.Add from UnitCommand
-	Leave,     // UnitDestroyed: out of ORDB, and nothing is kept of it
-};
-struct TurnEvent {
-	TurnEventKind kind = TurnEventKind::Join;
-	UnitId unit = NO_UNIT;
-};
-
 struct TurnInput {
 	bool hasInit = false;            // the first record: ApplyTurnInit before the events
 	TurnInit init;
 	Step now = 0;                    // f
-	std::vector<TurnEvent> events;   // since the previous walk, in the order the call-ins came
+	std::vector<TurnEvent> events;   // since the previous walk, in the order the call-ins came (later ones: TurnUnit::during)
 	std::vector<UnitId> netUnits;    // units with a queue, in the order the walk reads them (Busy: ascending); safety-net steps
-	std::vector<TurnUnit> units;     // every unit the walk visits, ascending unit id
+	// every unit the walk visits, ascending unit id; a unit visited twice (it left and joined again during the walk) has a
+	// record per visit, in the order of the visits
+	std::vector<TurnUnit> units;
 };
 
 struct TurnOutput {
