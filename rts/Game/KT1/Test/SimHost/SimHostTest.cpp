@@ -3,11 +3,13 @@
 
 #include "../KT1Test.h"
 
+#include "Game/KT1/Core/SimHost/CheckTally.h"
 #include "Game/KT1/Core/SimHost/DisplayQueue.h"
 #include "Game/KT1/Core/SimHost/Ordered.h"
 #include "Game/KT1/Core/SimHost/Phase.h"
 #include "Game/KT1/Core/SimHost/SimEventLog.h"
 #include "Game/KT1/Core/SimHost/StateHash.h"
+#include "Game/KT1/Core/SimHost/UnitColumns.h"
 #include "Game/KT1/Core/SimProbe/SimProbeCore.h"
 
 #include <functional>
@@ -228,10 +230,51 @@ KT1_CASE("SIMPROBE-STATE", "units are tracked from creation to death, and a reus
 	s.Apply(Ev(EventType::UnitDamaged, 7, -1, 2.5f));
 	s.Apply(Ev(EventType::UnitDamaged, 3, -1, 1.0f));
 	s.Apply(Ev(EventType::ProjectileCreated, 7));   // not a unit
-	KT1_CHECK_EQ(s.index.Size(), 2);
-	KT1_CHECK(s.damage[s.index.SlotOf(7)] == 2.5f && s.events[s.index.SlotOf(7)] == 2);
+	KT1_CHECK_EQ(s.units.index.Size(), 2);
+	KT1_CHECK(s.damage[s.units.index.SlotOf(7)] == 2.5f && s.events[s.units.index.SlotOf(7)] == 2);
 	s.Apply(Ev(EventType::UnitDestroyed, 7));
-	KT1_CHECK(!s.index.Has(7) && s.damage[s.index.SlotOf(3)] == 1.0f);
+	KT1_CHECK(!s.units.index.Has(7) && s.damage[s.units.index.SlotOf(3)] == 1.0f);
 	s.Apply(Ev(EventType::UnitCreated, 7));
-	KT1_CHECK(s.damage[s.index.SlotOf(7)] == 0.0f && s.events[s.index.SlotOf(7)] == 1);
+	KT1_CHECK(s.damage[s.units.index.SlotOf(7)] == 0.0f && s.events[s.units.index.SlotOf(7)] == 1);
+}
+
+KT1_CASE("SIMHOST-COLUMNS", "one removal moves every owned column") {
+	UnitColumns units;
+	KT1::Core::Column<float> a;
+	KT1::Core::Column<int> b;
+	units.Init(16);
+	units.Own(a, -1.0f);
+	units.Own(b);
+	for (const int id : {5, 2, 9}) {
+		const auto slot = units.AddUnit(id);
+		a[slot] = static_cast<float>(id);
+		b[slot] = 10 * id;
+	}
+	units.RemoveUnit(5);   // the first slot: the last one moves into it
+	units.RemoveUnit(77);  // not there: nothing moves
+	KT1_CHECK_EQ(units.index.Size(), 2);
+	for (const int id : {2, 9})
+		KT1_CHECK(a[units.index.SlotOf(id)] == static_cast<float>(id) && b[units.index.SlotOf(id)] == 10 * id);
+	const auto reused = units.AddUnit(5);
+	KT1_CHECK(a[reused] == -1.0f && b[reused] == 0);
+}
+
+KT1_CASE("SIMHOST-CHECK", "check lines: a step line only on differences, totals by system name, 20 descriptions") {
+	CheckTally t;
+	std::string lines;
+	const auto add = [&](const std::string& s) { lines += s + ";"; };
+	t.Add("Zed", 5, 0);
+	t.CloseStep(1, add);
+	KT1_CHECK(lines.empty());
+	int described = 0;
+	for (int i = 0; i < 30; ++i) described += t.Add("Abc", 2, 1) ? 1 : 0;
+	KT1_CHECK_EQ(described, CHECK_DETAILS);
+	t.CloseStep(2, add);
+	KT1_CHECK_EQ(lines, std::string("[KT1CHECK] Abc f=2 n=60 diffs=30;"));
+	lines.clear();
+	t.CloseStep(3, add);
+	KT1_CHECK(lines.empty());
+	t.Totals(add);
+	KT1_CHECK_EQ(lines, std::string("[KT1CHECK] Abc total n=60 diffs=30;[KT1CHECK] Zed total n=5 diffs=0;"));
+	KT1_CHECK(CheckTally::SameBits(1.5f, 1.5f) && !CheckTally::SameBits(0.0f, -0.0f));
 }

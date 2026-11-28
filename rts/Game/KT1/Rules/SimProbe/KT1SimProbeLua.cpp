@@ -66,10 +66,10 @@ int LState(lua_State* L) {
 	SimProbeRule* p = Self(L);
 	if (p == nullptr) return 0;
 	Core::SimProbe::State& s = p->state;
-	lua_createtable(L, s.index.Size() * 3, 0);
+	lua_createtable(L, s.units.index.Size() * 3, 0);
 	int n = 0;
-	for (const int32_t id : s.index.AscendingIds()) {
-		const Core::DenseIndex::Slot slot = s.index.SlotOf(id);
+	for (const int32_t id : s.units.index.AscendingIds()) {
+		const Core::DenseIndex::Slot slot = s.units.index.SlotOf(id);
 		Put(L, n, id);
 		Put(L, n, s.damage[slot]);
 		Put(L, n, s.events[slot]);

@@ -4,6 +4,9 @@
 #include "SimEvents.h"
 
 #include <string>
+#include <vector>
+
+#include "Check.h"
 
 #include "Game/GameHelper.h"
 #include "Sim/Features/Feature.h"
@@ -81,11 +84,13 @@ public:
 	Client() : CEventClient("[KT1SimEvents]", CLIENT_ORDER, true) {}
 
 	bool WantsEvent(const std::string& name) override {
+		if (name == "GameOver") return true;
 		for (size_t t = 0; t < Core::SimHost::EVENT_TYPES; ++t)
 			if (name == CALLINS[t]) return (eventLog.Wanted() & (Core::SimHost::EventMask(1) << t)) != 0;
 		return false;
 	}
 	int GetReadAllyTeam() const override { return AllAccessTeam; }
+	void GameOver(const std::vector<unsigned char>&) override { Check::Total(); }
 
 	void UnitCreated(const CUnit* u, const CUnit* builder) override {
 		Event e = UnitEvent(EventType::UnitCreated, u);

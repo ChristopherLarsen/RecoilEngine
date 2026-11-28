@@ -6,6 +6,7 @@
 #include <array>
 #include <string>
 
+#include "Check.h"
 #include "DisplayEvents.h"
 #include "SimEvents.h"
 #include "SyncState.h"
@@ -50,6 +51,7 @@ void Phases::Run(Core::SimHost::Phase phase, int frame) {
 		r.fn(context);
 	}
 	if (phase != Core::SimHost::Phase::FrameEnd) return;
+	Check::CloseStep(frame);
 	SyncState::Close();
 	SimEvents::Compact();
 	DisplayEvents::Publish();

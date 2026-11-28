@@ -49,8 +49,8 @@ void SimProbeRule::LoadConfig(const LuaTable& cfg) {
 	state.Init(MAX_UNITS);
 	RegisterPhases();
 	RegisterValidators();
-	SyncState::Add("SimProbe", "damage", state.index, state.damage);
-	SyncState::Add("SimProbe", "events", state.index, state.events);
+	SyncState::Add("SimProbe", "damage", state.units.index, state.damage);
+	SyncState::Add("SimProbe", "events", state.units.index, state.events);
 }
 
 void SimProbeRule::RegisterPhases() {
@@ -104,7 +104,7 @@ void SimProbeRule::Report(int frame) {
 		frame, (unsigned long long)seen[0], (unsigned long long)seen[1], (unsigned long long)seen[2],
 		(unsigned long long)seen[3], (unsigned long long)seen[4],
 		(unsigned long long)asked[static_cast<size_t>(Veto::Command)],
-		(unsigned long long)asked[static_cast<size_t>(Veto::PreDamage)], state.index.Size());
+		(unsigned long long)asked[static_cast<size_t>(Veto::PreDamage)], state.units.index.Size());
 	DisplayEvents::Log(line);
 }
 

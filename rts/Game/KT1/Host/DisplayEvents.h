@@ -3,12 +3,14 @@
 //
 // Emit during the step; the events are published at FrameEnd and replayed, in order, once the step's work is done.
 // While the game is fast-forwarding, sounds and pings are dropped. Nothing may read the queue back.
+// The queue has one consumer, Replay, called once per sim step with or without a draw side, so it never grows.
 
 #ifndef KT1_HOST_DISPLAY_EVENTS_H
 #define KT1_HOST_DISPLAY_EVENTS_H
 
 #include "Game/KT1/Core/SimHost/DisplayQueue.h"
-#include "System/float3.h"
+
+class float3;
 
 namespace KT1 {
 
