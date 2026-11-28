@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "Check.h"
+#include "Fakes.h"
 
 #include "Game/GameHelper.h"
 #include "Sim/Features/Feature.h"
@@ -34,7 +35,7 @@ constexpr const char* CALLINS[Core::SimHost::EVENT_TYPES] = {
 	"FeatureCreated", "FeatureDestroyed"
 };
 
-Core::SimHost::EventLog eventLog;
+Core::SimHost::SplitEventLog eventLog;
 
 void SetPos(Event& e, const float3& p) {
 	e.pos[0] = p.x;
@@ -95,21 +96,21 @@ public:
 	void UnitCreated(const CUnit* u, const CUnit* builder) override {
 		Event e = UnitEvent(EventType::UnitCreated, u);
 		e.other = IdOf(builder);
-		eventLog.Push(e);
+		PushUnit(e, u);
 	}
-	void UnitFinished(const CUnit* u) override { eventLog.Push(UnitEvent(EventType::UnitFinished, u)); }
-	void UnitIdle(const CUnit* u) override { eventLog.Push(UnitEvent(EventType::UnitIdle, u)); }
+	void UnitFinished(const CUnit* u) override { PushUnit(UnitEvent(EventType::UnitFinished, u), u); }
+	void UnitIdle(const CUnit* u) override { PushUnit(UnitEvent(EventType::UnitIdle, u), u); }
 	void UnitFromFactory(const CUnit* u, const CUnit* factory, bool userOrders) override {
 		Event e = UnitEvent(EventType::UnitFromFactory, u);
 		e.other = IdOf(factory);
 		e.flags = userOrders ? 1 : 0;
-		eventLog.Push(e);
+		PushUnit(e, u);
 	}
 	void UnitDestroyed(const CUnit* u, const CUnit* attacker, int weaponDefID) override {
 		Event e = UnitEvent(EventType::UnitDestroyed, u);
 		e.other = IdOf(attacker);
 		e.arg = weaponDefID;
-		eventLog.Push(e);
+		PushUnit(e, u);
 	}
 	void UnitGiven(const CUnit* u, int oldTeam, int newTeam) override { Transfer(EventType::UnitGiven, u, oldTeam, newTeam); }
 	void UnitTaken(const CUnit* u, int oldTeam, int newTeam) override { Transfer(EventType::UnitTaken, u, oldTeam, newTeam); }
@@ -120,7 +121,7 @@ public:
 		e.arg = weaponDefID;
 		e.arg2 = projectileID;
 		e.flags = paralyzer ? 1 : 0;
-		eventLog.Push(e);
+		PushUnit(e, u);
 	}
 	void UnitLoaded(const CUnit* u, const CUnit* transport) override { Cargo(EventType::UnitLoaded, u, transport); }
 	void UnitUnloaded(const CUnit* u, const CUnit* transport) override { Cargo(EventType::UnitUnloaded, u, transport); }
@@ -128,10 +129,10 @@ public:
 		Event e = UnitEvent(EventType::UnitCmdDone, u);
 		e.arg = c.GetID();
 		e.arg2 = static_cast<int32_t>(c.GetTag());
-		eventLog.Push(e);
+		PushUnit(e, u);
 	}
-	void ProjectileCreated(const CProjectile* p) override { eventLog.Push(ProjectileEvent(EventType::ProjectileCreated, p)); }
-	void ProjectileDestroyed(const CProjectile* p) override { eventLog.Push(ProjectileEvent(EventType::ProjectileDestroyed, p)); }
+	void ProjectileCreated(const CProjectile* p) override { Push(ProjectileEvent(EventType::ProjectileCreated, p)); }
+	void ProjectileDestroyed(const CProjectile* p) override { Push(ProjectileEvent(EventType::ProjectileDestroyed, p)); }
 	bool Explosion(int weaponDefID, const WeaponDef*, const CExplosionParams& params) override {
 		Event e;
 		e.type = EventType::Explosion;
@@ -142,23 +143,26 @@ public:
 		const CFeature* hit = params.hitObject.GetTyped<CFeature>();
 		e.arg2 = (hit != nullptr) ? hit->id : -1;
 		SetPos(e, params.pos);
-		eventLog.Push(e);
+		Push(e);
 		return false;   // never claims the explosion's effects
 	}
-	void FeatureCreated(const CFeature* f) override { eventLog.Push(FeatureEvent(EventType::FeatureCreated, f)); }
-	void FeatureDestroyed(const CFeature* f) override { eventLog.Push(FeatureEvent(EventType::FeatureDestroyed, f)); }
+	void FeatureCreated(const CFeature* f) override { Push(FeatureEvent(EventType::FeatureCreated, f)); }
+	void FeatureDestroyed(const CFeature* f) override { Push(FeatureEvent(EventType::FeatureDestroyed, f)); }
 
 private:
+	static void Push(const Event& e) { eventLog.Push(e, false); }
+	// a unit event, about its subject: hidden from readers that do not see fakes (the units Lua gadgets do not hear)
+	static void PushUnit(const Event& e, const CUnit* u) { eventLog.Push(e, Fakes::Is(u)); }
 	static void Transfer(EventType type, const CUnit* u, int oldTeam, int newTeam) {
 		Event e = UnitEvent(type, u);
 		e.arg = oldTeam;
 		e.arg2 = newTeam;
-		eventLog.Push(e);
+		PushUnit(e, u);
 	}
 	static void Cargo(EventType type, const CUnit* u, const CUnit* transport) {
 		Event e = UnitEvent(type, u);
 		e.other = IdOf(transport);
-		eventLog.Push(e);
+		PushUnit(e, u);
 	}
 };
 
@@ -167,8 +171,8 @@ Client* client = nullptr;
 
 } // namespace
 
-int SimEvents::Subscribe(Core::SimHost::EventMask mask) {
-	const int reader = eventLog.AddReader(mask);
+int SimEvents::Subscribe(Core::SimHost::EventMask mask, bool seesFakes) {
+	const int reader = eventLog.AddReader(mask, seesFakes);
 	if (client == nullptr) client = new Client();
 	else eventHandler.RemoveClient(client);   // re-link: the wanted events have changed
 	eventHandler.AddClient(client);

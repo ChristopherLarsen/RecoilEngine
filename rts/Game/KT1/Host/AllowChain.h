@@ -6,6 +6,11 @@
 // Whether its validators are in check mode is the system's switch, asked of the registry.
 // Order within a chain: (order, system name).
 //
+// Intel's fake units (Fakes.h): UnitPreDamaged skips a validator whose system does not see them; every other call-in asks
+// every validator, as Lua gadgets are asked. Each validator's last argument, Faked, says which of the call's units are
+// fake, in the order of the key table's id1 and id2 below (for UnitPreDamaged: the unit, its attacker). A command's
+// target unit is in its parameters: Fakes::Is.
+//
 // Live (switch on): in a veto chain the first "no" ends it and Lua is not asked, as when an earlier gadget says no. When
 // every validator says yes, Lua is asked exactly as before. With nothing registered every hook is the stock engine.
 //
@@ -54,18 +59,24 @@ struct PreDamage {
 	bool paralyzer;
 };
 
+// first / second: the call's first and second unit (or unit def) is a fake; false where there is none.
+struct Faked {
+	bool first = false;
+	bool second = false;
+};
+
 class AllowChain {
 public:
-	using CommandFn = std::function<bool(const CUnit*, const Command&, int playerNum, bool fromSynced, bool fromLua)>;
+	using CommandFn = std::function<bool(const CUnit*, const Command&, int playerNum, bool fromSynced, bool fromLua, Faked)>;
 	// drop: with a "no", whether the factory forgets the order (the engine's second return); true unless set
-	using CreationFn = std::function<bool(const UnitDef*, const CUnit* builder, const BuildInfo*, bool& drop)>;
-	using TransferFn = std::function<bool(const CUnit*, int newTeam, bool capture)>;
-	using UnitStepFn = std::function<bool(const CUnit* builder, const CUnit*, float part)>;
-	using FeatureStepFn = std::function<bool(const CUnit* builder, const CFeature*, float part)>;
+	using CreationFn = std::function<bool(const UnitDef*, const CUnit* builder, const BuildInfo*, bool& drop, Faked)>;
+	using TransferFn = std::function<bool(const CUnit*, int newTeam, bool capture, Faked)>;
+	using UnitStepFn = std::function<bool(const CUnit* builder, const CUnit*, float part, Faked)>;
+	using FeatureStepFn = std::function<bool(const CUnit* builder, const CFeature*, float part, Faked)>;
 	// priority is null for a command AI's search; a live change is what Lua then receives
-	using TargetFn = std::function<bool(unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority)>;
+	using TargetFn = std::function<bool(unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority, Faked)>;
 	// No veto: every live one runs, each sees the damage the one before left; impulse factors multiply.
-	using DamageFn = std::function<void(const PreDamage&, float& damage, float& impulseMult)>;
+	using DamageFn = std::function<void(const PreDamage&, float& damage, float& impulseMult, Faked)>;
 
 	static void AddCommand(const char* system, int order, CommandFn fn);
 	static void AddUnitCreation(const char* system, int order, CreationFn fn);

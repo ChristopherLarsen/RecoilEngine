@@ -18,6 +18,7 @@ template<class Fn> struct Validator {
 	std::string system;
 	bool check;     // true: its system's switch is "check" (the host asks the registry)
 	Fn fn;
+	bool seesFakes = false;   // asked UnitPreDamaged about intel's fake units too (Host/Fakes.h)
 };
 
 template<class Fn> using Chain = Ordered<Validator<Fn>>;

@@ -3,6 +3,7 @@
 
 #include "DrawPhases.h"
 #include "DisplaySink.h"
+#include "HostAudit.h"
 
 #include <deque>
 #include <memory>
@@ -130,6 +131,7 @@ void CallMiniMapSystems(DrawContext& ctx) {
 void RunPhase(DrawPhase phase) {
 	HostState& s = State();
 	s.view.BeginFrame(globalRendering->drawFrame);
+	const HostAudit::Scope audit(s.systems.AnyEnabled());
 	if (phase == DrawPhase::Update) DisplaySink::Replay();   // the steps since the last frame, before any system
 	if (phase == DrawPhase::PreDraw) SyncSwitches();
 	// Genesis is where the frame's camera and positions are settled: the facts are made there for every later phase
@@ -145,7 +147,7 @@ void RunPhase(DrawPhase phase) {
 } // namespace
 
 void DrawPhases::Init() {
-	if (DisplaySink::Present()) AddClients();   // the sim's display events are played with or without a draw system
+	AddClients();   // the sim's display events are played with or without a draw system
 }
 
 void DrawPhases::Add(DrawSystem* system) {
@@ -157,7 +159,7 @@ void DrawPhases::Add(DrawSystem* system) {
 }
 
 void DrawPhases::Run(DrawPhase phase) {
-	if (State().client == nullptr) return;   // no draw system and no display events in this game
+	if (State().client == nullptr) return;   // no game's draw side (before Init, after Kill)
 	RunPhase(phase);
 }
 
@@ -182,6 +184,7 @@ void DrawPhases::Kill() {
 	s.facts.Reset();
 	s.view.Reset();
 	s.endedFrame = 0;
+	HostAudit::Set(false);
 	SnapshotBoard::Get().Clear();
 }
 

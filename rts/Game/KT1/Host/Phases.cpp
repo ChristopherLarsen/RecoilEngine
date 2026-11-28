@@ -8,6 +8,7 @@
 
 #include "Check.h"
 #include "DisplayEvents.h"
+#include "Fakes.h"
 #include "SimEvents.h"
 #include "SyncState.h"
 #include "Game/KT1/Core/Common/Rate.h"
@@ -42,7 +43,7 @@ void Phases::Add(const char* system, Core::SimHost::Phase phase, int order, Core
 	CTimeProfiler::RegisterTimer(timer.c_str());
 	Registration r;
 	r.fn = std::move(fn);
-	r.reader = (events != 0) ? SimEvents::Subscribe(events) : -1;
+	r.reader = (events != 0) ? SimEvents::Subscribe(events, Fakes::Sees(system)) : -1;
 	r.timer = hashString(timer.c_str());
 	r.check = Check::InCheck(system);
 	schedule[static_cast<size_t>(phase)].Add(order, system, std::move(r));

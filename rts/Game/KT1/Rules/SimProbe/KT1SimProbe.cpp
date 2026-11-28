@@ -64,7 +64,7 @@ void SimProbeRule::RegisterPhases() {
 
 void SimProbeRule::RegisterValidators() {
 	const auto saw = [this](Veto v) { ++asked[static_cast<size_t>(v)]; };
-	AllowChain::AddCommand("SimProbe", 0, [this, saw](const CUnit* u, const ::Command& c, int, bool, bool) {
+	AllowChain::AddCommand("SimProbe", 0, [this, saw](const CUnit* u, const ::Command& c, int, bool, bool, Faked) {
 		saw(Veto::Command);
 		if (CheckMode()) {
 			if (commands.size() < MAX_RECORDS) {
@@ -77,13 +77,13 @@ void SimProbeRule::RegisterValidators() {
 		return denyCommand == 0 || c.GetID() != denyCommand;
 	});
 	if (CheckMode()) return;   // the counting validators: the twin answers for the command validator only
-	AllowChain::AddUnitCreation("SimProbe", 0, [saw](const UnitDef*, const CUnit*, const BuildInfo*, bool&) { saw(Veto::Creation); return true; });
-	AllowChain::AddUnitTransfer("SimProbe", 0, [saw](const CUnit*, int, bool) { saw(Veto::Transfer); return true; });
-	AllowChain::AddBuildStep("SimProbe", 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::BuildStep); return true; });
-	AllowChain::AddCaptureStep("SimProbe", 0, [saw](const CUnit*, const CUnit*, float) { saw(Veto::CaptureStep); return true; });
-	AllowChain::AddFeatureBuildStep("SimProbe", 0, [saw](const CUnit*, const CFeature*, float) { saw(Veto::FeatureStep); return true; });
-	AllowChain::AddWeaponTarget("SimProbe", 0, [saw](unsigned, unsigned, unsigned, unsigned, float*) { saw(Veto::Target); return true; });
-	AllowChain::AddPreDamage("SimProbe", 0, [saw](const PreDamage&, float&, float&) { saw(Veto::PreDamage); });
+	AllowChain::AddUnitCreation("SimProbe", 0, [saw](const UnitDef*, const CUnit*, const BuildInfo*, bool&, Faked) { saw(Veto::Creation); return true; });
+	AllowChain::AddUnitTransfer("SimProbe", 0, [saw](const CUnit*, int, bool, Faked) { saw(Veto::Transfer); return true; });
+	AllowChain::AddBuildStep("SimProbe", 0, [saw](const CUnit*, const CUnit*, float, Faked) { saw(Veto::BuildStep); return true; });
+	AllowChain::AddCaptureStep("SimProbe", 0, [saw](const CUnit*, const CUnit*, float, Faked) { saw(Veto::CaptureStep); return true; });
+	AllowChain::AddFeatureBuildStep("SimProbe", 0, [saw](const CUnit*, const CFeature*, float, Faked) { saw(Veto::FeatureStep); return true; });
+	AllowChain::AddWeaponTarget("SimProbe", 0, [saw](unsigned, unsigned, unsigned, unsigned, float*, Faked) { saw(Veto::Target); return true; });
+	AllowChain::AddPreDamage("SimProbe", 0, [saw](const PreDamage&, float&, float&, Faked) { saw(Veto::PreDamage); });
 }
 
 void SimProbeRule::FrameStart(const SimContext& c) {

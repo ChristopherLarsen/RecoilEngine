@@ -254,6 +254,8 @@ CGame::CGame(const std::string& mapFileName, const std::string& modFileName, ILo
 
 	, saveFileHandler(saveFile)
 {
+	KT1::Registry::Reset(); // KT1 hook: registry
+
 	game = this;
 
 	memset(gameID, 0, sizeof(gameID));

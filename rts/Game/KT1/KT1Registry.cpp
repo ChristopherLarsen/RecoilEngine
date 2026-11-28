@@ -20,6 +20,7 @@
 #include "KT1Registry.h"
 #include "KT1Register.h"
 #include "KT1Systems.h"
+#include "Host/HostReset.h"
 
 #include <algorithm>
 #include <cctype>
@@ -85,6 +86,13 @@ Registry& Registry::Get() {
 		p.clear();
 	}
 	return reg;
+}
+
+void Registry::Reset() {
+	Registry& reg = Get();
+	ResetSimHost();   // first: its phase functions, validators and sync columns point into the rules
+	reg.rules.clear();
+	reg.built = reg.inited = reg.started = false;
 }
 
 Rule* Registry::Find(const char* name) const {
