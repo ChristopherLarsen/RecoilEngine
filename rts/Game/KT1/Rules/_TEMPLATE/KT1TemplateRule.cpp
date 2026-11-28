@@ -16,10 +16,11 @@
 //             FrameEnd    publishes Snapshot<Core::Template::Dot>
 // Events:     UnitFinished, UnitDestroyed
 // State:      per unit: charge, due step (Core/_TEMPLATE/TemplateRuleCore.h); both in the sync checksum when live
-// Display:    none from the sim step; a sound, effect or log line would go through DisplayEvents (never in check mode)
-// Allow:      none; a validator is added with AllowChain::Add<CallIn>(NAME, Checking(), order, fn)
-// Check:      the contract in KT1Register.h (RuleInfo.checkSafe): the Lua stays authoritative; this rule keeps its own
-//             state outside the sync checksum, publishes nothing, and gives Host/Check each value it computes
+// Writes:     none to the engine. A system writes only through its SimContext: c.Write(fn) for sim state, c.Order for
+//             orders, c.Emit or DisplayEvents for sounds, effects and log lines. The host skips them in check mode.
+// Allow:      none; a validator is added with AllowChain::Add<CallIn>(NAME, order, fn)
+// Check:      the contract in KT1Register.h (RuleInfo.checkSafe): the Lua stays authoritative. The host keeps this rule's
+//             state out of the sync checksum; the rule publishes nothing and gives Host/Check each value it computes
 //             (Check::Native "charge", unit id). The replaced gadget, in check mode, answers for the same visit:
 //             Spring.KT1.Check.Answer("TemplateRule", "charge", unitID, 0, 0, charge)
 // Timer:      KT1::TemplateRule
@@ -70,23 +71,20 @@ public:
 		params = {Core::Rate::Every(config.period_s), config.gain, config.cap};
 		state.Init(MAX_UNITS, params);
 		RegisterPhases();
-		if (Checking()) return;   // shadow state: not synced state, and nothing for the draw side
-		snapshot.Init(MAX_UNITS);
-		SnapshotBoard::Get().Publish(snapshot);
 		SyncState::Add(NAME, "charge", state.units.index, state.charge);
 		SyncState::Add(NAME, "due", state.units.index, state.dueStep);
+		snapshot.Init(MAX_UNITS);
+		if (SwitchMode() != Mode::Check) SnapshotBoard::Get().Publish(snapshot);   // check: the draw side stays on the Lua
 	}
 
 	void PushLua(lua_State* L) override { LuaPushRawNamedCFunc(L, "Charge", LCharge); }
 
 private:
-	bool Checking() const { return SwitchMode() == Mode::Check; }
-
 	void RegisterPhases() {
 		const auto mask = MaskOf(EventType::UnitFinished) | MaskOf(EventType::UnitDestroyed);
 		Phases::Add(NAME, Phase::FrameStart, 0, mask, [this](const SimContext& c) { Track(c); });
 		Phases::Add(NAME, Phase::AfterUnits, 0, 0, [this](const SimContext& c) { Visit(c); });
-		if (!Checking()) Phases::Add(NAME, Phase::FrameEnd, 0, 0, [this](const SimContext& c) { Publish(c); });
+		Phases::Add(NAME, Phase::FrameEnd, 0, 0, [this](const SimContext& c) { if (!c.check) Publish(c); });
 	}
 
 	// KT1 hot
@@ -101,7 +99,7 @@ private:
 	void Visit(const SimContext& c) {
 		const auto due = state.TakeDue();
 		state.Visit(due, c.ids, params);
-		if (!Checking()) return;
+		if (!c.check) return;
 		for (const int32_t id : due) {
 			const Core::DenseIndex::Slot slot = state.units.index.SlotOf(id);
 			if (slot != Core::DenseIndex::NONE && c.ids.Contains(id)) Check::Native(NAME, "charge", id, 0, 0, state.charge[slot]);
