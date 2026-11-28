@@ -21,6 +21,7 @@
 #include "KT1Capture.h"
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,7 @@
 #include "Game/GlobalUnsynced.h"
 #include "Game/KT1/Host/DrawPhases.h"
 #include "Game/KT1/Core/Capture/CaptureCore.h"
+#include "Game/KT1/Host/Capture/CaptureScript.h"
 #include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Game/Players/PlayerBase.h"
@@ -65,7 +67,7 @@ namespace Capture {
 			return (it == opts.end()) ? std::string() : std::string(it->second.c_str());
 		}
 
-		constexpr int LAST_DRAW_ORDER = 1 << 30;   // DESIGN: after every other draw system, so the read-back sees their work
+		constexpr int LAST_DRAW_ORDER = std::numeric_limits<int>::max();   // DESIGN: after every other draw system, so the read-back sees their work
 
 		class CaptureRule : public Rule, public DrawSystem {
 		public:
@@ -185,7 +187,7 @@ namespace Capture {
 			const float seconds = shot.frame * INV_GAME_SPEED;
 			game->hideInterface = script.hideInterface;
 			globalRendering->timeOffset = script.timeOffset;   // held, the engine's own value drifts with the wall clock
-			globalRendering->grTime = spring_time::fromNanoSecs(static_cast<int64_t>(seconds * 1.0e9));
+			globalRendering->grTime = spring_time::fromNanoSecs(static_cast<int64_t>(seconds * 1.0e9));   // DESIGN: nanoseconds in a second
 			gu->gameTime = seconds;
 			gu->modGameTime = seconds;
 			guRNG.SetSeed(script.seed);
@@ -240,11 +242,11 @@ namespace Capture {
 				glClear(GL_COLOR_BUFFER_BIT);
 				glPopAttrib();
 			}
-			std::vector<uint8_t> pixels((size_t)w * h * 4);
+			std::vector<uint8_t> pixels((size_t)w * h * 4);   // DESIGN: bytes of an RGBA pixel
 			glPixelStorei(GL_PACK_ALIGNMENT, 1);
 			glReadBuffer(GL_BACK);
 			glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+			glPixelStorei(GL_PACK_ALIGNMENT, 4);   // DESIGN: GL's default, restored
 
 			const std::string path = CaptureCore::PicturePath(shot, step.side);
 			CBitmap bmp(pixels.data(), w, h);
