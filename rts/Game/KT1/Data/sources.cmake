@@ -3,6 +3,8 @@
 list(APPEND KT1_SOURCES
 	"${CMAKE_CURRENT_LIST_DIR}/Config.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/DataEngine.cpp"
+	"${CMAKE_CURRENT_LIST_DIR}/Json.cpp"
+	"${CMAKE_CURRENT_LIST_DIR}/Number.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/Reload.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/Schema.cpp"
 )

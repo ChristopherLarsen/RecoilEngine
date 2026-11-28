@@ -9,29 +9,26 @@
 #include <set>
 #include <string_view>
 
-#include "simdjson.h"
+#include "Json.h"
+#include "Number.h"
 
 namespace KT1::Data {
 
-namespace dom = simdjson::dom;
-
 struct Schema::Impl {
-	dom::object object;
+	const Node& object;
 	std::string path;
 	Report& report;
 	std::set<std::string, std::less<>> known;   // keys a Field/Object/List call asked for
 };
 
-static const char* TypeName(const dom::element& e) {
-	switch (e.type()) {
-		case dom::element_type::ARRAY:  return "a list";
-		case dom::element_type::OBJECT: return "an object";
-		case dom::element_type::INT64:
-		case dom::element_type::UINT64: return "a whole number";
-		case dom::element_type::DOUBLE: return "a number with a fraction";
-		case dom::element_type::STRING: return "a string";
-		case dom::element_type::BOOL:   return "true or false";
-		default:                        return "null";
+static const char* TypeName(const Node& n) {
+	switch (n.kind) {
+		case Node::Kind::List:   return "a list";
+		case Node::Kind::Object: return "an object";
+		case Node::Kind::Number: return IsWholeNumber(n.text) ? "a whole number" : "a number with a fraction";
+		case Node::Kind::String: return "a string";
+		case Node::Kind::Bool:   return "true or false";
+		default:                 return "null";
 	}
 }
 
@@ -47,58 +44,56 @@ static std::string RangeText(const Range& r) {
 	return "from " + Short(r.min) + " to " + Short(r.max);
 }
 
-static bool IsStringList(const dom::element& e) {
-	dom::array a;
-	if (e.get(a) != simdjson::SUCCESS) return false;
-	for (const dom::element item : a)
-		if (!item.is_string()) return false;
+static bool IsStringList(const Node& n) {
+	if (n.kind != Node::Kind::List) return false;
+	for (const Node& item : n.items)
+		if (item.kind != Node::Kind::String) return false;
 	return true;
 }
 
-Schema::Schema(const dom::object& object, std::string path, Report& report) : impl(new Impl{object, std::move(path), report, {}}) {}
+Schema::Schema(const Node& object, std::string path, Report& report) : impl(new Impl{object, std::move(path), report, {}}) {}
 Schema::~Schema() = default;
 
 std::string Schema::Where(const std::string& key) const { return impl->path.empty() ? key : impl->path + "." + key; }
 
-void Schema::WrongType(const std::string& where, const char* wanted, const dom::element& got) {
+void Schema::WrongType(const std::string& where, const char* wanted, const Node& got) {
 	impl->report.Error(where, std::string("expected ") + wanted + ", got " + TypeName(got));
 }
 
-bool Schema::Find(const char* key, dom::element& out) {
+const Node* Schema::Find(const char* key) {
 	impl->known.insert(key);
-	return impl->object.at_key(key).get(out) == simdjson::SUCCESS;
+	return impl->object.Find(key);
 }
 
 void Schema::Field(const char* key, bool& value) {
-	dom::element e;
-	if (!Find(key, e)) return;
-	bool v = false;
-	if (e.get(v) != simdjson::SUCCESS) return WrongType(Where(key), "true or false", e);
-	value = v;
+	const Node* n = Find(key);
+	if (!n) return;
+	if (n->kind != Node::Kind::Bool) return WrongType(Where(key), "true or false", *n);
+	value = n->boolean;
 }
 
 void Schema::Field(const char* key, int& value, Range range) {
-	dom::element e;
-	if (!Find(key, e)) return;
-	if (!e.is<int64_t>() && !e.is<uint64_t>()) return WrongType(Where(key), "a whole number", e);
-	int64_t v = 0;
-	if (e.get(v) != simdjson::SUCCESS || v < std::numeric_limits<int>::min() || v > std::numeric_limits<int>::max())
-		return impl->report.Error(Where(key), "too large for a whole number");
+	const Node* n = Find(key);
+	if (!n) return;
+	if (n->kind != Node::Kind::Number) return WrongType(Where(key), "a whole number", *n);
+	int v = 0;
+	const NumberError err = ReadNumber(n->text, v);
+	if (err == NumberError::NotWhole) return WrongType(Where(key), "a whole number", *n);
+	if (err != NumberError::Ok) return impl->report.Error(Where(key), "too large for a whole number");
 	if (double(v) < range.min || double(v) > range.max)
 		return impl->report.Error(Where(key), std::to_string(v) + " is out of range: " + RangeText(range));
-	value = int(v);
+	value = v;
 }
 
-// A float is the nearest double of the file's text, rounded to float: the same two steps Lua's reader takes (strtod into
-// its float number type), so a value moved from a .lua config keeps its bits.
-bool Schema::Number(const std::string& where, const dom::element& e, float& value, const Range& range) {
-	double v = 0;
-	if (e.get(v) != simdjson::SUCCESS) {
-		WrongType(where, "a number", e);
+// The range is judged on the number as a double, before it is rounded to float.
+bool Schema::Number(const std::string& where, const Node& node, float& value, const Range& range) {
+	if (node.kind != Node::Kind::Number) {
+		WrongType(where, "a number", node);
 		return false;
 	}
-	const float f = static_cast<float>(v);
-	if (!std::isfinite(f)) {
+	float f{};
+	double v{};
+	if (ReadNumber(node.text, f) != NumberError::Ok || ReadNumber(node.text, v) != NumberError::Ok) {
 		impl->report.Error(where, "too large for a number");
 		return false;
 	}
@@ -111,65 +106,54 @@ bool Schema::Number(const std::string& where, const dom::element& e, float& valu
 }
 
 void Schema::Field(const char* key, float& value, Range range) {
-	dom::element e;
-	if (Find(key, e)) Number(Where(key), e, value, range);
+	if (const Node* n = Find(key)) Number(Where(key), *n, value, range);
 }
 
 void Schema::Field(const char* key, std::string& value) {
-	dom::element e;
-	if (!Find(key, e)) return;
-	std::string_view v;
-	if (e.get(v) != simdjson::SUCCESS) return WrongType(Where(key), "a string", e);
-	value.assign(v);
+	const Node* n = Find(key);
+	if (!n) return;
+	if (n->kind != Node::Kind::String) return WrongType(Where(key), "a string", *n);
+	value = n->text;
 }
 
 // All or nothing: a bad entry leaves the whole list at its default, never half a colour.
 void Schema::Floats(const char* key, float* values, std::size_t count, Range range) {
-	dom::element e;
-	if (!Find(key, e)) return;
-	dom::array a;
-	if (e.get(a) != simdjson::SUCCESS) return WrongType(Where(key), "a list of numbers", e);
-	std::size_t given = 0;
-	for ([[maybe_unused]] const dom::element item : a) ++given;
-	if (given != count)
-		return impl->report.Error(Where(key), "expected " + std::to_string(count) + " numbers, got " + std::to_string(given));
+	const Node* n = Find(key);
+	if (!n) return;
+	if (n->kind != Node::Kind::List) return WrongType(Where(key), "a list of numbers", *n);
+	if (n->items.size() != count)
+		return impl->report.Error(Where(key), "expected " + std::to_string(count) + " numbers, got " + std::to_string(n->items.size()));
 	std::vector<float> read(count);
-	std::size_t i = 0;
 	bool ok = true;
-	for (const dom::element item : a) {
-		ok = Number(Where(key) + "[" + std::to_string(i + 1) + "]", item, read[i], range) && ok;
-		++i;
-	}
+	for (std::size_t i = 0; i < count; ++i)
+		ok = Number(Where(key) + "[" + std::to_string(i + 1) + "]", n->items[i], read[i], range) && ok;
 	if (!ok) return;
-	for (i = 0; i < count; ++i) values[i] = read[i];
+	for (std::size_t i = 0; i < count; ++i) values[i] = read[i];
 }
 
 std::unique_ptr<Schema> Schema::OpenObject(const char* key) {
-	dom::element e;
-	if (!Find(key, e)) return nullptr;
-	dom::object o;
-	if (e.get(o) != simdjson::SUCCESS) {
-		WrongType(Where(key), "an object", e);
+	const Node* n = Find(key);
+	if (!n) return nullptr;
+	if (n->kind != Node::Kind::Object) {
+		WrongType(Where(key), "an object", *n);
 		return nullptr;
 	}
-	return std::make_unique<Schema>(o, Where(key), impl->report);
+	return std::make_unique<Schema>(*n, Where(key), impl->report);
 }
 
 // True when the list is there and every entry is an object (a list with one bad entry keeps the default list).
 bool Schema::OpenList(const char* key, std::size_t& count) {
-	dom::element e;
-	if (!Find(key, e)) return false;
-	dom::array a;
-	if (e.get(a) != simdjson::SUCCESS) {
-		WrongType(Where(key), "a list", e);
+	const Node* n = Find(key);
+	if (!n) return false;
+	if (n->kind != Node::Kind::List) {
+		WrongType(Where(key), "a list", *n);
 		return false;
 	}
-	count = 0;
+	count = n->items.size();
 	bool ok = true;
-	for (const dom::element item : a) {
-		++count;
-		if (item.is_object()) continue;
-		WrongType(Where(key) + "[" + std::to_string(count) + "]", "an object", item);
+	for (std::size_t i = 0; i < count; ++i) {
+		if (n->items[i].kind == Node::Kind::Object) continue;
+		WrongType(Where(key) + "[" + std::to_string(i + 1) + "]", "an object", n->items[i]);
 		ok = false;
 	}
 	return ok;
@@ -177,18 +161,17 @@ bool Schema::OpenList(const char* key, std::size_t& count) {
 
 // Item numbers in messages start at 1.
 std::unique_ptr<Schema> Schema::OpenItem(const char* key, std::size_t index) {
-	dom::array a;
-	dom::element e;
-	dom::object o;
-	if (impl->object.at_key(key).get(a) != simdjson::SUCCESS) return nullptr;
-	if (a.at(index).get(e) != simdjson::SUCCESS || e.get(o) != simdjson::SUCCESS) return nullptr;
-	return std::make_unique<Schema>(o, Where(key) + "[" + std::to_string(index + 1) + "]", impl->report);
+	const Node* list = impl->object.Find(key);
+	if (!list || list->kind != Node::Kind::List || index >= list->items.size()) return nullptr;
+	const Node& item = list->items[index];
+	if (item.kind != Node::Kind::Object) return nullptr;
+	return std::make_unique<Schema>(item, Where(key) + "[" + std::to_string(index + 1) + "]", impl->report);
 }
 
-void Schema::CheckNote(const std::string& key, const dom::element& value) {
+void Schema::CheckNote(const std::string& key, const Node& value) {
 	const std::string where = Where(key);
 	if (key == "_doc") {
-		if (!value.is_string()) WrongType(where, "a string", value);
+		if (value.kind != Node::Kind::String) WrongType(where, "a string", value);
 		return;
 	}
 	if (key == "_sources" && impl->path.empty()) {
@@ -196,26 +179,23 @@ void Schema::CheckNote(const std::string& key, const dom::element& value) {
 		return;
 	}
 	if (key != "_label") return impl->report.Unknown(where, "unknown note (notes are _label, _doc and, at the top, _sources)");
-	dom::object labels;
-	if (value.get(labels) != simdjson::SUCCESS) return WrongType(where, "an object of key: label", value);
-	for (const dom::key_value_pair label : labels) {
-		const std::string at = where + "." + std::string(label.key);
-		if (!label.value.is_string()) WrongType(at, "a string", label.value);
-		dom::element target;
-		if (impl->object.at_key(label.key).get(target) != simdjson::SUCCESS)
-			impl->report.Unknown(at, "labels a key this object does not have");
+	if (value.kind != Node::Kind::Object) return WrongType(where, "an object of key: label", value);
+	for (std::size_t i = 0; i < value.keys.size(); ++i) {
+		const std::string at = where + "." + value.keys[i];
+		if (value.items[i].kind != Node::Kind::String) WrongType(at, "a string", value.items[i]);
+		if (!impl->object.Find(value.keys[i])) impl->report.Unknown(at, "labels a key this object does not have");
 	}
 }
 
 void Schema::Finish() {
 	std::set<std::string_view> seen;
-	for (const dom::key_value_pair entry : impl->object) {
-		const std::string key(entry.key);
-		if (!seen.insert(entry.key).second) {
+	for (std::size_t i = 0; i < impl->object.keys.size(); ++i) {
+		const std::string& key = impl->object.keys[i];
+		if (!seen.insert(key).second) {
 			impl->report.Error(Where(key), "key given twice");
 			continue;
 		}
-		if (!key.empty() && key[0] == '_') CheckNote(key, entry.value);
+		if (!key.empty() && key[0] == '_') CheckNote(key, impl->object.items[i]);
 		else if (impl->known.find(key) == impl->known.end()) impl->report.Unknown(Where(key), "unknown key");
 	}
 }

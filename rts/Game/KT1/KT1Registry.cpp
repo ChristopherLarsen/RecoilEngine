@@ -23,9 +23,11 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <string_view>
 
 #include "Core/Common/Rate.h"
 #include "Data/DataEngine.h"
+#include "Data/Number.h"
 #include "Game/GameSetup.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaUtils.h"
@@ -193,6 +195,16 @@ static int LuaMode(lua_State* L) {
 	return 1;
 }
 
+// Spring.KT1.ReadNumber(text): the number the data loader gives a float field for this text; nothing when it refuses it
+static int LuaReadNumber(lua_State* L) {
+	std::size_t length = 0;
+	const char* text = luaL_checklstring(L, 1, &length);
+	float value = 0.0f;
+	if (Data::ReadNumber(std::string_view(text, length), value) != Data::NumberError::Ok) return 0;
+	lua_pushnumber(L, value);
+	return 1;
+}
+
 // Spring.KT1.SetEnabled(name, on): refused from synced Lua and for synced rules
 static int LuaSetEnabled(lua_State* L) {
 	if (CLuaHandle::GetHandleSynced(L)) {
@@ -214,6 +226,7 @@ void Registry::PushLua(lua_State* L) {
 	LuaPushRawNamedCFunc(L, "Enabled", LuaEnabled);
 	LuaPushRawNamedCFunc(L, "Mode", LuaMode);
 	LuaPushRawNamedCFunc(L, "SetEnabled", LuaSetEnabled);
+	LuaPushRawNamedCFunc(L, "ReadNumber", LuaReadNumber);
 	for (auto& r : reg.rules) {
 		lua_pushstring(L, r->info.name);
 		lua_newtable(L);

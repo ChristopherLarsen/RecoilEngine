@@ -24,9 +24,9 @@
 
 #include "Report.h"
 
-namespace simdjson { namespace dom { class element; class object; } }
-
 namespace KT1::Data {
+
+struct Node;   // Json.h
 
 // The values a number may take, both ends included.
 struct Range {
@@ -39,7 +39,8 @@ inline Range Between(double min, double max) { return Range{min, max}; }
 class Schema {
 public:
 	// Reads `object`, found at `path` ("" for the top object). Used by Config.cpp and by Schema itself.
-	Schema(const simdjson::dom::object& object, std::string path, Report& report);
+	// `object` must outlive the Schema.
+	Schema(const Node& object, std::string path, Report& report);
 	~Schema();
 	Schema(const Schema&) = delete;
 	Schema& operator=(const Schema&) = delete;
@@ -79,17 +80,17 @@ public:
 	void Finish();
 
 private:
-	struct Impl;   // keeps simdjson out of the headers that describe configs
+	struct Impl;
 
-	bool Find(const char* key, simdjson::dom::element& out);   // marks the key known
+	const Node* Find(const char* key);                          // marks the key known
 	void Floats(const char* key, float* values, std::size_t count, Range range);
-	bool Number(const std::string& where, const simdjson::dom::element& e, float& value, const Range& range);
-	void WrongType(const std::string& where, const char* wanted, const simdjson::dom::element& got);
+	bool Number(const std::string& where, const Node& node, float& value, const Range& range);
+	void WrongType(const std::string& where, const char* wanted, const Node& got);
 	std::string Where(const std::string& key) const;
 	std::unique_ptr<Schema> OpenObject(const char* key);             // nullptr: absent, or not an object (reported)
 	bool OpenList(const char* key, std::size_t& count);
 	std::unique_ptr<Schema> OpenItem(const char* key, std::size_t index);
-	void CheckNote(const std::string& key, const simdjson::dom::element& value);
+	void CheckNote(const std::string& key, const Node& value);
 
 	std::unique_ptr<Impl> impl;
 };

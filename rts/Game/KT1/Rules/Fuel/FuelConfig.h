@@ -1,6 +1,7 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 Fuel: its config.
-// Engine-free. Values: game-build game/data/kt1/ (labels there); the members hold the defaults.
+// Engine-free. Values: game-build game/data/kt1/ (full labels there). The members hold the defaults, each
+// with its source label.
 
 #ifndef KT1_FUEL_CONFIG_H
 #define KT1_FUEL_CONFIG_H
@@ -10,10 +11,10 @@
 namespace KT1 {
 
 struct FuelConfig {
-	float climbAbove = 4.0f;            // elmos above the ground at which an aircraft counts as flying
-	float gaugeStep = 0.005f;           // share of the capacity the gauge moves before it is sent again
-	float lowEveryS = 0.16666667f;      // seconds between the low-fuel looks at one aircraft
-	float lowFraction = 0.19f;          // low-fuel fraction where the unit gives none
+	float climbAbove = 4.0f;            // DESIGN: elmos above the ground at which an aircraft counts as flying
+	float gaugeStep = 0.005f;           // DESIGN: share of the capacity the gauge moves before it is sent again
+	float lowEveryS = 0.16666667f;      // DESIGN: seconds between the low-fuel looks at one aircraft
+	float lowFraction = 0.19f;          // DESIGN: low-fuel fraction where the unit gives none
 
 	void Describe(Data::Schema& s) {
 		s.Field("climb_above", climbAbove);
