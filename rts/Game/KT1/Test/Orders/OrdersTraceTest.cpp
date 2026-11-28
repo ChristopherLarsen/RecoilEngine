@@ -150,6 +150,10 @@ namespace {
 	class TurnReplay: public Trace::ReplaySystem {
 	public:
 		void Input(std::string_view, Trace::ByteReader& bytes, int32_t) override { got = Get(bytes, in); }
+		// the turn's columns (TurnTrace.h); other "Orders" check answers are other steps' parts of the system
+		bool Compares(std::string_view column) const override {
+			return column == "front_class" || column == "next_check" || column == "turn_list";
+		}
 		void EndStep(int32_t, Trace::Outputs& columns) override {
 			if (!got)
 				return;

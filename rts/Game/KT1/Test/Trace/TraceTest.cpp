@@ -145,6 +145,17 @@ KT1_CASE("TRACE-FIRST-STEP", "a row of the step before the game starts is replay
 	KT1_CHECK_EQ(r.steps, 1u);
 }
 
+KT1_CASE("TRACE-SKIP", "a column the system does not compute is listed and not compared; the others still are") {
+	struct SumsOnly : Summer {
+		bool Compares(std::string_view column) const override { return column == "sum"; }
+	} sums;
+	const ReplayResult r = Replay(Recorded(true, true), sums);   // the planted wrong order is in the column left out
+	KT1_CHECK(r.Clean());
+	KT1_CHECK_EQ(r.compared, static_cast<uint64_t>(4));
+	KT1_CHECK_EQ(r.skipped.size(), static_cast<size_t>(1));
+	KT1_CHECK(r.skipped.size() == 1 && r.skipped[0] == "order");
+}
+
 KT1_CASE("TRACE-COLUMNS", "a column row replays under the check helper's keys") {
 	Outputs out;
 	const ReplayColumns give{out, 9};
