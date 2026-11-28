@@ -21,6 +21,7 @@
 #include "KT1Capture.h"
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -32,13 +33,16 @@
 #include "Game/GlobalUnsynced.h"
 #include "Game/KT1/Host/DrawPhases.h"
 #include "Game/KT1/Core/Capture/CaptureCore.h"
+#include "Game/KT1/Host/Capture/CaptureScript.h"
 #include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1Registry.h"
+#include "Game/Camera.h"   // after the KT1 headers: it defines a macro `camera` (FrameFacts has a member of that name)
 #include "Game/Players/PlayerBase.h"
 #include "Game/UI/UnitTracker.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/ReadMap.h"
+#include "Map/SMF/ROAM/RoamMeshDrawer.h"
 #include "Net/GameServer.h"
 #include "Rendering/GL/myGL.h"
 #include "Rendering/GlobalRendering.h"
@@ -65,7 +69,7 @@ namespace Capture {
 			return (it == opts.end()) ? std::string() : std::string(it->second.c_str());
 		}
 
-		constexpr int LAST_DRAW_ORDER = 1 << 30;   // DESIGN: after every other draw system, so the read-back sees their work
+		constexpr int LAST_DRAW_ORDER = std::numeric_limits<int>::max();   // DESIGN: after every other draw system, so the read-back sees their work
 
 		class CaptureRule : public Rule, public DrawSystem {
 		public:
@@ -91,6 +95,7 @@ namespace Capture {
 			void Stop();
 			bool SetSide(Side side);
 			void Apply(const Shot& shot);
+			void SnapCamera();
 			void Restore();
 			void ReadBack(const Shot& shot);
 			void Finish();
@@ -185,7 +190,7 @@ namespace Capture {
 			const float seconds = shot.frame * INV_GAME_SPEED;
 			game->hideInterface = script.hideInterface;
 			globalRendering->timeOffset = script.timeOffset;   // held, the engine's own value drifts with the wall clock
-			globalRendering->grTime = spring_time::fromNanoSecs(static_cast<int64_t>(seconds * 1.0e9));
+			globalRendering->grTime = spring_time::fromNanoSecs(static_cast<int64_t>(seconds * 1.0e9));   // DESIGN: nanoseconds in a second
 			gu->gameTime = seconds;
 			gu->modGameTime = seconds;
 			guRNG.SetSeed(script.seed);
@@ -199,6 +204,20 @@ namespace Capture {
 				state["pz"] = pose.atZ * mapDims.mapy * SQUARE_SIZE;
 			}
 			if (!state.empty()) camHandler->SetState(state);
+			SnapCamera();
+			// the terrain mesh is refined from earlier poses and kept: rebuilt, it depends on this pose only
+			CRoamMeshDrawer::ForceNextTesselation(true, true);
+		}
+
+		// SetState moves the controller only: the drawn camera would follow at the next frame's controller update, after key
+		// and screen-edge moves and any unfinished transition. Take the controller's view now (this frame's
+		// camera->Update() is still to come) and end the transition.
+		void CaptureRule::SnapCamera() {
+			const CCameraController& controller = camHandler->GetCurrentController();
+			camera->SetPos(controller.GetPos());
+			camera->SetRot(controller.GetRot());
+			camera->SetVFOV(controller.GetFOV());
+			camHandler->CameraTransition(0.0f);
 		}
 
 		void CaptureRule::Restore() {
@@ -213,6 +232,7 @@ namespace Capture {
 
 		void CaptureRule::Before() {
 			if (!running) return;
+			Restore();   // a frame whose FrameEnd never ran (inactive window): the originals first, or Apply saves overrides
 			step = sequence.Draw(gs->frameNum);
 			holdStep = sequence.HoldFrame();
 			if (step.shot < 0) return;
@@ -240,11 +260,11 @@ namespace Capture {
 				glClear(GL_COLOR_BUFFER_BIT);
 				glPopAttrib();
 			}
-			std::vector<uint8_t> pixels((size_t)w * h * 4);
+			std::vector<uint8_t> pixels((size_t)w * h * 4);   // DESIGN: bytes of an RGBA pixel
 			glPixelStorei(GL_PACK_ALIGNMENT, 1);
 			glReadBuffer(GL_BACK);
 			glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-			glPixelStorei(GL_PACK_ALIGNMENT, 4);
+			glPixelStorei(GL_PACK_ALIGNMENT, 4);   // DESIGN: GL's default, restored
 
 			const std::string path = CaptureCore::PicturePath(shot, step.side);
 			CBitmap bmp(pixels.data(), w, h);
@@ -253,8 +273,9 @@ namespace Capture {
 				LOG_L(L_ERROR, "[KT1CAPTURE] could not write %s", path.c_str());
 				return;
 			}
-			LOG("[KT1CAPTURE] shot=%s side=%s frame=%d file=%s size=%dx%d", shot.name.c_str(), CaptureCore::SideName(step.side),
-			    gs->frameNum, path.c_str(), w, h);
+			// offset: what this picture was drawn at (the script pins it; the engine own value drifts with the wall clock)
+			LOG("[KT1CAPTURE] shot=%s side=%s frame=%d file=%s size=%dx%d offset=%.6f", shot.name.c_str(),
+			    CaptureCore::SideName(step.side), gs->frameNum, path.c_str(), w, h, globalRendering->timeOffset);
 		}
 
 		void CaptureRule::After() {
