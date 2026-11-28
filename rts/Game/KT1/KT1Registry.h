@@ -39,7 +39,7 @@ namespace KT1 {
 
 	private:
 		void EnsureInit();     // switches and configs, once a game is set up
-		void EnsureStart();    // unsynced rules' Start, at the first sim step or drawn frame
+		void StartSynced();    // once: every enabled synced rule's Start (Setup; a step only when Setup never ran)
 
 		std::vector<std::unique_ptr<Rule>> rules;
 		bool built = false, inited = false;

@@ -140,27 +140,23 @@ void Registry::EnsureInit() {
 		CTimeProfiler::RegisterTimer(r->timer.c_str());   // the rule outlives the profiler's use of the name
 	}
 	if (configSource == Data::Source::Check) Data::LogCheck(check);
+	if (configSource == Data::Source::Json) Data::StartReload();   // before any rule's Start
 }
 
 void Registry::Setup() {
-	Registry& reg = Get();
 	ENTER_SYNCED_CODE();
-	reg.EnsureInit();
-	if (reg.inited) {
-		if (reg.configSource == Data::Source::Json) Data::StartReload();
-		reg.starts.Setup(reg.rules);
-	}
+	Get().StartSynced();
 	LEAVE_SYNCED_CODE();
 }
 
-void Registry::EnsureStart() {
+void Registry::StartSynced() {
 	EnsureInit();
-	if (inited) starts.StepOrDraw(rules);
+	if (inited) starts.Synced(rules);
 }
 
 void Registry::GameFrame(int frame) {
 	Registry& reg = Get();
-	reg.EnsureStart();
+	reg.StartSynced();   // Setup did it; only a path that never ran CGame::Load starts them here
 	for (auto& r : reg.rules) {
 		if (!r->enabled || !r->info.synced) continue;
 		ScopedTimer t(hashString(r->timer.c_str()));
@@ -171,7 +167,8 @@ void Registry::GameFrame(int frame) {
 void Registry::DrawWorld(bool drawAboveWater) {
 	if (!drawAboveWater) return;   // the below-water call of a water pass: the rules draw once, in the last (above-water) pass
 	Registry& reg = Get();
-	reg.EnsureStart();
+	reg.EnsureInit();
+	if (reg.inited) reg.starts.Unsynced(reg.rules);
 	for (auto& r : reg.rules) {
 		if (!r->enabled || r->info.synced) continue;
 		ScopedTimer t(hashString(r->timer.c_str()));

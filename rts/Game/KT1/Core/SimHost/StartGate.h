@@ -2,8 +2,9 @@
 // KT1 SimHost core: which rules a call starts. No engine include.
 //
 // Synced rules start once, at game setup: the same moment on every machine, before any unit exists and before any
-// validator can be asked, so per-def data is there. Unsynced rules start once, at the first sim step or drawn frame,
-// which differs between machines; nothing synced may depend on it.
+// validator can be asked, so per-def data is there. (A path that never ran game setup starts them at its first sim step.)
+// Unsynced rules start once, at the first drawn frame, which differs between machines; nothing synced may depend on it,
+// and an engine that draws nothing never starts them.
 // A rule here is a pointer-like to something with Enabled(), Info().synced and Start().
 
 #ifndef KT1_START_GATE_H
@@ -13,9 +14,10 @@ namespace KT1::Core::SimHost {
 
 class StartGate {
 public:
-	template<class Rules> void Setup(Rules& rules) { Start(rules, true, syncedDone); }
-	// from a sim step or a drawn frame: never a synced rule
-	template<class Rules> void StepOrDraw(Rules& rules) { Start(rules, false, unsyncedDone); }
+	// game setup, and each sim step for a path without one
+	template<class Rules> void Synced(Rules& rules) { Start(rules, true, syncedDone); }
+	// each drawn frame: never a synced rule
+	template<class Rules> void Unsynced(Rules& rules) { Start(rules, false, unsyncedDone); }
 	void Reset() { syncedDone = unsyncedDone = false; }
 
 private:
