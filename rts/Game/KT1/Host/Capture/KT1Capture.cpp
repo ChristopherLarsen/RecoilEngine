@@ -42,6 +42,7 @@
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/ReadMap.h"
+#include "Map/SMF/ROAM/RoamMeshDrawer.h"
 #include "Net/GameServer.h"
 #include "Rendering/GL/myGL.h"
 #include "Rendering/GlobalRendering.h"
@@ -204,6 +205,8 @@ namespace Capture {
 			}
 			if (!state.empty()) camHandler->SetState(state);
 			SnapCamera();
+			// the terrain mesh is refined from earlier poses and kept: rebuilt, it depends on this pose only
+			CRoamMeshDrawer::ForceNextTesselation(true, true);
 		}
 
 		// SetState moves the controller only: the drawn camera would follow at the next frame's controller update, after key
