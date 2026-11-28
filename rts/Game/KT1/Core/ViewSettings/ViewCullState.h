@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -126,6 +127,7 @@ struct PropState {
 	Column<uint8_t> savedMask;                    // adapter-written
 	Column<int32_t> cell;                         // index into cells
 	std::vector<PropCell> cells;
+	std::map<int64_t, int32_t> cellOf;            // cell key -> index into cells
 	std::vector<int32_t> bySize[PROP_SIZES];
 	bool gone[PROP_SIZES] = {};                   // hidden by the zoom gate
 	float lastCam[3] = {};

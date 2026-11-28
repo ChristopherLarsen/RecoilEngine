@@ -389,6 +389,11 @@ private:
 
 } // namespace
 
+void SetZoom(float zoom) {
+	luaZoom = zoom >= 0.0f ? zoom : -1.0f;
+	if (zoom >= 0.0f) luaZoomAge = 0;
+}
+
 bool Draw() {
 	if (!active) return false;
 	farNow = DecideFar();

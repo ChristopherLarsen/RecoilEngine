@@ -1,7 +1,7 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1: the zoom level and the zoom gates, for every draw system (LUA-FREE H01, FRAME §4.3; UNITDRAW and EFFECTS include
-// this). Bodies are FRAME step D07's. Until that lands the stubs answer from FrameFacts alone: Level is the facts' level,
-// every gate is open, every factor 1 and the change counter stays 0, so a caller's `other` value stands.
+// this). The Zoom system keeps the state (always on). Before its first drawn frame Level is the facts' level, every gate
+// is open and the change counter is 0; an unknown gate leaves a caller's `other` value.
 // Gate names are the `gate` column of data/kt1/viewsettings.json (Core/ViewSettings/ZoomLevel.h).
 // Lua, for widgets that still run: Spring.KT1.Zoom (ZoomBridge.h).
 
