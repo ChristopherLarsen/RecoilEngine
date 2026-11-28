@@ -11,9 +11,12 @@
 //   Spring.KT1.<Name>         the rule's own table (its PushLua)
 
 #include "KT1Registry.h"
+#include "KT1Register.h"
+#include "KT1Systems.h"
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 
 #include "Game/GameSetup.h"
@@ -34,11 +37,32 @@ static std::string Lower(const char* s) {
 
 Rule::Rule(const RuleInfo& i) : info(i), key(Lower(i.name)), option("kt1_" + Lower(i.name)), timer(std::string("KT1::") + i.name) {}
 
+namespace {
+	struct Registration { const char* name; int order; MakeRuleFn make; };
+	std::vector<Registration>& Pending() { static std::vector<Registration> v; return v; }
+}
+
+void RegisterSystem(const char* name, int order, MakeRuleFn make) {
+	Pending().push_back({name, order, make});
+}
+
 Registry& Registry::Get() {
 	static Registry reg;
 	if (!reg.built) {
 		reg.built = true;
-		AddAllRules(reg);
+		RegisterAllSystems();   // generated from every sources.cmake fragment
+		auto& p = Pending();
+		std::sort(p.begin(), p.end(), [](const Registration& a, const Registration& b) { return a.order < b.order; });
+		for (size_t i = 0; i < p.size(); ++i) {
+			for (size_t j = 0; j < i; ++j) {
+				if (p[j].order == p[i].order || Lower(p[j].name) == Lower(p[i].name)) {
+					LOG_L(L_FATAL, "[KT1] systems %s and %s share a run order (%d) or a name: each needs its own (KT1Register.h)", p[j].name, p[i].name, p[i].order);
+					std::abort();
+				}
+			}
+			reg.rules.push_back(p[i].make());
+		}
+		p.clear();
 	}
 	return reg;
 }

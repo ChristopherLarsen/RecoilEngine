@@ -23,6 +23,7 @@
 
 #include "Game/Camera.h"
 #include "Game/KT1/KT1Registry.h"
+#include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1Rule.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaUtils.h"
@@ -177,8 +178,8 @@ public:
 } // namespace
 } // namespace Rnd005
 
-std::unique_ptr<Rule> MakeTerrain() { return std::make_unique<Rnd005::TerrainRule>(); }
-std::unique_ptr<Rule> MakeDraw() { return std::make_unique<Rnd005::DrawRule>(); }
-std::unique_ptr<Rule> MakeDecals() { return std::make_unique<Rnd005::DecalsRule>(); }
+KT1_REGISTER_SYSTEM(Terrain, 1100, Rnd005::TerrainRule)
+KT1_REGISTER_SYSTEM(Draw, 1200, Rnd005::DrawRule)
+KT1_REGISTER_SYSTEM(Decals, 1300, Rnd005::DecalsRule)
 
 } // namespace KT1

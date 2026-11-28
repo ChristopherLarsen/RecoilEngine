@@ -1,11 +1,12 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1: the base class of a game rule moved from Lua into the engine (game-build docs/engine/rules/INDEX.md).
 //
-// Every KT1 rule is one folder rts/Game/KT1/Rules/<Name>/ with one .cpp file (and a header only if another KT1 file needs it).
+// Every KT1 rule is one folder rts/Game/KT1/Rules/<Name>/ with its .cpp file, a sources.cmake fragment (KT1Register.h)
+// and a header only if another KT1 file needs it.
 // Stock Recoil files never include a rule; they call the registry (KT1Registry.h) from one-line hooks marked "// KT1 hook: <rule>".
 //
 // A rule's life, in this order:
-//   1. Construct        the registry makes every rule once (KT1RuleList.cpp), before anything else is known.
+//   1. Construct        the registry makes every rule once (each registers itself: KT1Register.h), before anything else is known.
 //   2. LoadConfig       on first use in a game: gamedata/kt1/<name>.lua (the game's archive; the table it returns), or an empty table.
 //                       Only for an enabled rule. Tuning lives there: no number that a designer may change is a C++ constant.
 //   3. Start            at the first sim frame: unit defs are loaded; read per-def data here (KT1UnitData.h).

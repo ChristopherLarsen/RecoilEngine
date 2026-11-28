@@ -47,21 +47,6 @@ make_global_var(sources_engine_Game
 		"${CMAKE_CURRENT_SOURCE_DIR}/PreGame.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SelectedUnitsHandler.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComSelect.cpp"
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/KT1Registry.cpp" # KT1 hook: registry (KT1 sources: one line per file)
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/KT1RuleList.cpp" # KT1 hook: registry
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Census/KT1Census.cpp" # KT1 hook: Census
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/OwnPass/KT1OwnPass.cpp" # KT1 hook: OwnPass
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Orders/KT1Orders.cpp" # KT1 hook: Orders
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Plants/KT1Plants.cpp" # KT1 hook: Plants
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Fuel/KT1Fuel.cpp" # KT1 hook: Fuel
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Builders/KT1Builders.cpp" # KT1 hook: Builders
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Intel/KT1Intel.cpp" # KT1 hook: Intel
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/UnitAnim/KT1UnitAnim.cpp" # KT1 hook: UnitAnim
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Tiers/KT1Tiers.cpp" # KT1 hook: Tiers
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/UI/Ribbons/KT1Ribbons.cpp" # KT1 hook: Ribbons
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/UI/IconCull/KT1IconCull.cpp" # KT1 hook: IconCull
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/UI/FarView/KT1FarView.cpp" # KT1 hook: FarView
-		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/UI/Rnd005/KT1Rnd005.cpp" # KT1 hook: Terrain, Draw, Decals
 		"${CMAKE_CURRENT_SOURCE_DIR}/SelectedUnitsAI.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/SyncedGameCommands.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TraceRay.cpp"
@@ -100,6 +85,10 @@ make_global_var(sources_engine_Game
 		"${CMAKE_CURRENT_SOURCE_DIR}/WaitCommandsAI.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/WordCompletion.cpp"
 	)
+
+# KT1 hook: registry (LUA-FREE F01): every KT1 source, from the sources.cmake fragment of each KT1 system folder.
+include("${CMAKE_CURRENT_SOURCE_DIR}/KT1/sources.cmake")
+list(APPEND sources_engine_Game ${KT1_SOURCES})
 
 # Build-variant-agnostic Game library, see recoil_add_variant_library in rts/builds/CMakeLists.txt.
 add_library(GameCommon INTERFACE)

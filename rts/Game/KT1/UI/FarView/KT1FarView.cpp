@@ -35,6 +35,7 @@
 #include "Game/Camera.h"
 #include "Game/GlobalUnsynced.h"
 #include "Game/KT1/KT1Registry.h"
+#include "Game/KT1/KT1Register.h"
 #include "Game/SelectedUnitsHandler.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
@@ -395,6 +396,6 @@ bool FxCulled(float viewDepth, bool weapon) {
 
 } // namespace FarView
 
-std::unique_ptr<Rule> MakeFarView() { return std::make_unique<FarView::FarViewRule>(); }
+KT1_REGISTER_SYSTEM(FarView, 1400, FarView::FarViewRule)
 
 } // namespace KT1

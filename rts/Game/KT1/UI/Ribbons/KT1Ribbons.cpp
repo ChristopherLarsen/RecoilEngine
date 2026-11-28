@@ -41,6 +41,7 @@
 #include "Game/Camera.h"
 #include "Game/GlobalUnsynced.h"
 #include "Game/KT1/KT1Registry.h"
+#include "Game/KT1/KT1Register.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/Env/Particles/ProjectileDrawer.h"
@@ -714,6 +715,6 @@ private:
 
 } // namespace
 
-std::unique_ptr<Rule> MakeRibbons() { return std::make_unique<Ribbons>(); }
+KT1_REGISTER_SYSTEM(Ribbons, 300, Ribbons)
 
 } // namespace KT1

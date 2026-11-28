@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "Game/KT1/KT1Registry.h"
+#include "Game/KT1/KT1Register.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
@@ -99,6 +100,6 @@ private:
 
 } // namespace
 
-std::unique_ptr<Rule> MakeBuilders() { return std::make_unique<Builders>(); }
+KT1_REGISTER_SYSTEM(Builders, 700, Builders)
 
 } // namespace KT1

@@ -15,6 +15,7 @@
 
 #include <memory>
 
+#include "Game/KT1/KT1Register.h"
 #include "Game/KT1/KT1Registry.h"
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaParser.h"
@@ -38,6 +39,6 @@ private:
 
 } // namespace
 
-std::unique_ptr<Rule> MakeNAME() { return std::make_unique<NAME>(); }
+KT1_REGISTER_SYSTEM(NAME, ORDER, NAME)   // ORDER: its place in the frame order (docs/engine/rules/INDEX.md), a multiple of 100 not yet taken
 
 } // namespace KT1
