@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "UnitDrawer.h"
+#include "KT1PlainShadow.h" // KT1 hook: plain shadows
 #include "Game/KT1/UI/IconCull/KT1IconCull.h" // KT1 hook: IconCull
 
 #include <algorithm>
@@ -212,6 +213,9 @@ bool CUnitDrawer::ShouldDrawOpaqueUnit(CUnit* u, uint8_t thisPassMask)
 	if (thisPassMask == DrawFlags::SO_OPAQUE_FLAG && !u->HasDrawFlag(DrawFlags::SO_OPAQUE_FLAG))
 		return false;
 
+	if (KT1PlainShadow::maskFirst && (u->engineDrawMask & thisPassMask) != thisPassMask) // KT1 hook: masked units stop before the Lua material bins (as features)
+		return false;
+
 	if (LuaObjectDrawer::AddOpaqueMaterialObject(u, LUAOBJ_UNIT))
 		return false;
 
@@ -245,6 +249,9 @@ bool CUnitDrawer::ShouldDrawAlphaUnit(CUnit* u, uint8_t thisPassMask)
 	if (thisPassMask == DrawFlags::SO_ALPHAF_FLAG && !u->HasDrawFlag(DrawFlags::SO_ALPHAF_FLAG))
 		return false;
 
+	if (KT1PlainShadow::maskFirst && (u->engineDrawMask & thisPassMask) != thisPassMask) // KT1 hook: masked units stop before the Lua material bins (as features)
+		return false;
+
 	if (LuaObjectDrawer::AddAlphaMaterialObject(u, LUAOBJ_UNIT))
 		return false;
 
@@ -263,6 +270,13 @@ bool CUnitDrawer::ShouldDrawUnitShadow(CUnit* u)
 	static constexpr uint8_t thisPassMask = DrawFlags::SO_SHOPAQ_FLAG;
 
 	if (!u->HasDrawFlag(DrawFlags::SO_SHOPAQ_FLAG))
+		return false;
+
+	// KT1 plain shadows: these types' Lua shadow material is a plain depth write; the instanced pass draws it (DrawObjectsShadow)
+	if (KT1PlainShadow::Is(u->unitDef->id))
+		return ((u->engineDrawMask & thisPassMask) == thisPassMask);
+
+	if (KT1PlainShadow::maskFirst && (u->engineDrawMask & thisPassMask) != thisPassMask) // KT1 hook: masked units stop before the Lua material bins (as features)
 		return false;
 
 	if (LuaObjectDrawer::AddShadowMaterialObject(u, LUAOBJ_UNIT))
@@ -1909,11 +1923,19 @@ void CUnitDrawerGL4::DrawObjectsShadow(int modelType) const
 		const auto& bin = mdlRenderer.GetObjectBin(i);
 
 		static vector<const ObjType*> beingBuilt;
+		static vector<const ObjType*> plain;
 		beingBuilt.clear();
+		plain.clear();
 
 		for (auto* o : bin) {
 			if (!ShouldDrawUnitShadow(o))
 				continue;
+
+			// KT1 plain shadows: drawn whole, like the Lua material drew them (no nanoframe stages)
+			if (KT1PlainShadow::Is(o->unitDef->id)) {
+				plain.emplace_back(o);
+				continue;
+			}
 
 			if (o->beingBuilt && o->unitDef->showNanoFrame) {
 				beingBuilt.emplace_back(o);
@@ -1924,6 +1946,25 @@ void CUnitDrawerGL4::DrawObjectsShadow(int modelType) const
 		}
 
 		smv.Submit(GL_TRIANGLES, false);
+
+		if (!plain.empty()) {
+			// the Lua shadow material's state (LuaObjectDrawer SetupShadowUnitDrawState + art_shadow): polygon offset 1,1, no alpha
+			// discard, no slope bias
+			Shader::IProgramObject* po = shadowHandler.GetShadowGenProg(CShadowHandler::SHADOWGEN_PROGRAM_MODEL_GL4);
+			po->SetUniform("alphaCtrl", 0.0f, 0.0f, 0.0f, 1.0f);
+			po->SetUniform("kt1NoBias", 1.0f);
+			glPolygonOffset(1.0f, 1.0f);
+			glEnable(GL_POLYGON_OFFSET_FILL);
+
+			for (auto* o : plain) {
+				smv.AddToSubmission(o);
+			}
+			smv.Submit(GL_TRIANGLES, false);
+
+			glDisable(GL_POLYGON_OFFSET_FILL);
+			po->SetUniform("alphaCtrl", 0.5f, 1.0f, 0.0f, 0.0f);
+			po->SetUniform("kt1NoBias", 0.0f);
+		}
 
 		for (auto* o : beingBuilt) {
 			DrawUnitModelBeingBuiltShadow(o, false);

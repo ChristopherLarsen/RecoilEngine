@@ -9,10 +9,15 @@
 //                           ModelTint(): 12, the first of the four per-object user uniforms (12..15) the GL4 model shaders read as a
 //                           tint: gl.SetFeatureBufferUniforms(id, {r, g, b, 1}, 12) darkens that feature in the engine's own pass;
 //                           {1, 1, 1, 0} clears it (ModelVertProgGL4.glsl, "KT1 hook: model tint").
+//                           SetPlainShadow(unitDefID, b) / GetPlainShadow(unitDefID): that type's shadow is drawn by the instanced pass in
+//                           plain form (no alpha discard, no slope bias, polygon offset 1,1) instead of through its Lua shadow material.
+//                           SetUnitMaskBeforeMaterial(b) / GetUnitMaskBeforeMaterial(): test the unit draw mask before the Lua material
+//                           bins (opaque, alpha, shadow), as features do; default off (stock order), reset at game start.
 // Spring.KT1.Decals  (R13)  SetFade(f) / GetFade(): the fade fraction, default 0.25 at game start: a Lua decal with a cut-off (user data 0 y)
 //                           starts fading at f x its cut-off and is not drawn at the cut-off (GroundDecalsVertProg.glsl, uniform cutFade).
 //                           SetCutoff(decalID, v): that decal's own cut-off. GetDrawnAlpha(decalID, measure): the alpha the shader
 //                           draws it with at that camera measure (its alpha x the cut-off fade), computed on the CPU with the shader's formula.
+//                           SetHidden(b) / GetHidden(): the zoom gate (owner 2026-11-27); while hidden the ground decal pass is skipped.
 //
 // Determinism: draw only; no sim state is read or written. Writes come from unsynced Lua only.
 
@@ -35,6 +40,8 @@
 #include "Rendering/Env/Decals/GroundDecal.h"
 #include "Rendering/Env/Decals/SupComDecalCut.h"
 #include "Rendering/Env/IGroundDecalDrawer.h"
+#include "Rendering/Units/KT1PlainShadow.h"
+#include "Sim/Units/UnitDefHandler.h"
 
 namespace KT1 {
 namespace Rnd005 {
@@ -130,6 +137,47 @@ int LDecalSetCutoff(lua_State* L)
 	return 1;
 }
 
+int LSetHidden(lua_State* L)
+{
+	if (CLuaHandle::GetHandleSynced(L)) return 0;
+	SupComDecalCut::hidden = luaL_checkboolean(L, 1);
+	return 0;
+}
+
+int LGetHidden(lua_State* L)
+{
+	lua_pushboolean(L, SupComDecalCut::hidden);
+	return 1;
+}
+
+int LSetPlainShadow(lua_State* L)
+{
+	if (CLuaHandle::GetHandleSynced(L)) return 0;
+	const int defID = luaL_checkint(L, 1);
+	if (unitDefHandler == nullptr || unitDefHandler->GetUnitDefByID(defID) == nullptr) return 0;
+	KT1PlainShadow::Set(defID, luaL_checkboolean(L, 2));
+	return 0;
+}
+
+int LGetPlainShadow(lua_State* L)
+{
+	lua_pushboolean(L, KT1PlainShadow::Is(luaL_checkint(L, 1)));
+	return 1;
+}
+
+int LSetUnitMaskBeforeMaterial(lua_State* L)
+{
+	if (CLuaHandle::GetHandleSynced(L)) return 0;
+	KT1PlainShadow::maskFirst = luaL_checkboolean(L, 1);
+	return 0;
+}
+
+int LGetUnitMaskBeforeMaterial(lua_State* L)
+{
+	lua_pushboolean(L, KT1PlainShadow::maskFirst);
+	return 1;
+}
+
 int LGetDrawnAlpha(lua_State* L)
 {
 	const IGroundDecalDrawer* gdd = groundDecals;
@@ -154,24 +202,31 @@ public:
 class DrawRule : public Rule {
 public:
 	DrawRule() : Rule({"Draw", 2, false, "(RND-005 R12 cut-offs)", true}) {}
+	void Start() override { KT1PlainShadow::maskFirst = false; }   // stock order at every game start
 	static int LModelTint(lua_State* L) { lua_pushinteger(L, 12); return 1; }   // DESIGN: version number Spring.KT1.Draw.ModelTint reports to Lua
 	void PushLua(lua_State* L) override {
 		LuaPushRawNamedCFunc(L, "ModelTint", LModelTint);
 		LuaPushRawNamedCFunc(L, "SetCutoff", LSetCutoff);
 		LuaPushRawNamedCFunc(L, "GetCutoff", LGetCutoff);
 		LuaPushRawNamedCFunc(L, "CameraMeasure", LCameraMeasure);
+		LuaPushRawNamedCFunc(L, "SetPlainShadow", LSetPlainShadow);
+		LuaPushRawNamedCFunc(L, "SetUnitMaskBeforeMaterial", LSetUnitMaskBeforeMaterial);   // default off: stock order
+		LuaPushRawNamedCFunc(L, "GetUnitMaskBeforeMaterial", LGetUnitMaskBeforeMaterial);
+		LuaPushRawNamedCFunc(L, "GetPlainShadow", LGetPlainShadow);
 	}
 };
 
 class DecalsRule : public Rule {
 public:
 	DecalsRule() : Rule({"Decals", 1, false, "(RND-005 R13 decal fade)", true}) {}
-	void Start() override { SupComDecalCut::fade = SupComDecalCut::DEFAULT_FADE; }   // set at game start
+	void Start() override { SupComDecalCut::fade = SupComDecalCut::DEFAULT_FADE; SupComDecalCut::hidden = false; }   // set at game start
 	void PushLua(lua_State* L) override {
 		LuaPushRawNamedCFunc(L, "SetFade", LSetFade);
 		LuaPushRawNamedCFunc(L, "GetFade", LGetFade);
 		LuaPushRawNamedCFunc(L, "SetCutoff", LDecalSetCutoff);
 		LuaPushRawNamedCFunc(L, "GetDrawnAlpha", LGetDrawnAlpha);
+		LuaPushRawNamedCFunc(L, "SetHidden", LSetHidden);
+		LuaPushRawNamedCFunc(L, "GetHidden", LGetHidden);
 	}
 };
 

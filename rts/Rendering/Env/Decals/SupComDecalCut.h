@@ -8,6 +8,9 @@
 namespace SupComDecalCut {
 	inline constexpr float DEFAULT_FADE = 0.25f;   // PARITY (RND-005 v2 R13)
 	inline float fade = DEFAULT_FADE;
+	// KT1 zoom gate (owner 2026-11-27: decals are not drawn beyond the closest zoom levels): while true the ground decal pass is skipped;
+	// the decals stay (new ones are still made and aged). Set by Spring.KT1.Decals.SetHidden from unsynced Lua. Draw only.
+	inline bool hidden = false;
 }
 
 #endif

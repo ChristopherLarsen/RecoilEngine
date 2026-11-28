@@ -760,6 +760,9 @@ void CGroundDecalHandler::Draw()
 	if (!GetDrawDecals())
 		return;
 
+	if (SupComDecalCut::hidden) // KT1 zoom gate: Spring.KT1.Decals.SetHidden
+		return;
+
 	if (!smfDrawer->UseAdvShading())
 		return;
 
