@@ -6,7 +6,7 @@
 // Replaces:   the Loop thread of scripts/pm/anim.lua for "engine units" (ground treads, wheels, legs or fixed; body static, level,
 //             follow_terrain or bank; no work, link, unpack, charge or tilt); the poll of pm/aim.lua AimWeapon for those units
 // Switch:     mod option kt1_unitanim (default off)
-// Config:     data/kt1/unitanim.json (UnitAnimConfig.h)
+// Config:     gamedata/kt1/unitanim.lua or, with kt1_jsonconfig, data/kt1/unitanim.json (UnitAnimConfig.h)
 //               idle_ticks   still ticks before an idle unit backs off (DESIGN 2)
 //               rest_delay   frames with no aim before a mount turns to rest (DESIGN 90)
 //               rest_rate    rad/s back to rest (DESIGN 1.5)
@@ -39,6 +39,7 @@
 #include "Game/KT1/Data/Config.h"
 #include "Game/KT1/Rules/UnitAnim/UnitAnimConfig.h"
 #include "Lua/LuaHandle.h"
+#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/Ground.h"
 #include "Rendering/Models/3DModel.hpp"
@@ -91,6 +92,28 @@ struct Unit {
 class UnitAnim : public Rule {
 public:
 	UnitAnim() : Rule({"UnitAnim", 1, true, "scripts/pm/anim.lua (Loop), pm/loco.lua, pm/aim.lua (Tick, poll)", false}) {}
+
+	void LoadConfig(const LuaTable& t) override {
+		idleTicksN = std::max(1, t.GetInt("idle_ticks", 2));
+		restDelay = t.GetInt("rest_delay", 90);
+		restRate = t.GetFloat("rest_rate", 1.5f);
+		rollEps = t.GetFloat("roll_eps", 0.05f);
+		wakeEvery = std::max(1, t.GetInt("wake_every", 3));
+		spinRate = t.GetFloat("spin_rate", 0.6f);
+		fullUnits = std::max(1, t.GetInt("full_units", 250));
+		maxMs = t.GetInt("max_ms", 500);
+	}
+
+	void ConfigValues(Data::Values& v) const override {
+		v.Add("idle_ticks", idleTicksN);
+		v.Add("rest_delay", restDelay);
+		v.Add("rest_rate", restRate);
+		v.Add("roll_eps", rollEps);
+		v.Add("wake_every", wakeEvery);
+		v.Add("spin_rate", spinRate);
+		v.Add("full_units", fullUnits);
+		v.Add("max_ms", maxMs);
+	}
 
 	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
 		const Data::Report report = Data::ParseInto(text, strictness, cfg);

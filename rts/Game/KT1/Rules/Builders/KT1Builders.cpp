@@ -6,7 +6,7 @@
 //             Spring.GetUnitCommands(b, 0) for every builder, in SortedPairs order); the gadget stays and walks Busy()'s list
 //             instead; everything it does with a busy builder (targets, set-up, holds, requests, settlement) is unchanged
 // Switch:     mod option kt1_builders (default off)
-// Config:     data/kt1/builders.json (no tuning values; the file says so)
+// Config:     gamedata/kt1/builders.lua or, with kt1_jsonconfig, data/kt1/builders.json (no tuning values; the file says so)
 // Unit data:  which unit defs count as factories: pushed once by the gadget (SetFactoryDefs), from its own isFactoryDef
 // Timer:      KT1::Builders (each Busy() call)
 // Lua:        Spring.KT1.Builders.Busy() -> { unitID, ... } ascending: every builder or factory unit (a CBuilder or CFactory) that is

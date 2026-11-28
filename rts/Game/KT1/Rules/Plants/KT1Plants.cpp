@@ -5,7 +5,7 @@
 // Replaces:   the per-unit search of LuaRules/Gadgets/mov_trees.lua (MV-5: a tree knocked over) and LuaRules/Gadgets/map_plants.lua
 //             (MAP-002 v5: a plant falls, a cluster breaks); both stay and pull Events() when this is on
 // Switch:     mod option kt1_plants (default off)
-// Config:     data/kt1/plants.json (PlantsConfig.h)
+// Config:     gamedata/kt1/plants.lua or, with kt1_jsonconfig, data/kt1/plants.json (PlantsConfig.h)
 //               trees_every       frames between the checks of one unit (units spread by id)       (DESIGN 3)
 //               trees_reach       share of the footprint half-width at which a tree is reached     (DESIGN 0.6)
 //               trees_min_speed   speed (elmos per frame) above which a unit knocks trees          (DESIGN 0.01)
@@ -38,6 +38,7 @@
 #include "Game/KT1/Data/Config.h"
 #include "Game/KT1/Rules/Plants/PlantsConfig.h"
 #include "Lua/LuaHandle.h"
+#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/Ground.h"
 #include "Sim/Features/Feature.h"
@@ -55,6 +56,24 @@ namespace {
 class Plants : public Rule {
 public:
 	Plants() : Rule({"Plants", 1, true, "LuaRules/Gadgets/mov_trees.lua, map_plants.lua (contact search)", false}) {}
+
+	void LoadConfig(const LuaTable& t) override {
+		treesEvery = std::max(1, t.GetInt("trees_every", 3));
+		treesReach = t.GetFloat("trees_reach", 0.6f);
+		treesMin = t.GetFloat("trees_min_speed", 0.01f);
+		plantsEvery = std::max(1, t.GetInt("plants_every", 3));
+		plantsMargin = t.GetFloat("plants_margin", 4.0f);
+		plantsMin = t.GetFloat("plants_min_speed", 0.05f);
+	}
+
+	void ConfigValues(Data::Values& v) const override {
+		v.Add("trees_every", treesEvery);
+		v.Add("trees_reach", treesReach);
+		v.Add("trees_min_speed", treesMin);
+		v.Add("plants_every", plantsEvery);
+		v.Add("plants_margin", plantsMargin);
+		v.Add("plants_min_speed", plantsMin);
+	}
 
 	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
 		const Data::Report report = Data::ParseInto(text, strictness, cfg);

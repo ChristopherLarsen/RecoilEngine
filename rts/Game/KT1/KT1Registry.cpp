@@ -4,8 +4,10 @@
 // Switch: mod option kt1_<key> ("1"/"true" on, "0"/"false" off, "check"; unset: the rule's defaultOn). Off: the engine rule
 // does nothing and its Lua gadget runs (the gadget asks Spring.KT1.IsActive("<Name>") and stands down when it is true).
 // Check (LUA-FREE §3.2): the engine rule runs and IsActive is false, so its Lua runs too and a proof compares the two.
-// Config: data/kt1/<key>.json from the game archive (Data/DataEngine.h), read once per game when the rule is on; an
-// unsynced rule's file is read again on /kt1 reload and, in a dev archive, when it changes.
+// Config: read once per game when the rule is on, from the file mod option kt1_jsonconfig names (Data/Check.h):
+// gamedata/kt1/<key>.lua ("0", unset) or data/kt1/<key>.json ("1"; then an unsynced rule's file is read again on /kt1
+// reload and, in a dev archive, when it changes). "check" reads both for every rule, logs [KT1CHECK] JsonConfig and runs
+// on the Lua values.
 //
 // Lua (every handle, from LuaSyncedRead):
 //   Spring.KT1.Rules()        -> { {name, version, synced, replaces, enabled, option, timer}, ... } in registry order
@@ -95,6 +97,10 @@ void Registry::EnsureInit() {
 	Core::Rate::SetStepsPerSecond(GAME_SPEED);   // before any system turns seconds into steps
 
 	const auto& opts = CGameSetup::GetModOptions();
+	const auto source = opts.find("kt1_jsonconfig");
+	configSource = Data::ParseSource(source == opts.end() ? std::string() : std::string(source->second.c_str()));
+	LOG("[KT1] config files: kt1_jsonconfig=%s", Data::SourceName(configSource));
+	Data::ConfigCheck check;
 	for (auto& r : rules) {
 		Rule::Mode mode = r->info.defaultOn ? Rule::Mode::On : Rule::Mode::Off;
 		const auto it = opts.find(r->option);
@@ -106,20 +112,22 @@ void Registry::EnsureInit() {
 		const bool on = (mode != Rule::Mode::Off);
 		r->enabled = on;
 
+		if (configSource == Data::Source::Check) Data::CheckRule(*r, check);
 		if (on) {
-			Data::LoadRule(*r, Rule::ModeName(mode));
+			Data::LoadRule(*r, configSource, Rule::ModeName(mode));
 		} else {
 			LOG("[KT1] %s v%d off (Lua: %s) mode=off", r->info.name, r->info.version, r->info.replaces);
 		}
 		CTimeProfiler::RegisterTimer(r->timer.c_str());   // the rule outlives the profiler's use of the name
 	}
+	if (configSource == Data::Source::Check) Data::LogCheck(check);
 }
 
 void Registry::EnsureStart() {
 	EnsureInit();
 	if (started || !inited) return;
 	started = true;
-	Data::StartReload();
+	if (configSource == Data::Source::Json) Data::StartReload();
 	for (auto& r : rules)
 		if (r->enabled) r->Start();
 }

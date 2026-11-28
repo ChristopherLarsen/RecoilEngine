@@ -5,7 +5,7 @@
 // Replaces:   the fuel step of LuaRules/Gadgets/spc_staging.lua (its per-aircraft walk, the height read and the gauge); the gadget
 //             stays, reads fuel through this rule and pulls Events() when this is on
 // Switch:     mod option kt1_fuel (default off)
-// Config:     data/kt1/fuel.json (FuelConfig.h)
+// Config:     gamedata/kt1/fuel.lua or, with kt1_jsonconfig, data/kt1/fuel.json (FuelConfig.h)
 //               climb_above   elmos above the ground at which an aircraft counts as flying (burns fuel)                  (DESIGN 4)
 //               gauge_step    share of the capacity the gauge must move before it is sent again                         (DESIGN 0.005)
 //               low_every     frames between the low-fuel events of one aircraft (units spread by id)                   (DESIGN 5)
@@ -43,6 +43,7 @@
 #include "Game/KT1/Data/Config.h"
 #include "Game/KT1/Rules/Fuel/FuelConfig.h"
 #include "Lua/LuaHandle.h"
+#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/Ground.h"
 #include "Sim/Misc/GlobalConstants.h"
@@ -65,6 +66,20 @@ float Param(const UnitDef* ud, const char* key, float def) {
 class Fuel : public Rule {
 public:
 	Fuel() : Rule({"Fuel", 1, true, "LuaRules/Gadgets/spc_staging.lua (fuel step)", false}) {}
+
+	void LoadConfig(const LuaTable& t) override {
+		climbAbove = t.GetFloat("climb_above", 4.0f);
+		gaugeStep = t.GetFloat("gauge_step", 0.005f);
+		lowEvery = std::max(1, t.GetInt("low_every", 5));
+		lowDefault = t.GetFloat("low_fraction", 0.19f);
+	}
+
+	void ConfigValues(Data::Values& v) const override {
+		v.Add("climb_above", climbAbove);
+		v.Add("gauge_step", gaugeStep);
+		v.Add("low_every", lowEvery);
+		v.Add("low_fraction", lowDefault);
+	}
 
 	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
 		const Data::Report report = Data::ParseInto(text, strictness, cfg);

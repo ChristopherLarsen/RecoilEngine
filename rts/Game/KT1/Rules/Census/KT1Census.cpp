@@ -3,7 +3,7 @@
 //
 // Replaces:   LuaRules/Gadgets/kt1_census.lua (same numbers; it runs when this rule is off)
 // Switch:     mod option kt1_census (default off)
-// Config:     data/kt1/census.json (CensusConfig.h)
+// Config:     gamedata/kt1/census.lua or, with kt1_jsonconfig, data/kt1/census.json (CensusConfig.h)
 //               period_s          seconds between tallies (DESIGN 1)
 //               default_weight    a unit's weight when its def sets none (DESIGN 1)
 //               count_unfinished  count units still being built (DESIGN false)
@@ -29,6 +29,7 @@
 #include "Game/KT1/Rules/Census/CensusConfig.h"
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaHandle.h"
+#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/Units/Unit.h"
@@ -41,6 +42,18 @@ namespace {
 class Census : public Rule {
 public:
 	Census() : Rule({"Census", 1, true, "LuaRules/Gadgets/kt1_census.lua", false}) {}
+
+	void LoadConfig(const LuaTable& t) override {
+		period = std::max(1, t.GetInt("period", 30));
+		defaultWeight = t.GetInt("default_weight", 1);
+		countUnfinished = t.GetBool("count_unfinished", false);
+	}
+
+	void ConfigValues(Data::Values& v) const override {
+		v.Add("period", period);
+		v.Add("default_weight", defaultWeight);
+		v.Add("count_unfinished", countUnfinished);
+	}
 
 	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
 		const Data::Report report = Data::ParseInto(text, strictness, cfg);

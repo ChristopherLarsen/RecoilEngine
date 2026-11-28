@@ -5,7 +5,7 @@
 //
 // Replaces:   LuaRules/Gadgets/mov_own_pass.lua (the walk and search only: the gadget stays and pulls Events when this is on)
 // Switch:     mod option kt1_ownpass (default off)
-// Config:     data/kt1/ownpass.json (OwnPassConfig.h)
+// Config:     gamedata/kt1/ownpass.lua or, with kt1_jsonconfig, data/kt1/ownpass.json (OwnPassConfig.h)
 //               slice          frames between the speed reads of one unit (DESIGN 3)
 //               ahead          elmos beyond the two sizes at which the light unit stops blocking (DESIGN 24)
 //               search_margin  elmos added to the search radius for the heavy's cylinder (DESIGN 64)
@@ -40,6 +40,7 @@
 #include "Game/KT1/Rules/OwnPass/OwnPassConfig.h"
 #include "Game/KT1/KT1UnitData.h"
 #include "Lua/LuaHandle.h"
+#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/Models/3DModel.hpp"
 #include "Sim/Misc/QuadField.h"
@@ -56,6 +57,20 @@ namespace {
 class OwnPass : public Rule {
 public:
 	OwnPass() : Rule({"OwnPass", 1, true, "LuaRules/Gadgets/mov_own_pass.lua", false}) {}
+
+	void LoadConfig(const LuaTable& t) override {
+		slice = std::max(1, t.GetInt("slice", 3));
+		ahead = t.GetFloat("ahead", 24.0f);
+		margin = t.GetFloat("search_margin", 64.0f);
+		idleSpeed = t.GetFloat("idle_speed", 0.05f);
+	}
+
+	void ConfigValues(Data::Values& v) const override {
+		v.Add("slice", slice);
+		v.Add("ahead", ahead);
+		v.Add("search_margin", margin);
+		v.Add("idle_speed", idleSpeed);
+	}
 
 	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
 		const Data::Report report = Data::ParseInto(text, strictness, cfg);

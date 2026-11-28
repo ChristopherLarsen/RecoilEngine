@@ -13,6 +13,7 @@
 #include "Game/KT1/KT1Registry.h"
 #include "Game/UnsyncedActionExecutor.h"
 #include "Game/UnsyncedGameCommands.h"
+#include "Lua/LuaParser.h"
 #include "System/EventHandler.h"
 #include "System/FileSystem/FileHandler.h"
 #include "System/FileSystem/VFSModes.h"
@@ -96,6 +97,37 @@ private:
 	PollClock clock;
 };
 
+std::string LuaPathFor(const std::string& system) { return "gamedata/kt1/" + system + ".lua"; }
+
+bool HasLua(const std::string& system) { return CFileHandler::FileExists(LuaPathFor(system), SPRING_VFS_MOD_BASE); }
+
+// Hands the rule its .lua table; false, with `error`, when the file is missing or fails (the rule reads its defaults).
+bool ReadLua(Rule& rule, std::string& error) {
+	// setup {true}: the parser needs its own Lua state
+	LuaParser parser(LuaPathFor(rule.Key()), SPRING_VFS_MOD_BASE, SPRING_VFS_ZIP, {rule.Info().synced}, {true});
+	const bool ok = parser.Execute();
+	rule.LoadConfig(parser.GetRoot());   // an invalid root reads every field as its default
+	if (!ok) error = parser.GetErrorLog();
+	return ok;
+}
+
+void LoadJson(Rule& rule, const char* modeName) {
+	std::string text;
+	const bool found = ReadText(rule.Key(), text);
+	Watched().Seen(rule.Key(), found ? text : std::string());   // a file that appears later is a change too
+	// "{}" when there is no file: the rule still derives its values from the defaults
+	const Report report = rule.ReadConfig(found ? text : std::string("{}"), GameStrictness());
+	Log(rule.Key(), report);
+	const char* note = !found ? " (none: defaults)" : (report.accepted ? "" : " (rejected: defaults)");
+	LOG("[KT1] %s v%d %s, config %s%s mode=%s", rule.Info().name, rule.Info().version,
+	    rule.Info().synced ? "synced" : "unsynced", PathFor(rule.Key()).c_str(), note, modeName);
+}
+
+void Differs(ConfigCheck& check, const std::string& what, const std::string& lua, const std::string& json) {
+	++check.diffs;
+	LOG_L(L_WARNING, "[KT1CHECK-DIFF] JsonConfig %s lua=%s json=%s", what.c_str(), lua.c_str(), json.c_str());
+}
+
 } // namespace
 
 Strictness GameStrictness() {
@@ -116,16 +148,47 @@ void Log(const std::string& system, const Report& report) {
 	}
 }
 
-void LoadRule(Rule& rule, const char* modeName) {
+void LoadRule(Rule& rule, Source source, const char* modeName) {
 	std::string text;
-	const bool found = ReadText(rule.Key(), text);
-	Watched().Seen(rule.Key(), found ? text : std::string());   // a file that appears later is a change too
-	// "{}" when there is no file: the rule still derives its values from the defaults
-	const Report report = rule.ReadConfig(found ? text : std::string("{}"), GameStrictness());
-	Log(rule.Key(), report);
-	const char* note = !found ? " (none: defaults)" : (report.accepted ? "" : " (rejected: defaults)");
-	LOG("[KT1] %s v%d %s, config %s%s mode=%s", rule.Info().name, rule.Info().version,
-	    rule.Info().synced ? "synced" : "unsynced", PathFor(rule.Key()).c_str(), note, modeName);
+	// a rule written after the .lua configs has only a .json file
+	if (source == Source::Json || (!HasLua(rule.Key()) && ReadText(rule.Key(), text))) return LoadJson(rule, modeName);
+	std::string error;
+	const bool ok = ReadLua(rule, error);
+	LOG("[KT1] %s v%d %s, config %s%s%s mode=%s", rule.Info().name, rule.Info().version,
+	    rule.Info().synced ? "synced" : "unsynced", LuaPathFor(rule.Key()).c_str(), ok ? "" : " (none: defaults): ",
+	    error.c_str(), modeName);
+}
+
+void CheckRule(Rule& rule, ConfigCheck& check) {
+	const std::string& key = rule.Key();
+	std::string text;
+	const bool hasJson = ReadText(key, text);
+	if (!HasLua(key)) {
+		if (hasJson) LOG("[KT1] JsonConfig: %s has no .lua config; nothing to compare", rule.Info().name);
+		return;
+	}
+	if (!hasJson) return Differs(check, key + ".file", LuaPathFor(key), "absent");
+
+	const Report report = rule.ReadConfig(text, GameStrictness());
+	Log(key, report);
+	Values json;
+	rule.ConfigValues(json);
+	if (!report.accepted || report.HasErrors()) Differs(check, key + ".file", "read", "has errors");
+
+	std::string error;
+	if (!ReadLua(rule, error)) Differs(check, key + ".file", "failed: " + error, "read");
+	Values lua;
+	rule.ConfigValues(lua);
+
+	const Comparison c = Compare(lua, json);
+	++check.configs;
+	check.compared += static_cast<unsigned>(c.compared);
+	for (const Difference& d : c.diffs) Differs(check, key + "." + d.key, d.lua, d.json);
+}
+
+void LogCheck(const ConfigCheck& check) {
+	LOG("[KT1CHECK] JsonConfig f=0 n=%u diffs=%u", check.compared, check.diffs);
+	LOG("[KT1] JsonConfig: compared %u configs", check.configs);
 }
 
 void StartReload() {

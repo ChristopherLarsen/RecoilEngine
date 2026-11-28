@@ -34,6 +34,7 @@ namespace KT1 {
 
 		std::vector<std::unique_ptr<Rule>> rules;
 		bool built = false, inited = false, started = false;
+		Data::Source configSource = Data::Source::Lua;   // mod option kt1_jsonconfig
 	};
 }
 

@@ -5,7 +5,7 @@
 // Replaces:   the ribbon part (core, dash, thread) of LuaRules/Gadgets/gfx_shots.lua; puffs, bodies, prims and wakes stay there.
 //             With the rule on, gfx_shots drops those parts from its recipes (KT1.IsActive("Ribbons")).
 // Switch:     mod option kt1_ribbons (default off). Unsynced: draw only.
-// Config:     data/kt1/ribbons.json (RibbonsConfig.h: the follower plan's numbers: caps by effect scale, distance bands, short and guard life,
+// Config:     gamedata/kt1/ribbons.lua or, with kt1_jsonconfig, data/kt1/ribbons.json (RibbonsConfig.h: the follower plan's numbers: caps by effect scale, distance bands, short and guard life,
 //             heavy-fight lightening, pool sizes)
 // Settings:   KardashevFxShots (0 none, 1 short, 2 full), KardashevFxScale (caps row), and the heavy-fight overrides
 //             KardashevRibbonExtrasMax, KardashevRibbonLifeMax, KardashevRibbonLifeK, KardashevRibbonCap; read at start and every
@@ -45,6 +45,7 @@
 #include "Game/KT1/Core/Common/Rate.h"
 #include "Game/KT1/Data/Config.h"
 #include "Game/KT1/UI/Ribbons/RibbonsConfig.h"
+#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/Env/Particles/ProjectileDrawer.h"
 #include "Rendering/GL/SubState.h"
@@ -195,6 +196,51 @@ using Cap = RibbonsConfig::Cap;
 class Ribbons : public Rule {
 public:
 	Ribbons() : Rule({"Ribbons", 1, false, "LuaRules/Gadgets/gfx_shots.lua (ribbon parts)", false}) {}
+
+	void LoadConfig(const LuaTable& t) override {
+		caps.clear();
+		const LuaTable ct = t.SubTable("caps");
+		for (int i = 1; ct.KeyExists(i); ++i) {
+			const LuaTable c = ct.SubTable(i);
+			caps.push_back({c.GetFloat("scale", 1), c.GetInt("ribbons", 200), c.GetInt("points", 12)});
+		}
+		if (caps.empty()) caps = {{0.5f, 60, 6}, {1, 200, 12}, {2, 600, 20}};
+		nearD = t.GetFloat("near", 1500); midD = t.GetFloat("mid", 3500); farD = t.GetFloat("far", 6000);
+		shortLife = t.GetFloat("short_life", 0.5f); guardLife = t.GetFloat("guard_life", 0.5f);
+		const LuaTable h = t.SubTable("heavy");
+		extrasMax = h.GetInt("extras", 40); lifeMax = h.GetInt("life", 120); lifeK = h.GetFloat("lifeK", 0.5f);
+		poolMax = t.GetInt("pool_max", 8192); extraPoolMax = t.GetInt("extra_pool_max", 2048);
+		headMax = t.GetInt("head_max", 2048);
+		settingsEvery = std::max(1, t.GetInt("settings_every", 30));
+		defaultPriority = t.GetInt("default_priority", 9);
+		const LuaTable dt = t.SubTable("default_tex");
+		texHot = dt.GetString("hot", "bitmaps/sp_fx/sp_ribbon_hot.tga");
+		texSmoke = dt.GetString("smoke", "bitmaps/sp_fx/sp_ribbon_smoke.tga");
+	}
+
+	void ConfigValues(Data::Values& v) const override {
+		for (std::size_t i = 0; i < caps.size(); ++i) {
+			const std::string at = "caps[" + std::to_string(i + 1) + "].";
+			v.Add(at + "scale", caps[i].scale);
+			v.Add(at + "ribbons", caps[i].ribbons);
+			v.Add(at + "points", caps[i].points);
+		}
+		v.Add("near", nearD);
+		v.Add("mid", midD);
+		v.Add("far", farD);
+		v.Add("short_life", shortLife);
+		v.Add("guard_life", guardLife);
+		v.Add("heavy.extras", extrasMax);
+		v.Add("heavy.life", lifeMax);
+		v.Add("heavy.lifeK", lifeK);
+		v.Add("pool_max", poolMax);
+		v.Add("extra_pool_max", extraPoolMax);
+		v.Add("head_max", headMax);
+		v.Add("settings_every", settingsEvery);
+		v.Add("default_priority", defaultPriority);
+		v.Add("default_tex.hot", texHot);
+		v.Add("default_tex.smoke", texSmoke);
+	}
 
 	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
 		const Data::Report report = Data::ParseInto(text, strictness, cfg);

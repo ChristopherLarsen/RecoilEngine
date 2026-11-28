@@ -6,7 +6,7 @@
 //             GetUnitCommandCount per unit). The gadget keeps every rule: the fill, the redirect, the stuck and give-up rules,
 //             the order list. With the rule off it walks in Lua as before.
 // Switch:     mod option kt1_orders (default off)
-// Config:     data/kt1/orders.json (no tuning: the lists are exact)
+// Config:     gamedata/kt1/orders.lua or, with kt1_jsonconfig, data/kt1/orders.json (no tuning: the lists are exact)
 // Unit data:  none. A ground mover is a def that can move and cannot fly (as the gadget's groundMover).
 // Timer:      none (the lists are built when Lua asks, on the gadget's frames; KT1::Orders stays at 0)
 // Lua:        Spring.KT1.Orders.Movers() -> { unitID, ... }  ascending: ground movers not carried whose current command is a

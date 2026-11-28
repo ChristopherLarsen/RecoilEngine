@@ -7,9 +7,12 @@
 //
 // A rule's life, in this order:
 //   1. Construct        the registry makes every rule once (each registers itself: KT1Register.h), before anything else is known.
-//   2. ReadConfig       on first use in a game: the text of data/kt1/<name>.json (the game's archive), or "{}" when there is none.
-//                       Only for an enabled rule. Tuning lives there: no number that a designer may change is a C++ constant.
-//                       An unsynced rule's file may be read again while the game runs (Data/DataEngine.h), then ConfigReloaded.
+//   2. LoadConfig or    on first use in a game, by mod option kt1_jsonconfig (Data/Check.h): the table gamedata/kt1/<name>.lua
+//      ReadConfig       returns (0, the default), or the text of data/kt1/<name>.json (1; "{}" when there is none).
+//                       Only for an enabled rule, except in check, which reads both for every rule and compares ConfigValues.
+//                       Tuning lives there: no number that a designer may change is a C++ constant. In a game that reads
+//                       JSON an unsynced rule's file may be read again while it runs (Data/DataEngine.h), then ConfigReloaded.
+//                       A new rule needs only ReadConfig and a .json file.
 //   3. Start            at the first sim frame: unit defs are loaded; read per-def data here (KT1UnitData.h).
 //   4. GameFrame(f)     every synced frame, before the Lua GameFrame, under the profiler timer "KT1::<Name>".
 //   4b. DrawWorld       unsynced rules that draw: once per drawn frame, in the world's alpha pass (after the engine's own particles),
@@ -25,8 +28,10 @@
 #include <string>
 #include <string_view>
 
+#include "Data/Check.h"
 #include "Data/Report.h"
 
+class LuaTable;
 struct lua_State;
 
 namespace KT1 {
@@ -54,6 +59,10 @@ namespace KT1 {
 		Mode SwitchMode() const { return mode; }
 		static const char* ModeName(Mode m) { return m == Mode::On ? "on" : (m == Mode::Check ? "check" : "off"); }
 
+		// The .lua config's table (empty when there is no file). Sets every value the rule takes from its config.
+		virtual void LoadConfig(const LuaTable& cfg) {}
+		// Every value the rule runs on that its config sets, by name: what check compares between the two loaders.
+		virtual void ConfigValues(Data::Values& values) const {}
 		// Reads the file into the rule's config struct (Data::ParseInto) and derives what the rule uses from it. The default
 		// is a rule with no keys: its file may hold notes only. A rejected file leaves the struct as it was.
 		virtual Data::Report ReadConfig(std::string_view text, Data::Strictness strictness);

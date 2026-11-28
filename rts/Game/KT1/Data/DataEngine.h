@@ -1,7 +1,8 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 Data, the engine side: reads data/kt1/<system>.json from the game archive, logs what the loader found, and reloads
-// unsynced systems while a game runs (game-build docs/engine/rules/data.md). The only file pair of Data/ that includes
-// engine headers.
+// KT1 Data, the engine side: reads a rule's config from the game archive (gamedata/kt1/<system>.lua or
+// data/kt1/<system>.json, by mod option kt1_jsonconfig: Check.h), logs what the loader found, and reloads unsynced
+// systems that read JSON while a game runs (game-build docs/engine/rules/data.md). The only file pair of Data/ that
+// includes engine headers.
 //
 // Dev or release: a game archive that holds data/kt1/dev_data.json is a dev archive (release packages strip dev_ files).
 // Every client plays the same archive, so every client reads a synced config the same way.
@@ -11,6 +12,7 @@
 
 #include <string>
 
+#include "Check.h"
 #include "Config.h"
 
 namespace KT1 {
@@ -35,10 +37,20 @@ template <class T> T Load(const std::string& system) {
 	return value;
 }
 
-// At game start: hands the rule its file (or "{}" when there is none), logs the result, and remembers the text for reload.
-void LoadRule(Rule& rule, const char* modeName);
+// At game start: hands the rule its config and logs the result. Json: its .json text (or "{}" when there is none),
+// remembered for reload. Lua and Check: its .lua table (empty when there is none); a rule that has only a .json file is
+// given that.
+void LoadRule(Rule& rule, Source source, const char* modeName);
 
-// Once, at the first frame: the "/kt1 reload <system>" command and, in a dev archive, the look at the files.
+// Check: reads both of the rule's files, compares every value (Rule::ConfigValues), logs each difference and leaves the
+// rule holding the Lua values. A rule without a .lua file has nothing to compare.
+struct ConfigCheck { unsigned compared = 0, diffs = 0, configs = 0; };
+void CheckRule(Rule& rule, ConfigCheck& check);
+// "[KT1CHECK] JsonConfig f=0 n=<values compared> diffs=<k>", then how many configs that covered.
+void LogCheck(const ConfigCheck& check);
+
+// Once, at the first frame of a game that reads JSON: the "/kt1 reload <system>" command and, in a dev archive, the look
+// at the files.
 void StartReload();
 
 } // namespace KT1::Data

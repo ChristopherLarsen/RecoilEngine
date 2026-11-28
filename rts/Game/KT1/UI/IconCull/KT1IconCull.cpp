@@ -7,7 +7,7 @@
 //             (game-build docs/engine/DRAW-BREAKDOWN-FIGHT.md, option 7). Skipping them changes no pixel.
 // Replaces:   nothing in Lua (an engine pass made cheaper); its "Lua" side is the engine's own unculled loop when off.
 // Switch:     mod option kt1_iconcull (default on: no visual change). Off: the stock loops, for A/B.
-// Config:     data/kt1/iconcull.json (IconCullConfig.h): alpha_max (an icon is empty when every pixel's alpha is at most this; DESIGN 0)
+// Config:     gamedata/kt1/iconcull.lua or, with kt1_jsonconfig, data/kt1/iconcull.json (IconCullConfig.h): alpha_max (an icon is empty when every pixel's alpha is at most this; DESIGN 0)
 // Unit data:  none: decided per icon type from its bitmap, never by unit name.
 // Hooks:      rts/Rendering/Units/UnitDrawer.cpp, one line in DrawUnitIcons and in DrawUnitIconsScreen (units and dead ghosts):
 //             `if (KT1::IconCull::Skip(idx)) continue;` before the unit's position is read.
@@ -26,6 +26,7 @@
 #include "Game/KT1/KT1Register.h"
 #include "Game/KT1/Data/Config.h"
 #include "Game/KT1/UI/IconCull/IconCullConfig.h"
+#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Rendering/IconHandler.h"
 #include "Rendering/Textures/Bitmap.h"
@@ -67,6 +68,9 @@ namespace IconCull {
 	class IconCullRule : public KT1::Rule {
 	public:
 		IconCullRule() : KT1::Rule({"IconCull", 1, false, "(engine icon pass, unculled)", true}) {}
+
+		void LoadConfig(const LuaTable& t) override { alphaMax = t.GetInt("alpha_max", 0); }
+		void ConfigValues(Data::Values& v) const override { v.Add("alpha_max", alphaMax); }
 
 		Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
 			const Data::Report report = Data::ParseInto(text, strictness, cfg);

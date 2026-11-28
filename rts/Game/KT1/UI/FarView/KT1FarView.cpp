@@ -7,7 +7,7 @@
 //             From that height every one of those is a few pixels; a pre-baked map image on a coarse mesh looks the same.
 // Replaces:   nothing in Lua; its "Lua" side is the engine's own full world pass when off.
 // Switch:     mod option kt1_farview (default off until the bench proves it). Unsynced: draw only.
-// Config:     data/kt1/farview.json (FarViewConfig.h): switch_height, hysteresis, grid, refresh_s, water_level, water_color, brightness,
+// Config:     gamedata/kt1/farview.lua or data/kt1/farview.json (kt1_jsonconfig; FarViewConfig.h): switch_height, hysteresis, grid, refresh_s, water_level, water_color, brightness,
 //             texture (labels and pending values there).
 // Hooks:      ProjectileDrawer.cpp UpdateDrawFlags and DrawGroundFlashes: FxCulled (far only: effects past their view-depth cutoff).
 //             rts/Rendering/WorldDrawer.cpp, CWorldDrawer::Draw: `if (!KT1::FarView::Draw()) { DrawOpaqueObjects(); DrawAlphaObjects(); }`.
@@ -40,6 +40,7 @@
 #include "Game/KT1/UI/FarView/FarViewConfig.h"
 #include "Game/SelectedUnitsHandler.h"
 #include "Lua/LuaHandle.h"
+#include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "Map/ReadMap.h"
 #include "Rendering/DepthBufferCopy.h"
@@ -136,6 +137,7 @@ VAO* vaoP = nullptr;
 GLsizei indexCount = 0;
 uint32_t ownTex = 0;
 spring_time lastRefresh;   // wall time of the last mesh height refresh
+int sinceRefresh = 1 << 20;   // drawn frames since it
 int stRefreshes = 0, stFrames = 0;
 double stDrawMs = 0.0;
 
@@ -210,6 +212,7 @@ void RefreshMesh() {
 	vboP->SetBufferSubData(0, sizeof(float) * v.size(), v.data());
 	vboP->Unbind();
 	lastRefresh = spring_gettime();
+	sinceRefresh = 0;
 	stRefreshes += 1;
 }
 
@@ -226,7 +229,10 @@ bool DecideFar() {
 
 void DrawMesh() {
 	const uint32_t tex = ownTex != 0 ? ownTex : readMap->GetMiniMapTexture();
-	if (stRefreshes == 0 || (spring_gettime() - lastRefresh).toSecsf() >= cfg.refreshS) RefreshMesh();
+	const bool due = cfg.refreshFrames > 0 ? sinceRefresh >= cfg.refreshFrames   // the .lua config counts drawn frames
+	                                       : (spring_gettime() - lastRefresh).toSecsf() >= cfg.refreshS;
+	if (stRefreshes == 0 || due) RefreshMesh();
+	sinceRefresh += 1;
 
 	using namespace GL::State;
 	auto st = GL::SubState(Blending(GL_FALSE), DepthTest(GL_TRUE), DepthMask(GL_TRUE), Culling(GL_FALSE));
@@ -260,6 +266,47 @@ class FarViewRule : public Rule {
 public:
 	FarViewRule() : Rule({"FarView", 2, false, "(engine world pass at full detail)", false}) {}
 
+	void LoadConfig(const LuaTable& t) override {
+		cfg = FarViewConfig{};   // an absent key reads as the default
+		cfg.switchHeight = t.GetFloat("switch_height", cfg.switchHeight);
+		cfg.hysteresis = std::clamp(t.GetFloat("hysteresis", cfg.hysteresis), 0.0f, 0.5f);
+		cfg.grid = std::clamp(t.GetInt("grid", cfg.grid), 8, 512);
+		cfg.refreshFrames = std::max(1, t.GetInt("refresh_frames", 30));
+		cfg.waterLevel = t.GetFloat("water_level", cfg.waterLevel);
+		const LuaTable wc = t.SubTable("water_color");
+		for (int i = 0; i < 4; ++i) cfg.waterColor[i] = wc.GetFloat(i + 1, cfg.waterColor[i]);
+		cfg.brightness = t.GetFloat("brightness", cfg.brightness);
+		cfg.texture = t.GetString("texture", cfg.texture);
+		cfg.carto = t.GetBool("cartographic", cfg.carto);
+		cfg.autoSwitch = t.GetBool("auto_switch", cfg.autoSwitch);
+		const LuaTable rd = t.SubTable("ramp_dark"), rl = t.SubTable("ramp_light");
+		for (int i = 0; i < 3; ++i) { cfg.rampDark[i] = rd.GetFloat(i + 1, cfg.rampDark[i]); cfg.rampLight[i] = rl.GetFloat(i + 1, cfg.rampLight[i]); }
+		cfg.contourStep = std::max(0.001f, t.GetFloat("contour_step", cfg.contourStep));
+		cfg.edgeGain = t.GetFloat("contour_edge_gain", cfg.edgeGain);
+		cfg.drawFx = t.GetBool("draw_fx", cfg.drawFx);
+		cfg.fxCutoff = t.GetFloat("fx_cutoff", cfg.fxCutoff);
+		cfg.weaponCutoff = t.GetFloat("weapon_cutoff", cfg.weaponCutoff);
+	}
+	void ConfigValues(Data::Values& v) const override {
+		v.Add("water_color", cfg.waterColor, 4);
+		v.Add("ramp_dark", cfg.rampDark, 3);
+		v.Add("ramp_light", cfg.rampLight, 3);
+		// the .lua file counts drawn frames, the .json file seconds: compared at 60 drawn frames a second
+		v.Add("refresh_s", cfg.refreshFrames > 0 ? static_cast<float>(cfg.refreshFrames) / static_cast<float>(60) : cfg.refreshS);
+		v.Add("switch_height", cfg.switchHeight);
+		v.Add("hysteresis", cfg.hysteresis);
+		v.Add("grid", cfg.grid);
+		v.Add("water_level", cfg.waterLevel);
+		v.Add("brightness", cfg.brightness);
+		v.Add("texture", cfg.texture);
+		v.Add("cartographic", cfg.carto);
+		v.Add("auto_switch", cfg.autoSwitch);
+		v.Add("contour_step", cfg.contourStep);
+		v.Add("contour_edge_gain", cfg.edgeGain);
+		v.Add("draw_fx", cfg.drawFx);
+		v.Add("fx_cutoff", cfg.fxCutoff);
+		v.Add("weapon_cutoff", cfg.weaponCutoff);
+	}
 	// The mesh and the texture are built once, with the values of the first InitGL: a reload keeps those two.
 	Data::Report ReadConfig(std::string_view text, Data::Strictness strictness) override {
 		const int grid = cfg.grid;

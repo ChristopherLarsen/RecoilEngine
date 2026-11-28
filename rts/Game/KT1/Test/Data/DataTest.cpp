@@ -4,6 +4,7 @@
 // -fsingle-precision-constant: a bare literal such as 0.1 is a float.
 
 #include "../KT1Test.h"
+#include "Game/KT1/Data/Check.h"
 #include "Game/KT1/Data/Config.h"
 #include "Game/KT1/Data/Number.h"
 #include "Game/KT1/Data/Reload.h"
@@ -325,4 +326,39 @@ KT1_CASE("DATA-RELOAD-COMMAND", "the command names one system") {
 	KT1_CHECK(ReloadTarget("reload").empty());
 	KT1_CHECK(ReloadTarget("reload a b").empty());
 	KT1_CHECK(ReloadTarget("load a").empty());
+}
+
+KT1_CASE("DATA-SOURCE", "kt1_jsonconfig: unset and 0 read Lua, 1 reads JSON, check reads both") {
+	for (const char* lua : {"", "0", "false", "off", "2", "yes"}) KT1_CHECK_MSG(ParseSource(lua) == Source::Lua, lua);
+	KT1_CHECK(ParseSource("1") == Source::Json && ParseSource("true") == Source::Json);
+	KT1_CHECK(ParseSource("check") == Source::Check && ParseSource("CHECK") == Source::Check);
+	for (const Source s : {Source::Lua, Source::Json, Source::Check}) KT1_CHECK(ParseSource(SourceName(s)) == s);
+}
+
+KT1_CASE("DATA-COMPARE", "the compare counts every key and names each that differs in a bit or is on one side only") {
+	const float colour[2] = {0.5f, 0.25f};
+	Values a, b;
+	for (Values* v : {&a, &b}) {
+		v->Add("count", 3);
+		v->Add("on", true);
+		v->Add("name", "x");
+		v->Add("colour", colour, 2);
+		v->Add("gain", static_cast<float>(std::strtod("0.1", nullptr)));
+	}
+	Comparison c = Compare(a, b);
+	KT1_CHECK(c.compared == 6 && c.diffs.empty());
+
+	Values lua, json;
+	lua.Add("gain", std::nextafter(static_cast<float>(1), static_cast<float>(2)));
+	json.Add("gain", static_cast<float>(1));
+	lua.Add("zero", static_cast<float>(0));
+	json.Add("zero", -static_cast<float>(0));
+	lua.Add("only_lua", 1);
+	json.Add("only_json", 2);
+	c = Compare(lua, json);
+	KT1_CHECK(c.compared == 4 && c.diffs.size() == 4);
+	KT1_CHECK(c.diffs[0].key == "gain" && c.diffs[0].lua != c.diffs[0].json);
+	KT1_CHECK(c.diffs[1].key == "zero");
+	KT1_CHECK(c.diffs[2].key == "only_lua" && c.diffs[2].json == "absent");
+	KT1_CHECK(c.diffs[3].key == "only_json" && c.diffs[3].lua == "absent");
 }

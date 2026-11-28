@@ -24,6 +24,10 @@
 //  8500 -  8999   audio
 //  9000 -  9999   probes and test systems (F06 Draw/Probe 9000)
 
+// One switch belongs to the framework, not to a system: mod option kt1_jsonconfig (0, 1, check; default 0; Data/Check.h)
+// picks the config files every system reads. Its check mode is not a system's check mode: nothing runs twice in the game
+// and it writes nothing, it only reads both files at start and compares the values.
+
 #ifndef KT1_REGISTER_H
 #define KT1_REGISTER_H
 

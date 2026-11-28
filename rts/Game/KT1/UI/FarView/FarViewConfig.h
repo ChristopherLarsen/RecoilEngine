@@ -17,6 +17,7 @@ struct FarViewConfig {
 	float hysteresis = 0.05f;       // DESIGN: band below the switch before the full view returns
 	int grid = 128;                 // DESIGN: mesh cells per map side
 	float refreshS = 0.5f;          // DESIGN: seconds between mesh height refreshes while far
+	int refreshFrames = 0;          // DESIGN: not a JSON key: the .lua config's drawn frames between refreshes (0: refreshS)
 	float waterLevel = 0.0f;        // DESIGN: the engine's water plane
 	float waterColor[4] = {0.10f, 0.22f, 0.32f, 0.0f};   // DESIGN: tint below water; a = 0 keeps the image's water
 	float brightness = 1.0f;        // DESIGN: multiplier on the baked image
