@@ -8,7 +8,8 @@
 //   Spring.KT1.Check.Answer("OrderRules", "<gadget>", unitID, cmdID, 0, allow)                       AllowCommand
 //   Spring.KT1.Check.Answer("OrderRules", "<gadget>.build" | ".feature", builderID, targetID, 0, allow)
 //   Spring.KT1.Check.Answer("OrderRules", "<gadget>.load" | ".unload", transporterID, cargoID, 0, allow)
-// A rewritten order is reported by both sides as "reissued", unitID, the new order's id, 0, first and third parameter.
+// A rewritten order is reported by both sides as "reissued", unitID, the new order's id, floor(first parameter), first
+// and third parameter.
 
 #ifndef KT1_RULES_ORDER_RULES_ADAPTER_H
 #define KT1_RULES_ORDER_RULES_ADAPTER_H

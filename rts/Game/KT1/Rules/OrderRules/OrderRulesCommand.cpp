@@ -117,6 +117,7 @@ bool GoalCell(Table& table, const CompiledRow& row, const CommandAsk& ask) {
 	const ::Command& c = ask.command;
 	const Rows::GuardValues& values = table.config.values;
 	const float x = c.GetParam(X), y = c.GetParam(Y), z = c.GetParam(Z);
+	if (values.goal_cell_mu <= 0) return true;   // a data set without the value: no rule
 	float fx = ask.unit.pos.x, fz = ask.unit.pos.z;
 	if (Shifted(c)) {
 		std::vector<Core::Orders::OrderView> queue;
@@ -238,7 +239,8 @@ void Reissue(Table& table, const CompiledRow& row, int unit, int commandID, std:
 		v.v[0] = first;
 		v.v[1] = (params.size() >= POINT) ? params[Z] : 0.0f;
 		v.count = Check::Value::BOTH;
-		Check::Native(NAME, "reissued", unit, commandID, 0, v);
+		// the first parameter tells the several orders of one call apart
+		Check::Native(NAME, "reissued", unit, commandID, static_cast<int>(std::floor(first)), v);
 	}
 	table.state.Track(unit);
 	table.state.SetReissuing(unit, row.source, true);
