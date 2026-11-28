@@ -86,6 +86,7 @@ void CWorldDrawer::InitPost() const
 {
 	char buf[512] = {0};
 
+	KT1::DrawPhases::Init(); // KT1 hook: DrawPhases (the sim's display events are played from the first drawn frame)
 	CModelsLock::SetThreadSafety(true);
 	const bool preloadMode = configHandler->GetBool("PreloadModels");
 	{

@@ -118,14 +118,14 @@ public:
 			fuel[id] = v;
 			const float s = sent[id];
 			if (std::fabs(v - s) >= gaugeStep * c || (v <= 0.0f) != (s <= 0.0f) || (v >= c) != (s >= c)) {
-				Push(4, (int)id, v);
+				Push(4, (int)id, v);   // DESIGN: event code of this rule's Lua pull protocol
 				sent[id] = v;
 			}
 			if (v <= 0.0f && !empty[id]) { empty[id] = 1; Push(1, (int)id, 0.0f); }
-			else if (v > 0.0f && empty[id]) { empty[id] = 0; Push(2, (int)id, v); }
+			else if (v > 0.0f && empty[id]) { empty[id] = 0; Push(2, (int)id, v); }   // DESIGN: event code of this rule's Lua pull protocol
 			if (mult[id] < 0.0f && (int)(id % (unsigned)lowEvery) == lowSlot) {
 				const float lf = low[d] >= 0.0f ? low[d] : lowDefault;
-				if (v < lf * c) Push(3, (int)id, v);
+				if (v < lf * c) Push(3, (int)id, v);   // DESIGN: event code of this rule's Lua pull protocol
 			}
 		}
 	}
@@ -143,7 +143,7 @@ private:
 	static constexpr size_t MAX_EVENTS = 3 * 16384;   // DESIGN: events held between pulls (the gadget pulls every frame)
 
 	void Push(int kind, int id, float v) {
-		if (events.size() + 3 > MAX_EVENTS) return;
+		if (events.size() + 3 > MAX_EVENTS) return;   // DESIGN: one event is 3 numbers
 		events.push_back((float)kind);
 		events.push_back((float)id);
 		events.push_back(v);
@@ -224,8 +224,8 @@ private:
 		return 1;
 	}
 
-	float climbAbove = 4.0f, gaugeStep = 0.005f, lowDefault = 0.19f;
-	int lowEvery = 5;
+	float climbAbove = 4.0f, gaugeStep = 0.005f, lowDefault = 0.19f;   // DESIGN: fallbacks of gamedata/kt1/fuel.lua
+	int lowEvery = 5;   // DESIGN: fallback of gamedata/kt1/fuel.lua low_every, a frame count (SIM-10HZ stage 0)
 	std::vector<float> cap, recharge, ground, low;   // per def id
 	std::vector<const CUnit*> owner;                 // per unit id: who the state belongs to (an id is reused)
 	std::vector<float> fuel, sent, mult;             // per unit id

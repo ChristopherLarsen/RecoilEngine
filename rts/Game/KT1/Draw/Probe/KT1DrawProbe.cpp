@@ -40,7 +40,7 @@ struct ProbeConfig {
 	uint8_t hovered[4] = {255, 255, 255, 220};   // DESIGN
 	uint8_t selected[4] = {255, 220, 40, 200};   // DESIGN
 	uint8_t team[4][4] = {{60, 140, 255, 160}, {255, 80, 60, 160}, {80, 220, 100, 160}, {200, 110, 255, 160}};   // DESIGN
-	int teamColours = 4;
+	int teamColours = 4;   // DESIGN: the rows of `team`
 };
 
 const char* const VS = R"(#version 330
@@ -87,7 +87,7 @@ void PushPointer(lua_State* L, const PointerFacts& p) {
 	if (p.hit.hasGround) {
 		lua_pushliteral(L, "ground");
 		lua_createtable(L, 3, 0);
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < 3; i++) {   // DESIGN: x, y, z
 			lua_pushnumber(L, p.hit.ground[i]);
 			lua_rawseti(L, -2, i + 1);
 		}
@@ -98,7 +98,9 @@ void PushPointer(lua_State* L, const PointerFacts& p) {
 
 class DrawProbe : public Rule, public DrawSystem {
 public:
-	DrawProbe() : Rule({"DrawProbe", 1, false, "nothing (draw host test system)", false}) {}
+	// checkSafe: check only compares the GPU buffer with the CPU store; it reads DrawView and FrameFacts and writes no
+	// engine state
+	DrawProbe() : Rule({"DrawProbe", 1, false, "nothing (draw host test system)", false, true}) {}
 
 	// Rule
 	void Start() override { DrawPhases::Add(this); }
@@ -156,7 +158,7 @@ private:
 		InstanceBatch<ProbeInstance>::Config c;
 		c.name = "KT1DrawProbe";
 		c.idCapacity = unitCapacity;
-		if (!batch.Init(c, {{1, 4, false, offsetof(ProbeInstance, x)}, {2, 4, true, offsetof(ProbeInstance, rgba)}})) return false;
+		if (!batch.Init(c, {{1, 4, false, offsetof(ProbeInstance, x)}, {2, 4, true, offsetof(ProbeInstance, rgba)}})) return false;   // DESIGN: the shader's layout (vec4, vec4)
 		failed = false;
 		return true;
 	}

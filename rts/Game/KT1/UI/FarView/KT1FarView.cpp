@@ -117,7 +117,7 @@ struct Cfg {
 	float switchHeight = 4000.0f;   // PLACEHOLDER (pending FAR-ZOOM-MAP-VIEW): camera height (or zoom) where the far view begins
 	float hysteresis = 0.05f;       // DESIGN: band below the switch before the full view returns (ZOOM-TIER-PLAN: 5%)
 	int grid = 128;                 // DESIGN: mesh cells per map side (about 640 elmos a cell on an 80 km map, 33k triangles)
-	int refreshFrames = 30;         // DESIGN: drawn frames between mesh height refreshes while far
+	int refreshFrames = 30;         // DESIGN: drawn frames between mesh height refreshes while far; KT1 lint: allow frame-literal a count of drawn frames, not converted here: SIM-10HZ stage 0 (lua-to-engine) converts
 	float waterLevel = 0.0f;        // DESIGN: the engine's water plane
 	float waterColor[4] = {0.10f, 0.22f, 0.32f, 0.0f};   // PLACEHOLDER (pending): tint below water; a = 0 keeps the image's water
 	float brightness = 1.0f;        // PLACEHOLDER (pending): multiplier on the baked image
@@ -139,7 +139,7 @@ bool farNow = false;       // this frame is drawn far
 int force = -1;            // -1 by height, 0 never, 1 always (tests)
 bool manual = false;       // the player's cartographic toggle (RND-005 R1: a key action and a map option)
 float luaZoom = -1.0f;     // the game camera's zoom, when Lua sets it
-int luaZoomAge = 1000;     // drawn frames since Lua last set it
+int luaZoomAge = 1000;     // drawn frames since Lua last set it; DESIGN: starts as long unset
 float lastHeight = 0.0f;
 uint32_t fogTex = 0;       // the vision widget's fog mask (SetFogTexture); 0 = unfogged
 float fogFactor = 1.0f;
@@ -154,7 +154,7 @@ VBO* iboP = nullptr;
 VAO* vaoP = nullptr;
 GLsizei indexCount = 0;
 uint32_t ownTex = 0;
-int sinceRefresh = 1 << 20;
+int sinceRefresh = 1 << 20;   // DESIGN: starts as due
 int stRefreshes = 0, stFrames = 0;
 double stDrawMs = 0.0;
 
@@ -183,7 +183,7 @@ bool InitGL() {
 	VBO& vbo = *vboP; VBO& ibo = *iboP; VAO& vao = *vaoP;
 	const int n = cfg.grid;
 	std::vector<uint32_t> idx;
-	idx.reserve((size_t)n * n * 6);
+	idx.reserve((size_t)n * n * 6);   // DESIGN: 6 indices per mesh cell
 	for (int z = 0; z < n; ++z) {
 		for (int x = 0; x < n; ++x) {
 			const uint32_t a = z * (n + 1) + x, b = a + 1, c = a + (n + 1), d = c + 1;
@@ -192,7 +192,7 @@ bool InitGL() {
 	}
 	indexCount = (GLsizei)idx.size();
 	vbo.Bind(GL_ARRAY_BUFFER);
-	vbo.New(sizeof(float) * 3 * (n + 1) * (n + 1), GL_DYNAMIC_DRAW, nullptr);
+	vbo.New(sizeof(float) * 3 * (n + 1) * (n + 1), GL_DYNAMIC_DRAW, nullptr);   // DESIGN: 3 floats per vertex
 	vbo.Unbind();
 	ibo.Bind(GL_ELEMENT_ARRAY_BUFFER);
 	ibo.New(sizeof(uint32_t) * idx.size(), GL_STATIC_DRAW, idx.data());
@@ -215,7 +215,7 @@ void RefreshMesh() {
 	const float* hm = readMap->GetCornerHeightMapUnsynced();
 	const int W = mapDims.mapxp1, H = mapDims.mapyp1;
 	std::vector<float> v;
-	v.reserve((size_t)(n + 1) * (n + 1) * 3);
+	v.reserve((size_t)(n + 1) * (n + 1) * 3);   // DESIGN: 3 floats per vertex
 	for (int z = 0; z <= n; ++z) {
 		const int hz = std::min(H - 1, (int)std::lround((float)z * (H - 1) / n));
 		for (int x = 0; x <= n; ++x) {
@@ -234,7 +234,7 @@ void RefreshMesh() {
 
 bool DecideFar() {
 	luaZoomAge += 1;
-	const float h = (luaZoomAge <= 30 && luaZoom >= 0.0f) ? luaZoom : camera->GetPos().y - readMap->GetCurrAvgHeight();
+	const float h = (luaZoomAge <= 30 && luaZoom >= 0.0f) ? luaZoom : camera->GetPos().y - readMap->GetCurrAvgHeight();   // KT1 lint: allow frame-literal a count of drawn frames, not converted here: SIM-10HZ stage 0 (lua-to-engine) converts
 	lastHeight = h;
 	if (force >= 0) return force == 1;
 	if (manual) return true;
@@ -282,19 +282,19 @@ public:
 
 	void LoadConfig(const LuaTable& t) override {
 		cfg.switchHeight = t.GetFloat("switch_height", cfg.switchHeight);
-		cfg.hysteresis = std::clamp(t.GetFloat("hysteresis", cfg.hysteresis), 0.0f, 0.5f);
-		cfg.grid = std::clamp(t.GetInt("grid", cfg.grid), 8, 512);
+		cfg.hysteresis = std::clamp(t.GetFloat("hysteresis", cfg.hysteresis), 0.0f, 0.5f);   // DESIGN: allowed range
+		cfg.grid = std::clamp(t.GetInt("grid", cfg.grid), 8, 512);   // DESIGN: allowed range
 		cfg.refreshFrames = std::max(1, t.GetInt("refresh_frames", cfg.refreshFrames));
 		cfg.waterLevel = t.GetFloat("water_level", cfg.waterLevel);
 		const LuaTable wc = t.SubTable("water_color");
-		for (int i = 0; i < 4; ++i) cfg.waterColor[i] = wc.GetFloat(i + 1, cfg.waterColor[i]);
+		for (int i = 0; i < 4; ++i) cfg.waterColor[i] = wc.GetFloat(i + 1, cfg.waterColor[i]);   // DESIGN: 4 colour components
 		cfg.brightness = t.GetFloat("brightness", cfg.brightness);
 		cfg.texture = t.GetString("texture", cfg.texture);
 		cfg.carto = t.GetBool("cartographic", cfg.carto);
 		cfg.autoSwitch = t.GetBool("auto_switch", cfg.autoSwitch);
 		const LuaTable rd = t.SubTable("ramp_dark"), rl = t.SubTable("ramp_light");
-		for (int i = 0; i < 3; ++i) { cfg.rampDark[i] = rd.GetFloat(i + 1, cfg.rampDark[i]); cfg.rampLight[i] = rl.GetFloat(i + 1, cfg.rampLight[i]); }
-		cfg.contourStep = std::max(0.001f, t.GetFloat("contour_step", cfg.contourStep));
+		for (int i = 0; i < 3; ++i) { cfg.rampDark[i] = rd.GetFloat(i + 1, cfg.rampDark[i]); cfg.rampLight[i] = rl.GetFloat(i + 1, cfg.rampLight[i]); }   // DESIGN: 3 colour components
+		cfg.contourStep = std::max(0.001f, t.GetFloat("contour_step", cfg.contourStep));   // DESIGN: smallest contour step
 		cfg.edgeGain = t.GetFloat("contour_edge_gain", cfg.edgeGain);
 		cfg.drawFx = t.GetBool("draw_fx", cfg.drawFx);
 		cfg.fxCutoff = t.GetFloat("fx_cutoff", cfg.fxCutoff);
