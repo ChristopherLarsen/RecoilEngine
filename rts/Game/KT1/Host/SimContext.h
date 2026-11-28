@@ -2,7 +2,7 @@
 // KT1 Host: what a synced phase function is handed (LUA-FREE-PLAN 2.2 principle 7). No engine include.
 //
 // There is deliberately no camera, drawer, sound or GUI handle here, and a sim system includes no draw header
-// (tools/engine/kt1_simlint.py). A display effect leaves the sim only through DisplayEvents. Seconds become steps
+// (game-build tools/engine/kt1_lint.py). A display effect leaves the sim only through DisplayEvents. Seconds become steps
 // with Core::Rate (set by Phases.cpp from GAME_SPEED).
 
 #ifndef KT1_HOST_SIM_CONTEXT_H

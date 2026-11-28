@@ -254,10 +254,9 @@ bool CEventHandler::CommandFallback(const CUnit* unit, const Command& cmd)
 bool CEventHandler::AllowCommand(const CUnit* unit, const Command& cmd, int playerNum, bool fromSynced, bool fromLua)
 {
 	ZoneScoped;
-	KT1::AllowChain::Veto kt1; // KT1 hook: SimHost
-	if (!KT1::AllowChain::AskCommand(kt1, unit, cmd, playerNum, fromSynced, fromLua)) return false; // KT1 hook: SimHost
-	const bool lua = ControlIterateDefTrue(listAllowCommand, &CEventClient::AllowCommand, unit, cmd, playerNum, fromSynced, fromLua);
-	return KT1::AllowChain::Answered(kt1, "AllowCommand", lua); // KT1 hook: SimHost
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (!KT1::AllowChain::AskCommand(unit, cmd, playerNum, fromSynced, fromLua)) return false; // KT1 hook: SimHost
+	return ControlIterateDefTrue(listAllowCommand, &CEventClient::AllowCommand, unit, cmd, playerNum, fromSynced, fromLua);
 }
 
 
@@ -268,8 +267,8 @@ std::pair <bool, bool> CEventHandler::AllowUnitCreation(const UnitDef* unitDef, 
 	bool allow = true;
 	bool drop = true;
 
-	KT1::AllowChain::CreationShadow kt1; // KT1 hook: SimHost
-	if (!KT1::AllowChain::AskUnitCreation(kt1, unitDef, builder, buildInfo, drop)) return {false, drop}; // KT1 hook: SimHost
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (!KT1::AllowChain::AskUnitCreation(unitDef, builder, buildInfo, drop)) return {false, drop}; // KT1 hook: SimHost
 
 	for (size_t i = 0; i < listAllowUnitCreation.size(); ) {
 		const auto ec = listAllowUnitCreation[i];
@@ -281,34 +280,31 @@ std::pair <bool, bool> CEventHandler::AllowUnitCreation(const UnitDef* unitDef, 
 		i += (i < listAllowUnitCreation.size() && ec == listAllowUnitCreation[i]);
 	}
 
-	return KT1::AllowChain::AnsweredCreation(kt1, {allow, drop}); // KT1 hook: SimHost
+	return {allow, drop};
 }
 
 bool CEventHandler::AllowUnitTransfer(const CUnit* unit, int newTeam, bool capture)
 {
 	ZoneScoped;
-	KT1::AllowChain::Veto kt1; // KT1 hook: SimHost
-	if (!KT1::AllowChain::AskUnitTransfer(kt1, unit, newTeam, capture)) return false; // KT1 hook: SimHost
-	const bool lua = ControlIterateDefTrue(listAllowUnitTransfer, &CEventClient::AllowUnitTransfer, unit, newTeam, capture);
-	return KT1::AllowChain::Answered(kt1, "AllowUnitTransfer", lua); // KT1 hook: SimHost
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (!KT1::AllowChain::AskUnitTransfer(unit, newTeam, capture)) return false; // KT1 hook: SimHost
+	return ControlIterateDefTrue(listAllowUnitTransfer, &CEventClient::AllowUnitTransfer, unit, newTeam, capture);
 }
 
 bool CEventHandler::AllowUnitBuildStep(const CUnit* builder, const CUnit* unit, float part)
 {
 	ZoneScoped;
-	KT1::AllowChain::Veto kt1; // KT1 hook: SimHost
-	if (!KT1::AllowChain::AskBuildStep(kt1, builder, unit, part)) return false; // KT1 hook: SimHost
-	const bool lua = ControlIterateDefTrue(listAllowUnitBuildStep, &CEventClient::AllowUnitBuildStep, builder, unit, part);
-	return KT1::AllowChain::Answered(kt1, "AllowUnitBuildStep", lua); // KT1 hook: SimHost
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (!KT1::AllowChain::AskBuildStep(builder, unit, part)) return false; // KT1 hook: SimHost
+	return ControlIterateDefTrue(listAllowUnitBuildStep, &CEventClient::AllowUnitBuildStep, builder, unit, part);
 }
 
 bool CEventHandler::AllowUnitCaptureStep(const CUnit* builder, const CUnit* unit, float part)
 {
 	ZoneScoped;
-	KT1::AllowChain::Veto kt1; // KT1 hook: SimHost
-	if (!KT1::AllowChain::AskCaptureStep(kt1, builder, unit, part)) return false; // KT1 hook: SimHost
-	const bool lua = ControlIterateDefTrue(listAllowUnitCaptureStep, &CEventClient::AllowUnitCaptureStep, builder, unit, part);
-	return KT1::AllowChain::Answered(kt1, "AllowUnitCaptureStep", lua); // KT1 hook: SimHost
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (!KT1::AllowChain::AskCaptureStep(builder, unit, part)) return false; // KT1 hook: SimHost
+	return ControlIterateDefTrue(listAllowUnitCaptureStep, &CEventClient::AllowUnitCaptureStep, builder, unit, part);
 }
 
 bool CEventHandler::AllowUnitTransport(const CUnit* transporter, const CUnit* transportee)
@@ -358,10 +354,9 @@ bool CEventHandler::AllowFeatureCreation(const FeatureDef* featureDef, int allyT
 bool CEventHandler::AllowFeatureBuildStep(const CUnit* builder, const CFeature* feature, float part)
 {
 	ZoneScoped;
-	KT1::AllowChain::Veto kt1; // KT1 hook: SimHost
-	if (!KT1::AllowChain::AskFeatureBuildStep(kt1, builder, feature, part)) return false; // KT1 hook: SimHost
-	const bool lua = ControlIterateDefTrue(listAllowFeatureBuildStep, &CEventClient::AllowFeatureBuildStep, builder, feature, part);
-	return KT1::AllowChain::Answered(kt1, "AllowFeatureBuildStep", lua); // KT1 hook: SimHost
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (!KT1::AllowChain::AskFeatureBuildStep(builder, feature, part)) return false; // KT1 hook: SimHost
+	return ControlIterateDefTrue(listAllowFeatureBuildStep, &CEventClient::AllowFeatureBuildStep, builder, feature, part);
 }
 
 
@@ -441,10 +436,9 @@ bool CEventHandler::AllowWeaponTarget(
 	float* targetPriority
 ) {
 	ZoneScoped;
-	KT1::AllowChain::TargetShadow kt1; // KT1 hook: SimHost
-	if (!KT1::AllowChain::AskWeaponTarget(kt1, attackerID, targetID, attackerWeaponNum, attackerWeaponDefID, targetPriority)) return false; // KT1 hook: SimHost
-	const bool lua = ControlIterateDefTrue(listAllowWeaponTarget, &CEventClient::AllowWeaponTarget, attackerID, targetID, attackerWeaponNum, attackerWeaponDefID, targetPriority);
-	return KT1::AllowChain::AnsweredTarget(kt1, targetPriority, lua); // KT1 hook: SimHost
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
+	if (!KT1::AllowChain::AskWeaponTarget(attackerID, targetID, attackerWeaponNum, attackerWeaponDefID, targetPriority)) return false; // KT1 hook: SimHost
+	return ControlIterateDefTrue(listAllowWeaponTarget, &CEventClient::AllowWeaponTarget, attackerID, targetID, attackerWeaponNum, attackerWeaponDefID, targetPriority);
 }
 
 bool CEventHandler::AllowWeaponInterceptTarget(const CUnit* interceptorUnit, const CWeapon* interceptorWeapon, const CProjectile* interceptorTarget)
@@ -465,10 +459,11 @@ bool CEventHandler::UnitPreDamaged(
 	float* impulseMult
 ) {
 	ZoneScoped;
+	const KT1::AllowChain::Call kt1; // KT1 hook: SimHost
 	const KT1::PreDamage kt1Damage{unit, attacker, weaponDefID, projectileID, paralyzer}; // KT1 hook: SimHost
 	const auto kt1Native = KT1::AllowChain::AskPreDamaged(kt1Damage, damage, newDamage); // KT1 hook: SimHost
 	const bool skip = ControlIterateDefFalse(listUnitPreDamaged, &CEventClient::UnitPreDamaged, unit, attacker, damage, weaponDefID, projectileID, paralyzer, newDamage, impulseMult);
-	return KT1::AllowChain::AnsweredPreDamaged(kt1Native, skip, newDamage, impulseMult); // KT1 hook: SimHost
+	return KT1::AllowChain::AfterPreDamaged(kt1Native, skip, newDamage, impulseMult); // KT1 hook: SimHost
 }
 
 

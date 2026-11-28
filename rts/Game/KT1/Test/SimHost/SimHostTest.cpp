@@ -3,6 +3,7 @@
 
 #include "../KT1Test.h"
 
+#include "Game/KT1/Core/SimHost/CheckPairs.h"
 #include "Game/KT1/Core/SimHost/CheckTally.h"
 #include "Game/KT1/Core/SimHost/DisplayQueue.h"
 #include "Game/KT1/Core/SimHost/Ordered.h"
@@ -169,32 +170,115 @@ KT1_CASE("SIMHOST-CHAIN", "validators run by (order, name); the first live no en
 	AddValidator(chain, -5, "late", "l", true);
 	AddValidator(chain, 20, "tail", "t", true);
 	std::string seen;
-	Shadow<bool> shadow;
-	KT1_CHECK(AskVeto(chain, shadow, seen));
+	int checked = 0;
+	const auto count = [&](const std::string&, bool) { ++checked; };
+	KT1_CHECK(AskVeto(chain, count, seen));
 	KT1_CHECK_EQ(seen, std::string("lazt"));
 	AddValidator(chain, 10, "mid", "m", false);
 	seen.clear();
-	KT1_CHECK(!AskVeto(chain, shadow, seen));
+	KT1_CHECK(!AskVeto(chain, count, seen));
 	KT1_CHECK_EQ(seen, std::string("lam"));
-	KT1_CHECK_EQ(shadow.Size(), 0);
+	KT1_CHECK_EQ(checked, 0);
 	const Chain<Fn> none;
 	seen.clear();
-	KT1_CHECK(AskVeto(none, shadow, seen) && seen.empty());
+	KT1_CHECK(AskVeto(none, count, seen) && seen.empty());
 }
 
-KT1_CASE("SIMHOST-CHAIN-CHECK", "a check-mode validator never refuses; its answer is kept for the comparison") {
+KT1_CASE("SIMHOST-CHAIN-CHECK", "a check-mode validator never refuses; its answer goes to the comparison") {
 	Chain<Fn> chain;
 	AddValidator(chain, 1, "probe", "p", false, true);
 	AddValidator(chain, 2, "live", "v", true);
 	AddValidator(chain, 3, "other", "o", true, true);
 	std::string seen, answers;
-	Shadow<bool> shadow;
-	KT1_CHECK(AskVeto(chain, shadow, seen));
+	KT1_CHECK(AskVeto(chain, [&](const std::string& system, bool yes) { answers += system + (yes ? "=yes " : "=no "); }, seen));
 	KT1_CHECK_EQ(seen, std::string("pvo"));
-	shadow.Each([&](const std::string& system, bool yes) { answers += system + (yes ? "=yes " : "=no "); });
 	KT1_CHECK_EQ(answers, std::string("probe=no other=yes "));
-	for (int i = 0; i < 20; ++i) shadow.Keep(std::string("x"), true);
-	KT1_CHECK_EQ(shadow.Size(), SHADOW_CAPACITY);
+}
+
+namespace {
+	struct PairRun {
+		CheckTally tally;
+		CheckPairs pairs{tally};
+		int described = 0;
+		void Give(bool native, int id, float answer, const float* input = nullptr, float second = -1.0f) {
+			CheckValue v;
+			v.v = {answer, second};
+			v.count = (second >= 0.0f) ? 2 : 1;
+			if (input != nullptr) { v.hasInput = true; v.input = *input; }
+			const auto say = [this](const CheckKey&, const CheckValue*, const CheckValue&) { ++described; };
+			if (native) pairs.Native(CheckKey{"S", "w", {id, 0, 0}}, v, say);
+			else pairs.Lua(CheckKey{"S", "w", {id, 0, 0}}, v, say);
+		}
+		void Close() { pairs.CloseStep([this](const CheckKey&, const CheckValue*, const CheckValue&) { ++described; }); }
+		std::string Total() {
+			std::string out;
+			tally.Totals([&](const std::string& s) { out += s; });
+			return out;
+		}
+	};
+	std::string Counts(int n, int diffs, int unmatched) {
+		return "[KT1CHECK] S total n=" + std::to_string(n) + " diffs=" + std::to_string(diffs) + " unmatched=" +
+			std::to_string(unmatched) + " cumulative";
+	}
+}
+
+KT1_CASE("SIMHOST-PAIRS-ALLOW", "a call's native answer is matched inside its scope; never asked is unmatched, not a difference") {
+	PairRun r;
+	size_t mark = r.pairs.Mark();
+	r.Give(true, 7, 1.0f);
+	r.Give(false, 7, 1.0f);       // the replaced gadget agrees
+	r.pairs.CloseScope(mark);
+	mark = r.pairs.Mark();
+	r.Give(true, 7, 0.0f);        // another gadget refused first: never asked
+	r.pairs.CloseScope(mark);
+	mark = r.pairs.Mark();
+	r.Give(true, 7, 1.0f);
+	r.Give(false, 7, 0.0f);       // disagrees
+	r.pairs.CloseScope(mark);
+	r.Close();
+	KT1_CHECK_EQ(r.Total(), Counts(2, 1, 1));
+	KT1_CHECK_EQ(r.described, 1);
+	KT1_CHECK(r.pairs.Empty());
+}
+
+KT1_CASE("SIMHOST-PAIRS-LUAONLY", "a Lua answer with no native one for its key is a difference, at the step's end") {
+	PairRun r;
+	const size_t mark = r.pairs.Mark();
+	r.Give(true, 7, 1.0f);
+	r.Give(false, 8, 1.0f);
+	r.pairs.CloseScope(mark);
+	KT1_CHECK_EQ(r.Total(), Counts(0, 0, 1));
+	r.Close();
+	KT1_CHECK_EQ(r.Total(), Counts(1, 1, 1));
+}
+
+KT1_CASE("SIMHOST-PAIRS-ORDER", "a value matches in either order; a nested call takes its own answer and leaves the outer one") {
+	PairRun r;
+	r.Give(false, 3, 2.5f);       // Lua first (a value, no scope)
+	r.Give(true, 3, 2.5f);
+	const size_t outer = r.pairs.Mark();
+	r.Give(true, 9, 1.0f);
+	const size_t inner = r.pairs.Mark();
+	r.Give(true, 9, 0.0f);        // the same key, asked again inside the outer call
+	r.Give(false, 9, 0.0f);
+	r.pairs.CloseScope(inner);
+	r.Give(false, 9, 1.0f);
+	r.pairs.CloseScope(outer);
+	r.Close();
+	KT1_CHECK_EQ(r.Total(), Counts(3, 0, 0));
+}
+
+KT1_CASE("SIMHOST-PAIRS-INPUT", "answers about different inputs are unmatched; the shorter answer decides what is compared") {
+	PairRun r;
+	const float engine = 40.0f, changed = 20.0f;
+	r.Give(true, 1, 10.0f, &engine);
+	r.Give(false, 1, 5.0f, &changed);
+	r.Give(true, 2, 1.0f, nullptr, 0.0f);
+	r.Give(false, 2, 1.0f);
+	r.Give(true, 3, 1.0f, &engine, 3.0f);
+	r.Give(false, 3, 1.0f, &engine, 4.0f);
+	r.Close();
+	KT1_CHECK_EQ(r.Total(), Counts(2, 1, 1));
 }
 
 KT1_CASE("SIMHOST-PHASE", "phase names and half-open id ranges") {
@@ -320,6 +404,7 @@ KT1_CASE("SIMHOST-CHECK", "check lines: a step line only on differences, totals 
 	t.CloseStep(3, add);
 	KT1_CHECK(lines.empty());
 	t.Totals(add);
-	KT1_CHECK_EQ(lines, std::string("[KT1CHECK] Abc total n=60 diffs=30 cumulative;[KT1CHECK] Zed total n=5 diffs=0 cumulative;"));
+	KT1_CHECK_EQ(lines, std::string("[KT1CHECK] Abc total n=60 diffs=30 unmatched=0 cumulative;"
+		"[KT1CHECK] Zed total n=5 diffs=0 unmatched=0 cumulative;"));
 	KT1_CHECK(CheckTally::SameBits(1.5f, 1.5f) && !CheckTally::SameBits(0.0f, -0.0f));
 }

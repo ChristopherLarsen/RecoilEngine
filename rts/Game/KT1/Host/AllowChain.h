@@ -7,22 +7,35 @@
 //
 // Live (switch on): in a veto chain the first "no" ends it and Lua is not asked, as when an earlier gadget says no. When
 // every validator says yes, Lua is asked exactly as before. With nothing registered every hook is the stock engine.
-// Check mode: a validator never decides and changes nothing. Its answer is compared with the Lua chain's result and
-// counted on its system's [KT1CHECK] line. A call a live validator refused is not compared (Lua was not asked).
 //
-// Porting rule. A native validator runs before ALL Lua gadgets. A gadget that was asked before the ported one (lower
-// layer) is no longer called when the native one refuses: a package that ports an Allow* handler checks every gadget
-// ahead of it in layer order for side effects in that call-in, and lists what it found in its rule doc. In check mode a
-// veto by any other gadget differs from a native "yes" too; the package accounts for those.
-// A validator with a side effect says so in its rule doc.
+// Porting rule (live). A native validator runs before ALL Lua gadgets. A gadget that was asked before the ported one
+// (lower layer) is no longer called when the native one refuses: a package that ports an Allow* handler checks every
+// gadget ahead of it in layer order for side effects in that call-in, and lists what it found in its rule doc. A
+// validator with a side effect says so there.
+//
+// Check mode: a validator never decides and changes nothing. Its answer is compared with the answer of the ONE Lua handler
+// it replaces, not with the chain's result: that handler, in check mode, reports it from inside the call, on every path out:
+//   Spring.KT1.Check.Answer("Orders", "AllowCommand", unitID, cmdID, 0, allow)
+// with the same system name and these keys and answers, as the handler receives them:
+//   call-in                 id1, id2, id3                          answer, answer2          input
+//   AllowCommand            unitID, cmdID, 0                       allow
+//   AllowUnitCreation       unitDefID, builderID, 0                allow, drop
+//   AllowUnitTransfer       unitID, newTeam, 0                     allow
+//   AllowUnitBuildStep      builderID, unitID, 0                   allow
+//   AllowUnitCaptureStep    builderID, unitID, 0                   allow
+//   AllowFeatureBuildStep   builderID, featureID, 0                allow
+//   AllowWeaponTarget       attackerID, targetID, weaponNum        allow, priority          defPriority, if given one
+//   UnitPreDamaged          unitID, projectileID, weaponDefID      newDamage, impulse (1)   damage
+// AllowUnitCreation: drop is compared only when both refuse. AllowWeaponTarget: priority only when both allow.
+// Never asked (another gadget refused first, or the engine did not call Lua): the native answer counts as "unmatched",
+// not as a difference. The handler answered and no native answer has that key: a difference. Input differs (an earlier
+// gadget changed the damage or priority): unmatched. A call a live validator refused is not compared.
 
 #ifndef KT1_HOST_ALLOW_CHAIN_H
 #define KT1_HOST_ALLOW_CHAIN_H
 
+#include <cstddef>
 #include <functional>
-#include <utility>
-
-#include "Game/KT1/Core/SimHost/Validators.h"
 
 class CUnit;
 class CFeature;
@@ -63,45 +76,36 @@ public:
 	static void AddPreDamage(const char* system, bool check, int order, DamageFn fn);
 	static void Reset();   // game shutdown
 
-	// KT1 hook: SimHost (CEventHandler, around each call-in's Lua dispatch). Ask: false = a live validator refused.
-	// Answered: the Lua chain's result, compared with the check-mode answers.
-	using Veto = Core::SimHost::Shadow<bool>;
-	static bool AskCommand(Veto& s, const CUnit* u, const Command& c, int playerNum, bool fromSynced, bool fromLua);
-	static bool AskUnitTransfer(Veto& s, const CUnit* u, int newTeam, bool capture);
-	static bool AskBuildStep(Veto& s, const CUnit* builder, const CUnit* u, float part);
-	static bool AskCaptureStep(Veto& s, const CUnit* builder, const CUnit* u, float part);
-	static bool AskFeatureBuildStep(Veto& s, const CUnit* builder, const CFeature* f, float part);
-	static bool Answered(const Veto& s, const char* callIn, bool lua);
+	// KT1 hook: SimHost (CEventHandler). A Call lives across one call-in: check-mode answers the replaced Lua has not
+	// matched by its end are unmatched.
+	class Call {
+	public:
+		Call();
+		~Call();
+		Call(const Call&) = delete;
+		Call& operator=(const Call&) = delete;
 
-	struct Creation {
-		bool allow = true;
-		bool drop = true;
+	private:
+		size_t mark;
 	};
-	using CreationShadow = Core::SimHost::Shadow<Creation>;
-	static bool AskUnitCreation(CreationShadow& s, const UnitDef* def, const CUnit* builder, const BuildInfo* info, bool& drop);
-	static std::pair<bool, bool> AnsweredCreation(const CreationShadow& s, std::pair<bool, bool> lua);
 
-	struct Target {
-		bool allow = true;
-		float priority = 0.0f;
-	};
-	using TargetShadow = Core::SimHost::Shadow<Target>;
-	static bool AskWeaponTarget(TargetShadow& s, unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority);
-	static bool AnsweredTarget(const TargetShadow& s, const float* priority, bool lua);
+	// Asked before the Lua dispatch; false = a live validator refused.
+	static bool AskCommand(const CUnit* u, const Command& c, int playerNum, bool fromSynced, bool fromLua);
+	static bool AskUnitCreation(const UnitDef* def, const CUnit* builder, const BuildInfo* info, bool& drop);
+	static bool AskUnitTransfer(const CUnit* u, int newTeam, bool capture);
+	static bool AskBuildStep(const CUnit* builder, const CUnit* u, float part);
+	static bool AskCaptureStep(const CUnit* builder, const CUnit* u, float part);
+	static bool AskFeatureBuildStep(const CUnit* builder, const CFeature* f, float part);
+	static bool AskWeaponTarget(unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority);
 
-	struct Damage {
-		float damage = 0.0f;
-		float impulse = 1.0f;
-	};
 	struct Damaged {
 		bool ran = false;       // a live validator ran
 		float impulse = 1.0f;   // the live impulse factor
-		Core::SimHost::Shadow<Damage> shadow;
 	};
 	// Before Lua: live validators change damage (and *newDamage, which Lua overwrites when it answers). After Lua: the
 	// live impulse factor applies to Lua's answer; the result is whether the engine skips its damage handling.
 	static Damaged AskPreDamaged(const PreDamage& d, float& damage, float* newDamage);
-	static bool AnsweredPreDamaged(const Damaged& native, bool skip, const float* newDamage, float* impulseMult);
+	static bool AfterPreDamaged(const Damaged& native, bool skip, const float* newDamage, float* impulseMult);
 };
 
 } // namespace KT1

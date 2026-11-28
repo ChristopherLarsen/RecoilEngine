@@ -1,8 +1,8 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 rule: SimProbe (version 1). The sim host's test system: it uses every part of the host and changes nothing in a
 // game, except that it refuses one command id no unit has (game-build docs/engine/rules/simhost.md). In check mode that
-// refusal only answers: the Lua twin refuses the same id, and the host compares the two answers. Its other validators
-// only count (they say yes and change nothing), so they are live in both modes.
+// refusal only answers: the Lua twin refuses the same id and reports its answer, and the host compares the two. Its other
+// validators only count (they say yes and change nothing), so they are live in both modes.
 //
 // Replaces:   nothing. LuaRules/Gadgets/dev_kt1_simprobe.lua records the same things from the Lua call-ins in check mode
 // Switch:     mod option kt1_simprobe: 0 off (default), 1 on, check (on, and the gadget compares both)
