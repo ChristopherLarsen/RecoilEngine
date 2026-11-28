@@ -3,74 +3,144 @@
 
 #include "AllowChain.h"
 
-#include "Game/KT1/Core/SimHost/Ordered.h"
+#include "Check.h"
+#include "Game/KT1/Core/SimHost/Validators.h"
+#include "Lua/LuaConfig.h"
+#include "Sim/Features/Feature.h"
+#include "Sim/Units/CommandAI/Command.h"
+#include "Sim/Units/Unit.h"
+#include "Sim/Units/UnitDef.h"
 
 namespace KT1 {
 namespace {
 
-using Core::SimHost::AllAllow;
-using Core::SimHost::Ordered;
+using Core::SimHost::AskVeto;
+using Core::SimHost::Chain;
 
 struct Chains {
-	Ordered<AllowChain::CommandFn> command;
-	Ordered<AllowChain::CreationFn> creation;
-	Ordered<AllowChain::TransferFn> transfer;
-	Ordered<AllowChain::UnitStepFn> build;
-	Ordered<AllowChain::UnitStepFn> capture;
-	Ordered<AllowChain::FeatureStepFn> featureBuild;
-	Ordered<AllowChain::TargetFn> target;
-	Ordered<AllowChain::DamageFn> damage;
+	Chain<AllowChain::CommandFn> command;
+	Chain<AllowChain::CreationFn> creation;
+	Chain<AllowChain::TransferFn> transfer;
+	Chain<AllowChain::UnitStepFn> build;
+	Chain<AllowChain::UnitStepFn> capture;
+	Chain<AllowChain::FeatureStepFn> featureBuild;
+	Chain<AllowChain::TargetFn> target;
+	Chain<AllowChain::DamageFn> damage;
 };
 
 Chains chains;
 
-} // namespace
-
-void AllowChain::AddCommand(const char* system, int order, CommandFn fn) { chains.command.Add(order, system, std::move(fn)); }
-void AllowChain::AddUnitCreation(const char* system, int order, CreationFn fn) { chains.creation.Add(order, system, std::move(fn)); }
-void AllowChain::AddUnitTransfer(const char* system, int order, TransferFn fn) { chains.transfer.Add(order, system, std::move(fn)); }
-void AllowChain::AddBuildStep(const char* system, int order, UnitStepFn fn) { chains.build.Add(order, system, std::move(fn)); }
-void AllowChain::AddCaptureStep(const char* system, int order, UnitStepFn fn) { chains.capture.Add(order, system, std::move(fn)); }
-void AllowChain::AddFeatureBuildStep(const char* system, int order, FeatureStepFn fn) { chains.featureBuild.Add(order, system, std::move(fn)); }
-void AllowChain::AddWeaponTarget(const char* system, int order, TargetFn fn) { chains.target.Add(order, system, std::move(fn)); }
-void AllowChain::AddPreDamage(const char* system, int order, DamageFn fn) { chains.damage.Add(order, system, std::move(fn)); }
-void AllowChain::Reset() { chains = Chains(); }
-
-bool AllowChain::CheckCommand(const CUnit* u, const Command& c, int playerNum, bool fromSynced, bool fromLua) {
-	return AllAllow(chains.command, u, c, playerNum, fromSynced, fromLua);
+template<class Fn> void Add(Chain<Fn>& chain, const char* system, bool check, int order, Fn fn) {
+	chain.Add(order, system, {system, check, std::move(fn)});
 }
 
-bool AllowChain::CheckUnitCreation(const UnitDef* def, const CUnit* builder, const BuildInfo* info, bool& drop) {
+Check::Value Answer(float first) {
+	Check::Value v;
+	v.v[0] = first;
+	return v;
+}
+
+// A veto chain whose check-mode answers go to the check helper under the call-in's keys.
+// KT1 hot
+template<class Fn, class... Args> bool Veto(const Chain<Fn>& chain, const char* callIn, int id1, int id2, Args&&... args) {
+	return AskVeto(chain, [&](const auto& system, bool yes) {
+		Check::Native(system.c_str(), callIn, id1, id2, 0, Answer(yes ? 1.0f : 0.0f));
+	}, args...);
+}
+
+} // namespace
+
+void AllowChain::AddCommand(const char* system, bool check, int order, CommandFn fn) { Add(chains.command, system, check, order, std::move(fn)); }
+void AllowChain::AddUnitCreation(const char* system, bool check, int order, CreationFn fn) { Add(chains.creation, system, check, order, std::move(fn)); }
+void AllowChain::AddUnitTransfer(const char* system, bool check, int order, TransferFn fn) { Add(chains.transfer, system, check, order, std::move(fn)); }
+void AllowChain::AddBuildStep(const char* system, bool check, int order, UnitStepFn fn) { Add(chains.build, system, check, order, std::move(fn)); }
+void AllowChain::AddCaptureStep(const char* system, bool check, int order, UnitStepFn fn) { Add(chains.capture, system, check, order, std::move(fn)); }
+void AllowChain::AddFeatureBuildStep(const char* system, bool check, int order, FeatureStepFn fn) { Add(chains.featureBuild, system, check, order, std::move(fn)); }
+void AllowChain::AddWeaponTarget(const char* system, bool check, int order, TargetFn fn) { Add(chains.target, system, check, order, std::move(fn)); }
+void AllowChain::AddPreDamage(const char* system, bool check, int order, DamageFn fn) { Add(chains.damage, system, check, order, std::move(fn)); }
+void AllowChain::Reset() { chains = Chains(); }
+
+AllowChain::Call::Call() : mark(Check::Mark()) {}
+AllowChain::Call::~Call() { Check::CloseScope(mark); }
+
+bool AllowChain::AskCommand(const CUnit* u, const Command& c, int playerNum, bool fromSynced, bool fromLua) {
+	return Veto(chains.command, "AllowCommand", u->id, c.GetID(), u, c, playerNum, fromSynced, fromLua);
+}
+bool AllowChain::AskUnitTransfer(const CUnit* u, int newTeam, bool capture) {
+	return Veto(chains.transfer, "AllowUnitTransfer", u->id, newTeam, u, newTeam, capture);
+}
+bool AllowChain::AskBuildStep(const CUnit* builder, const CUnit* u, float part) {
+	return Veto(chains.build, "AllowUnitBuildStep", builder->id, u->id, builder, u, part);
+}
+bool AllowChain::AskCaptureStep(const CUnit* builder, const CUnit* u, float part) {
+	return Veto(chains.capture, "AllowUnitCaptureStep", builder->id, u->id, builder, u, part);
+}
+bool AllowChain::AskFeatureBuildStep(const CUnit* builder, const CFeature* f, float part) {
+	return Veto(chains.featureBuild, "AllowFeatureBuildStep", builder->id, f->id, builder, f, part);
+}
+
+bool AllowChain::AskUnitCreation(const UnitDef* def, const CUnit* builder, const BuildInfo* info, bool& drop) {
 	for (const auto& item : chains.creation) {
-		bool d = true;
-		if (!item.value(def, builder, info, d)) {
-			drop = d;
+		bool itemDrop = true;
+		const bool yes = item.value.fn(def, builder, info, itemDrop);
+		if (item.value.check) {
+			Check::Value v = Answer(yes ? 1.0f : 0.0f);
+			v.v[1] = itemDrop ? 1.0f : 0.0f;
+			v.count = yes ? 1 : Check::Value::BOTH;
+			Check::Native(item.value.system.c_str(), "AllowUnitCreation", def->id, (builder != nullptr) ? builder->id : -1, 0, v);
+		} else if (!yes) {
+			drop = itemDrop;
 			return false;
 		}
 	}
 	return true;
 }
 
-bool AllowChain::CheckUnitTransfer(const CUnit* u, int newTeam, bool capture) { return AllAllow(chains.transfer, u, newTeam, capture); }
-bool AllowChain::CheckBuildStep(const CUnit* builder, const CUnit* u, float part) { return AllAllow(chains.build, builder, u, part); }
-bool AllowChain::CheckCaptureStep(const CUnit* builder, const CUnit* u, float part) { return AllAllow(chains.capture, builder, u, part); }
-bool AllowChain::CheckFeatureBuildStep(const CUnit* builder, const CFeature* f, float part) { return AllAllow(chains.featureBuild, builder, f, part); }
-
 // KT1 hot
-bool AllowChain::CheckWeaponTarget(unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority) {
-	return AllAllow(chains.target, attackerID, targetID, weaponNum, weaponDefID, priority);
+bool AllowChain::AskWeaponTarget(unsigned attackerID, unsigned targetID, unsigned weaponNum, unsigned weaponDefID, float* priority) {
+	for (const auto& item : chains.target) {
+		if (!item.value.check) {
+			if (!item.value.fn(attackerID, targetID, weaponNum, weaponDefID, priority)) return false;
+			continue;
+		}
+		const float incoming = (priority != nullptr) ? *priority : 0.0f;
+		float own = incoming;
+		const bool yes = item.value.fn(attackerID, targetID, weaponNum, weaponDefID, (priority != nullptr) ? &own : nullptr);
+		Check::Value v = Answer(yes ? 1.0f : 0.0f);
+		v.v[1] = own;
+		v.count = (yes && priority != nullptr) ? Check::Value::BOTH : 1;
+		v.hasInput = (priority != nullptr);
+		v.input = incoming;
+		// the ids as Lua receives them (a command AI's -1, the weapon number from LUA_WEAPON_BASE_INDEX)
+		const int weapon = static_cast<int>(weaponNum);
+		Check::Native(item.value.system.c_str(), "AllowWeaponTarget", static_cast<int>(attackerID), static_cast<int>(targetID),
+			weapon + LUA_WEAPON_BASE_INDEX * (weapon >= 0), v);
+	}
+	return true;
 }
 
-AllowChain::Damaged AllowChain::PreDamaged(const PreDamage& d, float& damage, float* newDamage) {
+AllowChain::Damaged AllowChain::AskPreDamaged(const PreDamage& d, float& damage, float* newDamage) {
 	Damaged native;
 	if (chains.damage.Empty()) return native;
-	native.ran = true;
+	const float incoming = damage;
 	for (const auto& item : chains.damage) {
+		float own = item.value.check ? incoming : damage;
 		float impulse = 1.0f;
-		item.value(d, damage, impulse);
-		native.impulse *= impulse;
+		item.value.fn(d, own, impulse);
+		if (!item.value.check) {
+			native.ran = true;
+			damage = own;
+			native.impulse *= impulse;
+			continue;
+		}
+		Check::Value v = Answer(own);
+		v.v[1] = impulse;
+		v.count = Check::Value::BOTH;
+		v.hasInput = true;
+		v.input = incoming;
+		Check::Native(item.value.system.c_str(), "UnitPreDamaged", d.unit->id, d.projectileID, d.weaponDefID, v);
 	}
-	*newDamage = damage;
+	if (native.ran) *newDamage = damage;
 	return native;
 }
 

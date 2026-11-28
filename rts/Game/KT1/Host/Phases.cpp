@@ -54,7 +54,7 @@ void Phases::Run(Core::SimHost::Phase phase, int frame) {
 	Check::CloseStep(frame);
 	SyncState::Close();
 	SimEvents::Compact();
-	DisplayEvents::Publish();
+	DisplayEvents::Publish(frame);
 }
 
 void Phases::Reset() {

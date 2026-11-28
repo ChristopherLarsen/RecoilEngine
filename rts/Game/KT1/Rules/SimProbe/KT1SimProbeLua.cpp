@@ -4,7 +4,7 @@
 //                                     since the last call, as raised (check mode), then forgotten
 //   Spring.KT1.SimProbe.Commands()    { unitID, cmdID, ... } the command validator's calls since the last call
 //   Spring.KT1.SimProbe.State()       { id, damage, events, ... } every tracked unit, ascending id
-//   Spring.KT1.SimProbe.Counts()      { phases = {5 numbers}, vetoes = {8 numbers}, dropped = n }
+//   Spring.KT1.SimProbe.Counts()      { phases = {3 numbers}, vetoes = {8 numbers}, dropped = n }
 //   Spring.KT1.SimProbe.DenyCommand() the refused command id
 
 #include "KT1SimProbe.h"
