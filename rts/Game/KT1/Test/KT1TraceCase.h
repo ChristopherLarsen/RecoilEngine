@@ -7,7 +7,8 @@
 // runs once for every file of that name under <dir> (the recorder writes <dir>/<engine>/<scene>/<system>.kt1t), as case
 // TRACE-<system>-<engine>-<scene>; no file: one failing case. Without --traces no replay case exists.
 // Each prints "[TRACE] <id> bytes= steps= inputs= compared= differences= ms=" and its first differences; it passes on a
-// complete trace with at least one compared row and no difference.
+// complete trace with at least one compared row and no difference. A column the system leaves out (Compares) is listed:
+// "[TRACE] <id> skipped column <name>".
 
 #ifndef KT1_TRACE_CASE_H
 #define KT1_TRACE_CASE_H

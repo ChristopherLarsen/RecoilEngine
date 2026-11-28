@@ -11,7 +11,7 @@
 
 #include "Game/KT1/Core/Common/Rate.h"
 #include "Game/KT1/Core/Orders/OrdersConfig.h"
-#include "Game/KT1/Core/Orders/TurnStep.h"
+#include "Game/KT1/Core/Orders/TurnTrace.h"
 
 using namespace KT1::Core::Orders;
 using KT1::Core::Rate;
@@ -519,6 +519,36 @@ KT1_CASE("ORD-TURN-JOIN-IN-WALK", "a unit that joins during the walk is visited 
 	JoiningPort port{*s, {}, {}};
 	WalkTurns(*s, FAST, 1, port);
 	KT1_CHECK_EQ(Join(port.seen), "3 5 2");
+}
+
+KT1_CASE("ORD-TURN-WALK-EVENTS", "recorded joins and leaves of a turn apply during the walk; a second visit has its own record") {
+	auto s = NewState();
+	TurnParams params = FAST;
+	TurnInput in;
+	in.now = 1;
+	for (const UnitId u: {5, 3, 7})
+		in.events.push_back({TurnEventKind::Join, u});
+	TurnUnit first = U(3, {});                                 // visited idle: it leaves
+	TurnUnit again = U(3, {E(K::Move, 4)});                    // and an order given in 9's turn brings it back
+	TurnUnit five = U(5, {E(K::Patrol, 1)});
+	five.during = {{TurnEventKind::Leave, 7}, {TurnEventKind::Join, 9}};
+	TurnUnit nine = U(9, {E(K::Move, 2)});
+	nine.during = {{TurnEventKind::Join, 3}};
+	in.units = {first, again, five, nine};
+	// the record goes through the trace's bytes on the way
+	KT1::Core::Trace::Bytes bytes;
+	Put(bytes, in);
+	KT1::Core::Trace::ByteReader reader(bytes.View());
+	TurnInput read;
+	KT1_CHECK(Get(reader, read));
+	TurnOutput out;
+	RunTurnStep(*s, params, read, out);
+	// 5's turn destroys 7 before its slot is reached and brings in 9; 3 leaves, 9 takes its slot and brings 3 back
+	KT1_CHECK_EQ(Join(out.turnList), "5 3 9 3");
+	KT1_CHECK_EQ(Join(out.listAfter), "5 9 3");
+	KT1_CHECK(out.missing.empty());
+	KT1_CHECK_EQ(int(out.frontClass[1]), int(FrontClass::None));
+	KT1_CHECK_EQ(int(out.frontClass[3]), int(FrontClass::Plain));
 }
 
 KT1_CASE("ORD-TURN-QUEUE-FILL", "only the first eight entries of a queue are kept") {
