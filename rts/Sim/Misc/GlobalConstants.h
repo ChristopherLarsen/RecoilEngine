@@ -49,7 +49,7 @@ static constexpr float ELMOS_TO_METERS = 1.0f / SQUARE_SIZE;
  *
  * Defines the game-/sim-frames per second.
  */
-static constexpr int GAME_SPEED = 30;
+static constexpr int GAME_SPEED = 10; // KT1 sim rate stage 1 (SIM-10HZ-PLAN): 10 Hz
 static constexpr float INV_GAME_SPEED = 1.0f / GAME_SPEED;
 
 /**
