@@ -45,6 +45,11 @@ namespace KT1 {
 		const std::string& OptionKey() const { return option; }    // "kt1_census": the mod option that switches it
 		const std::string& TimerName() const { return timer; }     // "KT1::Census"
 		bool Enabled() const { return enabled; }
+		// the switch as the game set it: off, on, or check (LUA-FREE §3.2: the rule runs and its Lua is not stood down,
+		// so both paths run and the proof compares them). Fixed for the run; Enabled() is what runs now.
+		enum class Mode { Off, On, Check };
+		Mode SwitchMode() const { return mode; }
+		static const char* ModeName(Mode m) { return m == Mode::On ? "on" : (m == Mode::Check ? "check" : "off"); }
 
 		virtual void LoadConfig(const LuaTable& cfg) {}
 		virtual void Start() {}
@@ -57,6 +62,7 @@ namespace KT1 {
 		RuleInfo info;
 		std::string key, option, timer;
 		bool enabled = false;
+		Mode mode = Mode::Off;
 	};
 }
 

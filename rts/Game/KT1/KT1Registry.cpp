@@ -1,13 +1,17 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1: the rule registry (game-build docs/engine/rules/INDEX.md). See KT1Rule.h for a rule's life.
 //
-// Switch: mod option kt1_<key> ("1"/"true" on, "0"/"false" off; unset: the rule's defaultOn). Off: the engine rule does
-// nothing and its Lua gadget runs (the gadget asks Spring.KT1.IsActive("<Name>") and stands down when it is true).
+// Switch: mod option kt1_<key> ("1"/"true" on, "0"/"false" off, "check"; unset: the rule's defaultOn). Off: the engine rule
+// does nothing and its Lua gadget runs (the gadget asks Spring.KT1.IsActive("<Name>") and stands down when it is true).
+// Check (LUA-FREE §3.2): the engine rule runs and IsActive is false, so its Lua runs too and a proof compares the two.
 // Config: gamedata/kt1/<key>.lua from the game archive, read once per game when the rule is on.
 //
 // Lua (every handle, from LuaSyncedRead):
 //   Spring.KT1.Rules()        -> { {name, version, synced, replaces, enabled, option, timer}, ... } in registry order
-//   Spring.KT1.IsActive(name) -> true when the engine rule exists and is on
+//   Spring.KT1.IsActive(name) -> true when the engine rule exists and is on (not in check mode: its Lua keeps running)
+//   Spring.KT1.Enabled(name)  -> true while the engine rule runs (on or check, and not turned off by SetEnabled)
+//   Spring.KT1.Mode(name)     -> "off" | "on" | "check", the switch as the game set it; nil when there is no such rule
+//   Spring.KT1.SetEnabled(name, on) -> unsynced Lua only, unsynced rules only (capture A/B); true when done
 //   Spring.KT1.<Name>         the rule's own table (its PushLua)
 
 #include "KT1Registry.h"
@@ -20,6 +24,7 @@
 #include <cstring>
 
 #include "Game/GameSetup.h"
+#include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaUtils.h"
 #include "System/FileSystem/VFSModes.h"
@@ -81,12 +86,14 @@ void Registry::EnsureInit() {
 
 	const auto& opts = CGameSetup::GetModOptions();
 	for (auto& r : rules) {
-		bool on = r->info.defaultOn;
+		Rule::Mode mode = r->info.defaultOn ? Rule::Mode::On : Rule::Mode::Off;
 		const auto it = opts.find(r->option);
 		if (it != opts.end()) {
 			const std::string v = Lower(it->second.c_str());
-			on = (v == "1" || v == "true");
+			mode = (v == "1" || v == "true") ? Rule::Mode::On : (v == "check" ? Rule::Mode::Check : Rule::Mode::Off);
 		}
+		r->mode = mode;
+		const bool on = (mode != Rule::Mode::Off);
 		r->enabled = on;
 
 		if (on) {
@@ -94,10 +101,10 @@ void Registry::EnsureInit() {
 			LuaParser p(path, SPRING_VFS_MOD_BASE, SPRING_VFS_ZIP, {r->info.synced}, {true});   // setup: the parser needs its own Lua state (setup false leaves it invalid)
 			const bool ok = p.Execute();
 			r->LoadConfig(p.GetRoot());   // an invalid root reads every field as its default
-			LOG("[KT1] %s v%d %s, config %s%s%s", r->info.name, r->info.version, r->info.synced ? "synced" : "unsynced",
-			    path.c_str(), ok ? "" : " (none: defaults): ", ok ? "" : p.GetErrorLog().c_str());
+			LOG("[KT1] %s v%d %s, config %s%s%s mode=%s", r->info.name, r->info.version, r->info.synced ? "synced" : "unsynced",
+			    path.c_str(), ok ? "" : " (none: defaults): ", ok ? "" : p.GetErrorLog().c_str(), Rule::ModeName(mode));
 		} else {
-			LOG("[KT1] %s v%d off (Lua: %s)", r->info.name, r->info.version, r->info.replaces);
+			LOG("[KT1] %s v%d off (Lua: %s) mode=off", r->info.name, r->info.version, r->info.replaces);
 		}
 		CTimeProfiler::RegisterTimer(r->timer.c_str());   // the rule outlives the profiler's use of the name
 	}
@@ -151,10 +158,44 @@ static int LuaRules(lua_State* L) {
 	return 1;
 }
 
-// Spring.KT1.IsActive(name)
+bool Registry::SetEnabled(const char* name, bool on) {
+	Rule* r = Find(name);
+	if (r == nullptr || r->info.synced || r->mode == Rule::Mode::Off)
+		return false;   // a synced switch never changes in a run; an off rule never loaded its config or started
+	r->enabled = on;
+	LOG("[KT1] %s %s at run time (capture)", r->info.name, on ? "enabled" : "disabled");
+	return true;
+}
+
+// Spring.KT1.IsActive(name): the engine rule replaces its Lua (on; not check, where both run)
 static int LuaIsActive(lua_State* L) {
 	const Rule* r = Registry::Get().Find(luaL_checkstring(L, 1));
+	lua_pushboolean(L, r != nullptr && r->Enabled() && r->SwitchMode() == Rule::Mode::On);
+	return 1;
+}
+
+// Spring.KT1.Enabled(name): the engine rule runs now
+static int LuaEnabled(lua_State* L) {
+	const Rule* r = Registry::Get().Find(luaL_checkstring(L, 1));
 	lua_pushboolean(L, r != nullptr && r->Enabled());
+	return 1;
+}
+
+// Spring.KT1.Mode(name)
+static int LuaMode(lua_State* L) {
+	const Rule* r = Registry::Get().Find(luaL_checkstring(L, 1));
+	if (r == nullptr) return 0;
+	lua_pushstring(L, Rule::ModeName(r->SwitchMode()));
+	return 1;
+}
+
+// Spring.KT1.SetEnabled(name, on): refused from synced Lua and for synced rules
+static int LuaSetEnabled(lua_State* L) {
+	if (CLuaHandle::GetHandleSynced(L)) {
+		lua_pushboolean(L, false);
+		return 1;
+	}
+	lua_pushboolean(L, Registry::Get().SetEnabled(luaL_checkstring(L, 1), (luaL_checktype(L, 2, LUA_TBOOLEAN), lua_toboolean(L, 2) != 0)));
 	return 1;
 }
 
@@ -166,6 +207,9 @@ void Registry::PushLua(lua_State* L) {
 	lua_newtable(L);
 	LuaPushRawNamedCFunc(L, "Rules", LuaRules);
 	LuaPushRawNamedCFunc(L, "IsActive", LuaIsActive);
+	LuaPushRawNamedCFunc(L, "Enabled", LuaEnabled);
+	LuaPushRawNamedCFunc(L, "Mode", LuaMode);
+	LuaPushRawNamedCFunc(L, "SetEnabled", LuaSetEnabled);
 	for (auto& r : reg.rules) {
 		lua_pushstring(L, r->info.name);
 		lua_newtable(L);

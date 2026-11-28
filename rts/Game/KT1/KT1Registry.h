@@ -23,6 +23,9 @@ namespace KT1 {
 		static void PushLua(lua_State* L);
 
 		Rule* Find(const char* name) const;         // by name, case-insensitive; nullptr when there is none
+		// Run-time switch for an unsynced (draw-side) rule only, for the in-run draw A/B (F07 capture): a rule the game
+		// switched on or to check may be turned off and on again; a synced rule, or one the game switched off, is refused.
+		bool SetEnabled(const char* name, bool on);
 		const std::vector<std::unique_ptr<Rule>>& All() const { return rules; }
 
 	private:
