@@ -47,9 +47,6 @@ namespace KT1::CaptureCore {
 	enum class Side { One, Off, On };
 	const char* SideName(Side side);
 
-	// Reads the JSON text of a script into `script` (which holds the defaults on the way in) and checks it. "" when the
-	// script can be run, else the first reason it cannot. Unknown keys are reasons.
-	std::string ParseScript(const std::string& text, Script& script);
 	// "" when the script can be run, else the first reason it cannot.
 	std::string Validate(const Script& script);
 	// "screenshots/kt1capture/<shot>_<side>.png"

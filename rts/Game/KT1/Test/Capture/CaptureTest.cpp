@@ -4,6 +4,7 @@
 
 #include "../KT1Test.h"
 #include "Game/KT1/Core/Capture/CaptureCore.h"
+#include "Game/KT1/Host/Capture/CaptureScript.h"
 
 #include <string>
 #include <vector>
