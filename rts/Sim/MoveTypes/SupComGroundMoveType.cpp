@@ -180,20 +180,20 @@ static bool GoRoundOn() { static const bool on = SupComSimSwitch::Get("SupComGoR
 // refused (switch SupComBlockMemory, default 1)
 static bool PushFromMoversOn() { static const bool on = SupComSimSwitch::Get("SupComPushFromMovers", true); return on; }
 // pathing fix 6 (L11534: MOV-007-C/D, PTH-004-F, PTH-006-E): the MOV-021 R1 push back is for contact with an object (a unit or a
-// structure: MOV-007 v2 edge cases, MEV-25); a step refused by impassable terrain or the map edge is MOV-007 R2/R3 alone (no move,
+// structure: MOV-007 v3 edge cases, MEV-25); a step refused by impassable terrain or the map edge is MOV-007 R2/R3 alone (no move,
 // speed 0, restart at v_restart), switch SupComTerrainNoPushBack, default 1. A unit pressed against the same obstacle gets one push
 // back, not one per refused step: while it is refused again within a square of where it was last refused (SupComBlockMemory) it
 // stays put, so a mover at a held gap comes to rest instead of rocking back and forth (switch SupComPushBackOnce, default 1)
 static bool TerrainNoPushBackOn() { static const bool on = SupComSimSwitch::Get("SupComTerrainNoPushBack", true); return on; }
 static bool PushBackOnceOn() { static const bool on = SupComSimSwitch::Get("SupComPushBackOnce", true); return on; }
 // pathing fix 7 (L11551: MOV-007-D still -0.42 on the next step, PTH-004-F/PTH-006-E movers at a held gap never still): a step refused
-// by a unit gets no MOV-021 R1 push back either: MOV-007 v2 case D (a parked unit in the way, removed after the first blocked step)
+// by a unit gets no MOV-021 R1 push back either: MOV-007 v3 case D (a parked unit in the way, removed after the first blocked step)
 // restarts at v_restart on the next step, and contact between units is MOV-021 R3 separation (R1: no push back for a unit already
 // being pushed). The R1 push back is for a structure (MOV-021-A). Switch SupComPushBackStructOnly, default 1
 static bool PushBackRecheckOn() { static const bool on = SupComSimSwitch::Get("SupComPushBackRecheck", true); return on; }
 static bool PushBackStructOnlyOn() { static const bool on = SupComSimSwitch::Get("SupComPushBackStructOnly", true); return on; }
 // pathing fix 7 (L11551 PTH-002-D: a mover went through the footprint of a standing enemy in a one-cell gap and reached the goal):
-// MOV-007 v2 R1, space occupied by a unit is blocked. A unit in contact with a standing unit (last collision pass) is refused a step
+// MOV-007 v3 R1, space occupied by a unit is blocked. A unit in contact with a standing unit (last collision pass) is refused a step
 // towards it; a step away from it or along it is taken (MOV-021 R2: it can leave). Switch SupComStandingBlocks, default 1
 static bool StandingKeepHalfOn() { static const bool on = SupComSimSwitch::Get("SupComStandingKeepHalf", true); return on; }
 static bool StandingSlideOnceOn() { static const bool on = SupComSimSwitch::Get("SupComStandingSlideOnce", true); return on; }
@@ -1258,7 +1258,7 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		return;
 	}
 
-	// MOV-007 v2 R2 and R3, MOV-021 v1 R1 and case A (pathing fix 4): on the blocked step the unit stays at its old position with speed 0
+	// MOV-007 v3 R2 and R3, MOV-021 v1 R1 and case A (pathing fix 4): on the blocked step the unit stays at its old position with speed 0
 	// (L11389: MOV-007-B moved -0.113 elmos in the blocked step itself); the push back moves it on the next frame, with no step of its
 	// own (it is being pushed), and the restart at v_restart (scRestart, kept) follows on the frame after
 	// pathing fix 8 (MOV-007-D, L11575): the push back is for an obstacle that is still there; a structure removed after the blocked step
