@@ -2937,9 +2937,9 @@ void CGroundMoveType::HandleUnitCollisions(
 		// pathing fix 11 (L11654 PTH-006-E: the mover lining up at the held gap turned off the 60 degrees and the contact flickered): an
 		// actual overlap needs no heading test, the margin does; the goal crowd is excluded for both
 		// PTH-008 v1 R3, R6 (G0-PTHSLIDE [crowd_short]: a crowd 4 to 16 cells short of the goal was gone round by every unit, none stopped
-		// short; no arrival-by-proximity distance): with SupComGoalCrowdNone (default 1) a standing unit near the goal is an obstacle like any
-		// other; 0 excludes the crowd within 12 squares of the goal as before (pathing fix 10's mechanism value)
-		static const bool goalCrowdNoneOn = SupComSimSwitch::Get("SupComGoalCrowdNone", true);
+		// short; no arrival-by-proximity distance): with SupComGoalCrowdNone (default 0 for the combined run kt1-big-1128; 1 turns it on) a standing unit near the goal is an obstacle like any
+		// other; 0 (default) excludes the crowd within 12 squares of the goal as before (pathing fix 10's mechanism value)
+		static const bool goalCrowdNoneOn = SupComSimSwitch::Get("SupComGoalCrowdNone", false);
 		const bool outsideGoalCrowd = (goalCrowdNoneOn || collidee->pos.SqDistance2D(goalPos) > Square(12.0f * SQUARE_SIZE));
 		const bool standingAhead = (!standingAheadOn || ((isCollision || toCollidee.dot(flatFrontDir) > 0.5f) && outsideGoalCrowd));
 		const bool standingNear = (collideeMobile && !collidee->IsMoving() && collidee->moveType->progressState != AMoveType::Active && standingAhead
