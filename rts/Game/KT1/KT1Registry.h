@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "KT1Rule.h"
+#include "Prof/KT1FrameCount.h" // KT1 hook: FrameCount (dev frame counters; stock files call KT1::FrameCount::*)
 
 namespace KT1 {
 	class Registry {

@@ -293,6 +293,7 @@ CGame::CGame(const std::string& mapFileName, const std::string& modFileName, ILo
 CGame::~CGame()
 {
 	ENTER_SYNCED_CODE();
+	KT1::FrameCount::Finish("exit"); // KT1 hook: FrameCount
 	LOG("[Game::%s][1]", __func__);
 
 	RmlGui::Shutdown();
@@ -1451,6 +1452,7 @@ bool CGame::UpdateUnsynced(const spring_time currentTime)
 
 
 bool CGame::Draw() {
+	KT1::FrameCount::DrawFrame(); // KT1 hook: FrameCount
 	const spring_time currentTimePreUpdate = spring_gettime();
 
 	if (UpdateUnsynced(currentTimePreUpdate))
@@ -1717,6 +1719,7 @@ void CGame::SimFrame() {
 	CSyncChecker::NewGameFrame();
 #endif
 	lastFrameTime = spring_gettime();
+	KT1::FrameCount::SimBegin(); // KT1 hook: FrameCount
 	// This is not very ideal, as the timeoffset of each new draw frame is also calculated from this
 	// with a strange side effect: if the timeOffset was a high number, like 0.9, then this will force the next draw frame to have an offset of 0.0x
 	// What this means, is that in the case where we have frames to spare, and and over rendering, then the following can happen at 60hz:
@@ -1826,6 +1829,7 @@ void CGame::SimFrame() {
 	}
 
 	lastSimFrameTime = spring_gettime();
+	KT1::FrameCount::SimEnd(); // KT1 hook: FrameCount
 	gu->avgSimFrameTime = mix(gu->avgSimFrameTime, (lastSimFrameTime - lastFrameTime).toMilliSecsf(), 0.05f);
 	gu->avgSimFrameTime = std::max(gu->avgSimFrameTime, 0.01f);
 

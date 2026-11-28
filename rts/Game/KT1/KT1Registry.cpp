@@ -148,6 +148,7 @@ void Registry::PushLua(lua_State* L) {
 		r->PushLua(L);   // the rule's functions: present when it is off too, so callers may ask it for state (each checks Enabled)
 		lua_rawset(L, -3);
 	}
+	FrameCount::PushLua(L);   // Spring.KT1.FrameCount (dev counters, unsynced)
 	lua_rawset(L, -3);
 }
 

@@ -49,6 +49,7 @@ make_global_var(sources_engine_Game
 		"${CMAKE_CURRENT_SOURCE_DIR}/SupComSelect.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/KT1Registry.cpp" # KT1 hook: registry (KT1 sources: one line per file)
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/KT1RuleList.cpp" # KT1 hook: registry
+		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Prof/KT1FrameCount.cpp" # KT1 hook: FrameCount
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Census/KT1Census.cpp" # KT1 hook: Census
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/OwnPass/KT1OwnPass.cpp" # KT1 hook: OwnPass
 		"${CMAKE_CURRENT_SOURCE_DIR}/KT1/Rules/Orders/KT1Orders.cpp" # KT1 hook: Orders
