@@ -98,9 +98,7 @@ int InstanceBuffer::Differences(const void* data, int count) {
 	const size_t bytes = count * stride;
 	readBack.resize(bytes);
 	stream->Bind();
-#ifndef HEADLESS
 	glGetBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(Region() * static_cast<size_t>(stream->GetByteSize())), bytes, readBack.data());
-#endif
 	stream->Unbind();
 	int differing = 0;
 	for (int i = 0; i < count; i++)
