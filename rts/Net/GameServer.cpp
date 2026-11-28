@@ -22,6 +22,7 @@
 #include "Game/ChatMessage.h"
 #include "Game/CommandMessage.h"
 #include "Game/GlobalUnsynced.h" // for syncdebug
+#include "Game/KT1/Host/Capture/KT1Capture.h" // KT1 hook: Capture
 #ifndef DEDICATED
 #include "Game/IVideoCapturing.h"
 #endif
@@ -2836,6 +2837,7 @@ void CGameServer::CreateNewFrame(bool fromServerThread, bool fixedFrameTime)
 		assert(demoReader == nullptr);
 
 		for (unsigned int i = 0; i < numNewFrames; ++i) {
+			if (KT1::Capture::HoldAt(serverFrameNum)) break; // KT1 hook: Capture (the sim waits at a shot's frame)
 			++serverFrameNum;
 
 			// Send out new frame messages.
