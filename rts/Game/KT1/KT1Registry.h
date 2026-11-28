@@ -22,6 +22,10 @@ namespace KT1 {
 		// KT1 hook: registry (LuaSyncedRead::PushEntries): Spring.KT1 = { Rules, IsActive, <Name> = {...} }.
 		static void PushLua(lua_State* L);
 
+		// KT1 hook: registry (CGame::CGame): the sim host is reset and every rule destroyed; the next Get() makes fresh
+		// rules, and the next game reads its own switches and configs.
+		static void Reset();
+
 		Rule* Find(const char* name) const;         // by name, case-insensitive; nullptr when there is none
 		// Run-time switch for an unsynced (draw-side) rule only, for the in-run draw A/B (F07 capture): a rule the game
 		// switched on or to check may be turned off and on again; a synced rule, or one the game switched off, is refused.
