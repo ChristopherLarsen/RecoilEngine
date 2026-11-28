@@ -48,6 +48,7 @@ struct Table {
 	std::vector<Rows::CompiledRow> compiled;
 	std::array<std::vector<Group>, static_cast<size_t>(Rows::CallIn::Count)> groups;
 	std::array<int32_t, Rows::MAX_ROWS> luaPassing{};   // by source row: the replaced Lua is giving that row's own order
+	std::vector<float> pickupReach;  // elmos by unit def id (0: none), handed over by the game (ORD-013 v3 R3)
 	Rows::State state;
 
 	// config.rows to compiled and groups; a row with an unknown name is logged and left out
@@ -70,8 +71,8 @@ bool AskCommandRow(Table& table, const Rows::CompiledRow& row, const CommandAsk&
 // a build or feature step of `builder` on a unit or (target null) a feature; part < 0 takes it apart (OrderRulesSteps.cpp)
 bool AskStepRow(Table& table, const Rows::CompiledRow& row, const CUnit& builder, const CUnit* target, float part, int frame);
 // the transport gates (OrderRulesSteps.cpp)
-bool AskTransportRow(const Rows::CompiledRow& row, const CUnit& transporter, const CUnit& cargo, float x, float z,
-                     bool engineAllows, int frame);
+bool AskTransportRow(const Table& table, const Rows::CompiledRow& row, const CUnit& transporter, const CUnit& cargo,
+                     float x, float z, bool engineAllows, int frame);
 
 // gives a row's rewritten order with the row's own guard up, and reports it in check mode (OrderRulesCommand.cpp)
 void Reissue(Table& table, const Rows::CompiledRow& row, int unit, int commandID, std::span<const float> params,

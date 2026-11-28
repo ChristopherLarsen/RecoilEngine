@@ -9,6 +9,7 @@
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
+#include "System/float3.h"
 
 namespace KT1::OrderRules {
 namespace {
@@ -36,6 +37,14 @@ bool Living(const CUnit& builder, const CUnit& target) {
 	return target.id == builder.id || !reclaimable || (!DirectReclaim(builder, target) && !target.beingBuilt);
 }
 
+// ord_pickup.lua InReach: a transport with a pickup reach takes only a unit within it, horizontally
+bool InPickupReach(const Table& table, const CUnit& transporter, const CUnit& cargo) {
+	const int def = transporter.unitDef->id;
+	if (def < 0 || def >= static_cast<int>(table.pickupReach.size()) || table.pickupReach[def] <= 0) return true;
+	const float reach = table.pickupReach[def];
+	return transporter.pos.distance2D(cargo.pos) <= reach;
+}
+
 } // namespace
 
 bool AskStepRow(Table& table, const CompiledRow& row, const CUnit& builder, const CUnit* target, float part, int frame) {
@@ -54,11 +63,17 @@ bool AskStepRow(Table& table, const CompiledRow& row, const CUnit& builder, cons
 	}
 }
 
-bool AskTransportRow(const CompiledRow& row, const CUnit& transporter, const CUnit& cargo, float x, float z,
-                     bool engineAllows, int frame) {
+bool AskTransportRow(const Table& table, const CompiledRow& row, const CUnit& transporter, const CUnit& cargo,
+                     float x, float z, bool engineAllows, int frame) {
 	if (row.condition != Condition::TransportGate) return true;
-	if (row.callIn == Rows::CallIn::TransportLoad) return Internal::AskTransportLoad(transporter, cargo, engineAllows, frame);
-	return Internal::AskTransportUnload(transporter, cargo, x, z, engineAllows, frame);
+	if (row.callIn != Rows::CallIn::TransportLoad)
+		return Internal::AskTransportUnload(transporter, cargo, x, z, engineAllows, frame);
+	if (InPickupReach(table, transporter, cargo)) return Internal::AskTransportLoad(transporter, cargo, engineAllows, frame);
+	// out of reach: the load time starts over when it is in reach
+	Core::Orders::State* state = Internal::State();
+	const auto slot = (state != nullptr) ? state->SlotOf(transporter.id) : Core::DenseIndex::NONE;
+	if (slot != Core::DenseIndex::NONE) state->loading[slot] = Core::Orders::GateClock{};
+	return false;
 }
 
 } // namespace KT1::OrderRules

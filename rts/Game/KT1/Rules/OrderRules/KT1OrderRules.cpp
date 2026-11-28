@@ -16,6 +16,7 @@
 //   Spring.KT1.OrderRules.Passing(row, on)    the Lua gives the order row `row` would give: the row lets it through
 //   Spring.KT1.OrderRules.Value(name, number) -> a guard value of the running data set, over the file's
 //   Spring.KT1.OrderRules.Accepts(unitDefID, words) -> a def's accepted-order words of the running data set
+//   Spring.KT1.OrderRules.PickupReach(unitDefID, elmos) -> a transport def's pickup reach
 // Doc:        game-build docs/engine/rules/orderrules.md
 
 #include <string>
@@ -36,6 +37,7 @@
 #include "Sim/Units/CommandAI/Command.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
+#include "Sim/Units/UnitDefHandler.h"
 #include "System/float3.h"
 #include "System/Log/ILog.h"
 
@@ -144,6 +146,7 @@ public:
 		LuaPushRawNamedCFunc(L, "Passing", LPassing);
 		LuaPushRawNamedCFunc(L, "Value", LValue);
 		LuaPushRawNamedCFunc(L, "Accepts", LAccepts);
+		LuaPushRawNamedCFunc(L, "PickupReach", LPickupReach);
 	}
 
 private:
@@ -183,7 +186,7 @@ private:
 
 	bool Transport(CallIn callIn, const CUnit& t, const CUnit& cargo, const float3& pos, bool allowed) {
 		return Run(table, callIn, t.id, cargo.id, [&](const CompiledRow& row) {
-			return AskTransportRow(row, t, cargo, pos.x, pos.z, allowed, gs->frameNum);
+			return AskTransportRow(table, row, t, cargo, pos.x, pos.z, allowed, gs->frameNum);
 		});
 	}
 
@@ -239,6 +242,20 @@ private:
 		const int def = luaL_checkint(L, 1);
 		const char* words = luaL_checkstring(L, 2);
 		lua_pushboolean(L, Self(L) != nullptr && Orders::Internal::HandAccepts(def, words));
+		return 1;
+	}
+
+	static int LPickupReach(lua_State* L) {
+		const int def = luaL_checkint(L, 1);
+		const float elmos = luaL_checkfloat(L, 2);
+		OrderRulesRule* r = Self(L);
+		const bool taken = r != nullptr && def > 0 && def <= static_cast<int>(unitDefHandler->NumUnitDefs());
+		if (taken) {
+			std::vector<float>& reach = r->table.pickupReach;
+			if (def >= static_cast<int>(reach.size())) reach.resize(def + 1, 0.0f);
+			reach[def] = elmos;
+		}
+		lua_pushboolean(L, taken);
 		return 1;
 	}
 
