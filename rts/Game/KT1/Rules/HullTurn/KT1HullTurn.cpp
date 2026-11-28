@@ -58,6 +58,7 @@ using Core::SimHost::MaskOf;
 using Core::SimHost::Phase;
 
 constexpr const char* NAME = "HullTurn";
+constexpr int PHASE_ORDER = 100;            // DESIGN: after Targeting (0) in FrameStart: the Lua gadget had layer 10, the gun gadget 0
 constexpr float FULL_ARC_DEG = 180;          // DESIGN: a weapon with no yaw_range turns all round (the Lua default)
 constexpr float FIRE_TOLERANCE_DEG = 2;      // DESIGN: the Lua default fire_tolerance
 constexpr float ANGLE_UNITS = 65536;         // DESIGN (engine fact): the turn rate counts a full turn as 65536 angle units
@@ -146,7 +147,7 @@ private:
 
 	void RegisterPhases() {
 		const auto mask = MaskOf(EventType::UnitFinished) | MaskOf(EventType::UnitDestroyed);
-		Phases::Add(NAME, Phase::FrameStart, 0, mask, [this](const SimContext& c) { Track(c); Visit(c); });
+		Phases::Add(NAME, Phase::FrameStart, PHASE_ORDER, mask, [this](const SimContext& c) { Track(c); Visit(c); });
 	}
 
 	void RegisterSync() {

@@ -1,5 +1,4 @@
-# KT1 COMBAT family (LUA-FREE H01): stubs behind the targeting headers. No system registers yet.
-list(APPEND KT1_SOURCES
-	"${CMAKE_CURRENT_LIST_DIR}/TargetingApi.cpp"
-	"${CMAKE_CURRENT_LIST_DIR}/TargetingBridge.cpp"
-	"${CMAKE_CURRENT_LIST_DIR}/../../Core/Targeting/TargetState.cpp")
+# KT1 system fragment (rts/Game/KT1/sources.cmake): the COMBAT family Targeting rule (LUA-FREE S19)
+kt1_system(NAMES Targeting FAMILY combat SOURCES
+	KT1Targeting.cpp KT1TargetingDefs.cpp KT1TargetingWorld.cpp TargetingApi.cpp TargetingBridge.cpp
+	../../Core/Targeting/TargetState.cpp)
