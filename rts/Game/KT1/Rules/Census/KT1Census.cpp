@@ -41,7 +41,7 @@ public:
 	Census() : Rule({"Census", 1, true, "LuaRules/Gadgets/kt1_census.lua", false}) {}
 
 	void LoadConfig(const LuaTable& cfg) override {
-		period = std::max(1, cfg.GetInt("period", 30));
+		period = std::max(1, cfg.GetInt("period", 30));   // KT1 lint: allow frame-literal a frame count, not converted here: SIM-10HZ stage 0 (lua-to-engine) converts
 		defaultWeight = cfg.GetInt("default_weight", 1);
 		countUnfinished = cfg.GetBool("count_unfinished", false);
 	}
@@ -113,7 +113,7 @@ private:
 		return 1;
 	}
 
-	int period = 30, defaultWeight = 1;
+	int period = 30, defaultWeight = 1;   // KT1 lint: allow frame-literal a frame count, not converted here: SIM-10HZ stage 0 (lua-to-engine) converts
 	bool countUnfinished = false;
 	std::vector<int> weight;          // per def id
 	std::vector<int> units, sums;     // per team, the last tally

@@ -51,7 +51,7 @@ float SmoothStep(float e0, float e1, float x)
 	if (e1 <= e0)
 		return (x < e1) ? 0.0f : 1.0f;
 	const float t = std::clamp((x - e0) / (e1 - e0), 0.0f, 1.0f);
-	return t * t * (3.0f - 2.0f * t);
+	return t * t * (3.0f - 2.0f * t);   // DESIGN: smoothstep
 }
 
 // ---- Terrain ----
@@ -96,7 +96,7 @@ int LCameraMeasure(lua_State* L)
 	if (camera == nullptr)
 		return 0;
 	const float3 pos = camera->GetPos();
-	float d = CGround::LineGroundCol(pos, camera->GetDir(), 1.0e6f, false);
+	float d = CGround::LineGroundCol(pos, camera->GetDir(), 1.0e6f, false);   // DESIGN: ray length past any map
 	if (d < 0.0f)
 		d = pos.y - ((readMap != nullptr) ? readMap->GetCurrAvgHeight() : 0.0f);   // looking above the horizon: the height over the map
 	lua_pushnumber(L, d);
@@ -154,7 +154,7 @@ public:
 class DrawRule : public Rule {
 public:
 	DrawRule() : Rule({"Draw", 2, false, "(RND-005 R12 cut-offs)", true}) {}
-	static int LModelTint(lua_State* L) { lua_pushinteger(L, 12); return 1; }
+	static int LModelTint(lua_State* L) { lua_pushinteger(L, 12); return 1; }   // DESIGN: version number Spring.KT1.Draw.ModelTint reports to Lua
 	void PushLua(lua_State* L) override {
 		LuaPushRawNamedCFunc(L, "ModelTint", LModelTint);
 		LuaPushRawNamedCFunc(L, "SetCutoff", LSetCutoff);

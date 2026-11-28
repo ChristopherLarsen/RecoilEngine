@@ -72,7 +72,7 @@ public:
 			if (ud == nullptr || !ud->canmove || ud->canfly) continue;
 			ground[d] = 1;
 			mass[d] = ud->mass;
-			const float foot = std::sqrt(float(ud->xsize) * float(ud->xsize) + float(ud->zsize) * float(ud->zsize)) * 4.0f;
+			const float foot = std::sqrt(float(ud->xsize) * float(ud->xsize) + float(ud->zsize) * float(ud->zsize)) * 4.0f;   // DESIGN: footprints count 8-elmo map squares; half a square, in elmos
 			const S3DModel* model = ud->LoadModel();   // the Lua unit def radius is the model radius
 			size[d] = std::max(model != nullptr ? model->radius : 0.0f, foot);   // the engine collides by footprint as well as by radius
 		}
@@ -182,8 +182,8 @@ private:
 		return 1;
 	}
 
-	int slice = 3;
-	float ahead = 24.0f, margin = 64.0f, idleSpeed = 0.05f;
+	int slice = 3;   // DESIGN: fallback of gamedata/kt1/ownpass.lua slice, a frame count (SIM-10HZ stage 0)
+	float ahead = 24.0f, margin = 64.0f, idleSpeed = 0.05f;   // DESIGN: fallbacks of gamedata/kt1/ownpass.lua
 	std::vector<char> ground;             // per def id
 	std::vector<float> mass, size;        // per def id
 	std::vector<CUnit*> owner;            // per unit id: who the state below belongs to (an id is reused)

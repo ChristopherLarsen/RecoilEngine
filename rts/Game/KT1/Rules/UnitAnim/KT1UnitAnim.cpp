@@ -49,8 +49,8 @@
 namespace KT1 {
 namespace {
 
-constexpr float TAU = 2.0f * 3.14159265358979323846f;   // math.pi in Lua is the same float
-constexpr float PI = TAU / 2.0f;
+constexpr float TAU = 2.0f * 3.14159265358979323846f;   // math.pi in Lua is the same float; DESIGN: math constant
+constexpr float PI = TAU / 2.0f;   // DESIGN: math constant
 
 float Wrap(float a) { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; }
 float LuaMod(float a, float b) { return a - math::floor(a / b) * b; }   // Lua's %
@@ -64,7 +64,7 @@ struct Weapon {
 	int yaw = -1, pit = -1;                    // aim pieces (script numbers, 0-based; -1 none)
 	int turret = -1, barrel = -1, barrelb = -1; // rest pieces
 	float rest = 0, yawRate = 0, pitchRate = 0, tol = 0;
-	int aimFrame = -9999;
+	int aimFrame = -9999;   // DESIGN: never-aimed sentinel
 	bool rested = false;
 };
 
@@ -75,14 +75,14 @@ struct Unit {
 	int base = -1;
 	std::vector<int> wheels, legs, feet;
 	std::vector<float> wside, wang, legOff, legAng;
-	float stride = 1, wr = 1, swing = 0, lift = 0, bob = 0, h = 4, bobMul = 1, cap = 0, bankRate = 1;
+	float stride = 1, wr = 1, swing = 0, lift = 0, bob = 0, h = 4, bobMul = 1, cap = 0, bankRate = 1;   // PLACEHOLDER: value for a descriptor that gives none
 	std::vector<Weapon> W;                     // by weapon number (1-based in Lua; index n-1)
 	// state
 	int lastFrame = 0, wakeAt = 0, idleTicks = 0, wakeTick = 0;
 	bool first = true, sensed = false, sleeping = false, rollSentSet = false;
-	float px = 0, py = 0, pz = 0, hd = 0, vs = 0, speed = 0, turn = 0, gh = 0, dt = 0.1f, t = 0;
+	float px = 0, py = 0, pz = 0, hd = 0, vs = 0, speed = 0, turn = 0, gh = 0, dt = 0.1f, t = 0;   // PLACEHOLDER: state before the first tick (dt: one 100 ms tick)
 	bool ghSet = false, land = true;
-	float phase = 0, cycle = 0, rate = 0, sl = 0, sr = 0, pitch = 0, roll = 0, rollSent = 0, pitchSent = 0, trailT = -1e9f;
+	float phase = 0, cycle = 0, rate = 0, sl = 0, sr = 0, pitch = 0, roll = 0, rollSent = 0, pitchSent = 0, trailT = -1e9f;   // DESIGN: state before the first tick; trailT: no trail yet
 	bool tiltSet = false; float tiltX = 0, tiltZ = 0, tiltH = 0, tiltP = 0, tiltR = 0;
 };
 
@@ -106,7 +106,7 @@ public:
 	void GameFrame(int frame) override {
 		if (luaDriven || ids.empty()) return;
 		const int n = (int)unitHandler.GetActiveUnits().size();
-		tickMs = (n <= fullUnits) ? 100 : std::min(maxMs, (int)math::floor(100.0f * n / fullUnits));
+		tickMs = (n <= fullUnits) ? 100 : std::min(maxMs, (int)math::floor(100.0f * n / fullUnits));   // DESIGN: the 100 ms tick (gamedata/kt1/unitanim.lua full_units, pm_tick.lua)
 		unitCount = n;
 		TickDue(frame);
 	}
@@ -138,7 +138,7 @@ public:
 private:
 	static constexpr size_t MAX_EVENTS = 4 * 4096;   // DESIGN: dust beyond this between pulls is dropped (look only)
 
-	static int SleepFrames(float ms) { return std::max(1, (int)math::floor(ms / 33.0f)); }   // base unit_script.lua Sleep
+	static int SleepFrames(float ms) { return std::max(1, (int)math::floor(ms / 33.0f)); }   // base unit_script.lua Sleep; DESIGN: milliseconds per sim frame as base unit_script.lua Sleep; frame constant (SIM-10HZ stage 0)
 
 	// ---- the tick (anim.lua Loop body) ----------------------------------------------------------------------------------------
 	void Tick(Unit& U, CUnit* u, int f) {
@@ -147,28 +147,28 @@ private:
 		Loco(U, S);
 		AimTick(U, S, f);
 		// sleep (anim.lua Loop tail)
-		float ms = U.quiet ? 1000.0f : (float)tickMs;
-		if (U.canIdle && ms > 100) {
-			if (math::fabs(U.vs) <= 0.3f && math::fabs(U.turn) <= 0.05f && AimIdle(U) && !u->beingBuilt) ++U.idleTicks; else U.idleTicks = 0;
+		float ms = U.quiet ? 1000.0f : (float)tickMs;   // PLACEHOLDER: idle back-off thresholds and times of scripts/pm/anim.lua (no label there)
+		if (U.canIdle && ms > 100) {   // PLACEHOLDER: idle back-off thresholds and times of scripts/pm/anim.lua (no label there)
+			if (math::fabs(U.vs) <= 0.3f && math::fabs(U.turn) <= 0.05f && AimIdle(U) && !u->beingBuilt) ++U.idleTicks; else U.idleTicks = 0;   // PLACEHOLDER: idle back-off thresholds and times of scripts/pm/anim.lua (no label there)
 			if (U.idleTicks >= idleTicksN) {
-				ms = std::min(8000.0f, std::max(2000.0f, 2.0f * unitCount));
+				ms = std::min(8000.0f, std::max(2000.0f, 2.0f * unitCount));   // PLACEHOLDER: idle back-off thresholds and times of scripts/pm/anim.lua (no label there)
 				U.sleeping = true;
 			}
 		}
 		if (U.first) {
 			U.first = false;
-			const int frames = (int)math::floor(ms / 33.333f);
-			if (frames > 1) ms = std::max(1.0f, ms - (U.owner->id % frames) * 33.333f);
+			const int frames = (int)math::floor(ms / 33.333f);   // DESIGN: milliseconds per sim frame as base unit_script.lua Sleep; frame constant (SIM-10HZ stage 0)
+			if (frames > 1) ms = std::max(1.0f, ms - (U.owner->id % frames) * 33.333f);   // DESIGN: milliseconds per sim frame as base unit_script.lua Sleep; frame constant (SIM-10HZ stage 0)
 		}
 		U.wakeAt = f + SleepFrames(ms);
 	}
 
 	void Sense(Unit& U, CUnit* u, int f) {
-		const float dt = std::max(1, f - U.lastFrame) / 30.0f;
+		const float dt = std::max(1, f - U.lastFrame) / 30.0f;   // KT1 lint: allow frame-literal a frame count, not converted here: SIM-10HZ stage 0 (lua-to-engine) converts
 		U.dt = dt;
 		U.lastFrame = f;
 		const float x = u->pos.x, y = u->pos.y, z = u->pos.z;
-		const float hd = (float)u->heading * TAU / 65536.0f;
+		const float hd = (float)u->heading * TAU / 65536.0f;   // DESIGN: engine heading units per turn
 		if (!U.sensed) { U.sensed = true; U.px = x; U.py = y; U.pz = z; U.hd = hd; U.vs = 0; }
 		const float dx = x - U.px, dz = z - U.pz;
 		const float dist = math::sqrt(dx * dx + dz * dz);
@@ -185,7 +185,7 @@ private:
 		if (U.tiltSet && U.tiltX == U.px && U.tiltZ == U.pz && U.tiltH == U.hd) { p = U.tiltP; r = U.tiltR; return; }
 		const float3 n = CGround::GetSmoothNormal((float)U.px, (float)U.pz, true);
 		const float nx = n.x, ny = n.y, nz = n.z;
-		if (ny < 0.01f) { p = 0; r = 0; }
+		if (ny < 0.01f) { p = 0; r = 0; }   // DESIGN: animation tuning of scripts/pm/loco.lua
 		else {
 			const float fx = math::sin(U.hd), fz = math::cos(U.hd);
 			const float rx = -math::cos(U.hd), rz = math::sin(U.hd);
@@ -200,8 +200,8 @@ private:
 	void Loco(Unit& U, CUnitScript* S) {
 		const float dt = U.dt;
 		U.t += dt;
-		const bool moving = math::fabs(U.vs) > 0.3f;
-		const bool turning = math::fabs(U.turn) > 0.05f;
+		const bool moving = math::fabs(U.vs) > 0.3f;   // DESIGN: animation tuning of scripts/pm/loco.lua
+		const bool turning = math::fabs(U.turn) > 0.05f;   // DESIGN: animation tuning of scripts/pm/loco.lua
 		const bool rolling = U.loco == L_TREADS || U.loco == L_WHEELS;
 		if (rolling || U.loco == L_LEGS) {
 			float rate = 0, sl = 0, sr = 0;
@@ -218,7 +218,7 @@ private:
 					const float side = U.wside[i] > 0 ? sl : sr;
 					if (side == 0) continue;
 					U.wang[i] = U.wang[i] + side * dt * (U.stride / U.wr);
-					S->Turn(U.wheels[i], 0, 40.0f, (float)(-U.wang[i]));
+					S->Turn(U.wheels[i], 0, 40.0f, (float)(-U.wang[i]));   // DESIGN: animation tuning of scripts/pm/loco.lua
 				}
 			} else {
 				float bobAmp = 0;
@@ -226,16 +226,16 @@ private:
 					for (size_t i = 0; i < U.legs.size(); ++i) {
 						const float ph = LuaMod(U.phase + U.legOff[i], 1.0f);
 						const float a = math::sin(ph * TAU) * U.swing;
-						S->Turn(U.legs[i], 0, (float)std::max(1.0f, math::fabs(a - U.legAng[i]) / dt * 1.2f), (float)a);
+						S->Turn(U.legs[i], 0, (float)std::max(1.0f, math::fabs(a - U.legAng[i]) / dt * 1.2f), (float)a);   // DESIGN: animation tuning of scripts/pm/loco.lua
 						U.legAng[i] = a;
 						if (i < U.feet.size() && U.feet[i] >= 0) {
-							const float l = std::max(0.0f, math::cos(ph * 2.0f * PI)) * U.lift;   // Gait.Lift: cos(ph * 2 * math.pi), two roundings
-							S->Turn(U.feet[i], 0, (float)std::max(1.0f, math::fabs(l) / dt * 1.5f), (float)l);
+							const float l = std::max(0.0f, math::cos(ph * 2.0f * PI)) * U.lift;   // Gait.Lift: cos(ph * 2 * math.pi), two roundings; DESIGN: animation tuning of scripts/pm/loco.lua
+							S->Turn(U.feet[i], 0, (float)std::max(1.0f, math::fabs(l) / dt * 1.5f), (float)l);   // DESIGN: animation tuning of scripts/pm/loco.lua
 						}
 					}
 					bobAmp = U.bob * U.h * math::fabs(math::sin(U.phase * TAU * U.bobMul));
 				}
-				if (U.base >= 0) S->Move(U.base, 1, 20.0f, (float)bobAmp);
+				if (U.base >= 0) S->Move(U.base, 1, 20.0f, (float)bobAmp);   // DESIGN: animation tuning of scripts/pm/loco.lua
 			}
 		}
 		// the body (R8)
@@ -244,16 +244,16 @@ private:
 		else if (U.body == B_BANK) {
 			const float share = std::min(1.0f, math::fabs(U.turn) / U.bankRate);
 			tr = (U.turn > 0 ? -1 : 1) * U.cap * share;
-			if (math::fabs(U.turn) < 0.01f) tr = 0;
+			if (math::fabs(U.turn) < 0.01f) tr = 0;   // DESIGN: animation tuning of scripts/pm/loco.lua
 		}
-		const float k = std::min(1.0f, dt / 0.25f);
+		const float k = std::min(1.0f, dt / 0.25f);   // DESIGN: animation tuning of scripts/pm/loco.lua
 		U.pitch = U.pitch + (tp - U.pitch) * k;
 		U.roll = U.roll + (tr - U.roll) * k;
 		if (U.base >= 0) {
 			if (!(U.rollSentSet && math::fabs(U.roll - U.rollSent) < rollEps && math::fabs(U.pitch - U.pitchSent) < rollEps)) {
 				U.rollSentSet = true; U.rollSent = U.roll; U.pitchSent = U.pitch;
-				S->Turn(U.base, 2, 6.0f, (float)Rad(U.roll));
-				S->Turn(U.base, 0, 6.0f, (float)(-Rad(U.pitch)));
+				S->Turn(U.base, 2, 6.0f, (float)Rad(U.roll));   // DESIGN: animation tuning of scripts/pm/loco.lua
+				S->Turn(U.base, 0, 6.0f, (float)(-Rad(U.pitch)));   // DESIGN: animation tuning of scripts/pm/loco.lua
 			}
 		}
 		// dust (loco.lua Trails, land only)
@@ -262,7 +262,7 @@ private:
 			const bool on = U.t - U.trailT < 1.0f;
 			if (moving) {
 				++U.wakeTick;
-				if (on && U.wakeTick % wakeEvery == 0 && events.size() + 4 <= MAX_EVENTS) {
+				if (on && U.wakeTick % wakeEvery == 0 && events.size() + 4 <= MAX_EVENTS) {   // DESIGN: one dust event is 4 numbers
 					events.push_back(U.owner->id); events.push_back(U.px); events.push_back(U.gh); events.push_back(U.pz);
 				}
 			}
@@ -272,7 +272,7 @@ private:
 	// pm/aim.lua Tick: the rest pose (R9)
 	void AimTick(Unit& U, CUnitScript* S, int f) {
 		for (Weapon& w : U.W) {
-			if (f - w.aimFrame > restDelay && !w.rested && w.aimFrame > -9000) {
+			if (f - w.aimFrame > restDelay && !w.rested && w.aimFrame > -9000) {   // DESIGN: never-aimed sentinel
 				w.rested = true;
 				if (w.turret >= 0) S->Turn(w.turret, 1, restRate, 0.0f);
 				if (w.barrel >= 0) S->Turn(w.barrel, 0, restRate, 0.0f);
@@ -281,7 +281,7 @@ private:
 		}
 	}
 	static bool AimIdle(const Unit& U) {
-		for (const Weapon& w : U.W) if (!(w.rested || w.aimFrame <= -9000)) return false;
+		for (const Weapon& w : U.W) if (!(w.rested || w.aimFrame <= -9000)) return false;   // DESIGN: never-aimed sentinel
 		return true;
 	}
 
@@ -355,19 +355,19 @@ private:
 		U.owner = u;
 		static const char* LOCO[] = {"fixed", "treads", "wheels", "legs"};
 		static const char* BODY[] = {"static", "follow_terrain", "bank"};
-		U.loco = Str(L, 2, "loco", LOCO, 4, L_FIXED);
-		U.body = Str(L, 2, "body", BODY, 3, B_STATIC);
-		U.spin = Flag(L, 2, "spin"); U.dust = Flag(L, 2, "dust"); U.quiet = Flag(L, 2, "quiet");
+		U.loco = Str(L, 2, "loco", LOCO, 4, L_FIXED);   // DESIGN: Lua stack index and name table size
+		U.body = Str(L, 2, "body", BODY, 3, B_STATIC);   // DESIGN: Lua stack index and name table size
+		U.spin = Flag(L, 2, "spin"); U.dust = Flag(L, 2, "dust"); U.quiet = Flag(L, 2, "quiet");   // DESIGN: Lua stack index
 		U.canIdle = U.body != B_BANK;
-		U.base = (int)Num(L, 2, "base", 0) - 1;
-		Pieces(L, 2, "wheels", U.wheels); Pieces(L, 2, "legs", U.legs); Pieces(L, 2, "feet", U.feet);
-		List(L, 2, "wside", U.wside, 0); List(L, 2, "leg_off", U.legOff, 0);
+		U.base = (int)Num(L, 2, "base", 0) - 1;   // DESIGN: Lua stack index; Lua counts pieces from 1
+		Pieces(L, 2, "wheels", U.wheels); Pieces(L, 2, "legs", U.legs); Pieces(L, 2, "feet", U.feet);   // DESIGN: Lua stack index
+		List(L, 2, "wside", U.wside, 0); List(L, 2, "leg_off", U.legOff, 0);   // DESIGN: Lua stack index
 		U.wside.resize(U.wheels.size(), 1); U.wang.assign(U.wheels.size(), 0);
 		U.legOff.resize(U.legs.size(), 0); U.legAng.assign(U.legs.size(), 0);
-		U.stride = Num(L, 2, "stride", 1); U.wr = Num(L, 2, "wr", 1); U.swing = Num(L, 2, "swing", 0); U.lift = Num(L, 2, "lift", 0);
-		U.bob = Num(L, 2, "bob", 0); U.h = Num(L, 2, "h", 4); U.bobMul = Num(L, 2, "bob_mul", 1);
-		U.cap = Num(L, 2, "cap", 0); U.bankRate = Num(L, 2, "bank_rate", 1);
-		U.t = Num(L, 2, "t", 0);
+		U.stride = Num(L, 2, "stride", 1); U.wr = Num(L, 2, "wr", 1); U.swing = Num(L, 2, "swing", 0); U.lift = Num(L, 2, "lift", 0);   // PLACEHOLDER: value for a descriptor that gives none
+		U.bob = Num(L, 2, "bob", 0); U.h = Num(L, 2, "h", 4); U.bobMul = Num(L, 2, "bob_mul", 1);   // PLACEHOLDER: value for a descriptor that gives none
+		U.cap = Num(L, 2, "cap", 0); U.bankRate = Num(L, 2, "bank_rate", 1);   // PLACEHOLDER: value for a descriptor that gives none
+		U.t = Num(L, 2, "t", 0);   // PLACEHOLDER: value for a descriptor that gives none
 		U.lastFrame = gs->frameNum;
 		U.wakeAt = std::numeric_limits<int>::max();   // Start (from script.Create) runs the first tick, as the Lua Create starts the Loop
 		lua_getfield(L, 2, "weapons");
@@ -448,17 +448,17 @@ private:
 		const float heading = luaL_checknumber(L, 3), pitch = luaL_checknumber(L, 4);
 		const Weapon& w = U->W[n - 1];
 		CUnitScript* S = u->script;
-		const float ptol = std::max(w.tol, 0.02f);
+		const float ptol = std::max(w.tol, 0.02f);   // PLACEHOLDER: tolerance floor of scripts/pm/aim.lua (no label there)
 		float ey = 0, ep = 0;
 		bool ok = true;
 		if (w.yaw >= 0) { const auto* p = S->SafeGetPiece(w.yaw); ey = math::fabs(Wrap((p ? (float)p->GetRotation().y : 0.0f) - heading)); if (ey > w.tol) ok = false; }
 		if (w.pit >= 0) { const auto* p = S->SafeGetPiece(w.pit); ep = math::fabs(Wrap(-(p ? (float)p->GetRotation().x : 0.0f) + w.rest - pitch)); if (ep > ptol) ok = false; }
 		if (ok) { lua_pushnumber(L, 0); return 1; }
 		float lb = 0;
-		if (w.yaw >= 0) lb = std::max(lb, (ey - w.tol) / (w.yawRate / 30.0f));
-		if (w.pit >= 0) lb = std::max(lb, (ep - ptol) / (w.pitchRate / 30.0f));
+		if (w.yaw >= 0) lb = std::max(lb, (ey - w.tol) / (w.yawRate / 30.0f));   // KT1 lint: allow frame-literal a frame count, not converted here: SIM-10HZ stage 0 (lua-to-engine) converts
+		if (w.pit >= 0) lb = std::max(lb, (ep - ptol) / (w.pitchRate / 30.0f));   // KT1 lint: allow frame-literal a frame count, not converted here: SIM-10HZ stage 0 (lua-to-engine) converts
 		const float skip = math::floor(lb) - 1;
-		lua_pushnumber(L, (skip >= 2 && skip < 1e6f) ? SleepFrames(skip * 33) : 1);
+		lua_pushnumber(L, (skip >= 2 && skip < 1e6f) ? SleepFrames(skip * 33) : 1);   // DESIGN: milliseconds per sim frame as base unit_script.lua Sleep; frame constant (SIM-10HZ stage 0)
 		return 1;
 	}
 	static int LState(lua_State* L) {
@@ -504,10 +504,10 @@ private:
 	}
 
 	bool luaDriven = false;
-	int idleTicksN = 2, restDelay = 90, wakeEvery = 3, fullUnits = 250, maxMs = 500;
-	float restRate = 1.5f;
-	float rollEps = 0.05f, spinRate = 0.6f;
-	int tickMs = 100, unitCount = 0;
+	int idleTicksN = 2, restDelay = 90, wakeEvery = 3, fullUnits = 250, maxMs = 500;   // DESIGN: fallbacks of gamedata/kt1/unitanim.lua, except wakeEvery: PLACEHOLDER there
+	float restRate = 1.5f;   // DESIGN: fallback of gamedata/kt1/unitanim.lua
+	float rollEps = 0.05f, spinRate = 0.6f;   // DESIGN: fallbacks of gamedata/kt1/unitanim.lua
+	int tickMs = 100, unitCount = 0;   // DESIGN: the 100 ms tick (pm_tick.lua)
 	std::vector<Unit> units;      // per unit id
 	std::vector<int> ids;         // registered ids, ascending
 	std::vector<float> events;   // dust: unitID, x, ground height, z
