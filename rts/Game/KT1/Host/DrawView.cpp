@@ -72,8 +72,8 @@ RayHit DrawView::Trace(int x, int y) const {
 	const CUnit* unit = nullptr;
 	const CFeature* feature = nullptr;
 	// LuaUnsyncedRead::TraceScreenRay's own numbers, so both give the same answer
-	const float rawRange = camera->GetFarPlaneDist() * 1.4f;   // PARITY: engine TraceScreenRay
-	const float badRange = rawRange - 300.0f;                  // PARITY: engine TraceScreenRay
+	const float rawRange = camera->GetFarPlaneDist() * 1.4f;   // DESIGN: the stock engine's value (TraceScreenRay)
+	const float badRange = rawRange - 300.0f;                  // DESIGN: the stock engine's value (TraceScreenRay)
 	const float3 camPos = camera->GetPos();
 	const float3 dir = camera->CalcPixelDir(x + globalRendering->viewPosX, globalRendering->viewSizeY - 1 - y);
 

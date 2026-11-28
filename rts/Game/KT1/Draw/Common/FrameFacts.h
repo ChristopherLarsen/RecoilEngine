@@ -34,9 +34,11 @@ struct PointerFacts {
 
 class FrameFacts {
 public:
+	static constexpr int ZOOM_UNKNOWN = -1;
+
 	const CameraFacts& Camera() const { return camera; }
-	int ZoomLevel() const { return zoomLevel; }              // 0 (closest) .. 7: SupComZoomLevel
-	float ZoomDist() const { return zoomDist; }              // camera zoom distance, elmos
+	int ZoomLevel() const { return zoomLevel; }              // 0 (closest) .. 7 (SupComZoomLevel); ZOOM_UNKNOWN without it
+	float ZoomDist() const { return zoomDist; }              // camera zoom distance, elmos; -1 when unknown
 	int Step() const { return step; }                        // sim step number
 	float StepFraction() const { return stepFraction; }      // how far past that step the drawn frame is, in steps
 	const PointerFacts& Pointer() const { return pointer; }
@@ -57,6 +59,7 @@ public:
 
 private:
 	void ReadCamera();
+	void ReadZoom();
 	void ReadPointer(const DrawView& view);
 	void ReadVisible(const DrawView& view);
 
@@ -65,8 +68,8 @@ private:
 	SelectionTracker selection;
 	IdBits visibleBits;
 	std::vector<int> visible;
-	int zoomLevel = 0;
-	float zoomDist = 0.0f;
+	int zoomLevel = ZOOM_UNKNOWN;
+	float zoomDist = -1.0f;
 	int step = 0;
 	float stepFraction = 0.0f;
 	uint32_t frame = 0;

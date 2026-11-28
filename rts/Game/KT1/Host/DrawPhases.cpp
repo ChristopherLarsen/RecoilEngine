@@ -65,13 +65,15 @@ HostState& State() {
 	return state;
 }
 
-const char* TimerName(const char* system) {
+const std::string TIMER_PREFIX = "KT1::";
+
+// "KT1::<system>", registered with the profiler the first time; no allocation after that
+const char* TimerName(const std::string& system) {
 	HostState& s = State();
-	const std::string name = std::string("KT1::") + system;
 	for (const std::string& t : s.timers) {
-		if (t == name) return t.c_str();
+		if (t.compare(TIMER_PREFIX.size(), std::string::npos, system) == 0) return t.c_str();
 	}
-	s.timers.push_back(name);
+	s.timers.push_back(TIMER_PREFIX + system);
 	CTimeProfiler::RegisterTimer(s.timers.back().c_str());
 	return s.timers.back().c_str();
 }
