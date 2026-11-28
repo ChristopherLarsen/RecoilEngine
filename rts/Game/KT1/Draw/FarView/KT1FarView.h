@@ -10,6 +10,8 @@ namespace FarView {
 	// One line in CWorldDrawer::Draw: true when the far view drew this frame's opaque and alpha world passes
 	// (the caller then skips DrawOpaqueObjects and DrawAlphaObjects). False when the rule is off or the camera is below the switch.
 	bool Draw();
+	// the game camera's zoom distance this drawn frame, elmos (ViewSettings); below 0: unset
+	void SetZoom(float zoom);
 	// Effects in the far view (owner 2026-11-26, D-Z3 withdrawn: shots and explosions follow the original at L4+).
 	// True when the last drawn frame was far and this effect lies past its view-depth cutoff (WVFX-ZOOM-001 v7 R3, R4):
 	// `weapon` is a weapon projectile (its own cutoff), else a CEG particle or a ground flash. Called by
