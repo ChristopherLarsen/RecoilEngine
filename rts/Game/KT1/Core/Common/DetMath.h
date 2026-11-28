@@ -6,6 +6,8 @@
 // Rules: only + - * / and std::sqrt / std::floor, which IEEE 754 makes exact on every client. No trig, exp or pow:
 //   the C library's versions differ between builds; synced code takes those from the engine's own math. The engine
 //   builds x86-64 with SSE math and no fused multiply-add; the Core tests build with -ffp-contract=off to match.
+//   The engine also builds with -fsingle-precision-constant: a bare floating literal is a float. Core code writes no
+//   floating literal in double maths: integers, or a constant built from them (HALF). The tests build with the same flag.
 // No engine include, no allocation.
 
 #ifndef KT1_CORE_COMMON_DET_MATH_H
@@ -28,8 +30,12 @@ inline double Clamp(double x, double lo, double hi) {
 // Lua: math.floor(x)
 inline double Floor(double x) { return std::floor(x); }
 
+// a double constant built from integers: the engine compiles with -fsingle-precision-constant, so a bare literal such as
+// 0.1 would be a float even here (0.5 happens to be exact, but no helper relies on that)
+inline constexpr double HALF = static_cast<double>(1) / 2;
+
 // Lua: math.floor(x + 0.5), the game's rounding (halves go up: -0.5 -> 0, 2.5 -> 3)
-inline double RoundHalfUp(double x) { return std::floor(x + 0.5); }
+inline double RoundHalfUp(double x) { return std::floor(x + HALF); }
 
 // Lua 5.1: a % b == a - math.floor(a / b) * b (takes the sign of b: -1 % 3 == 2)
 inline double Mod(double a, double b) { return a - std::floor(a / b) * b; }
@@ -50,7 +56,7 @@ inline double Dist3(double dx, double dy, double dz) { return std::sqrt(dx * dx 
 
 // Lua: local s = 0; for i = 1, #v do s = s + v[i] end (front to back; callers pass values in ascending unit id)
 inline double Sum(std::span<const double> v) {
-	double s = 0.0;
+	double s = 0;
 	for (const double x: v)
 		s = s + x;
 	return s;

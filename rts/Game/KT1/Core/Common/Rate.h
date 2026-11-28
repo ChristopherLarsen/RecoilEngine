@@ -29,7 +29,7 @@ public:
 	}
 	static bool IsSet() { return sps >= 1; }
 	static int32_t StepsPerSecond() { assert(IsSet()); return sps; }
-	static double StepSeconds() { assert(IsSet()); return IsSet() ? 1.0 / sps : 0.0; }
+	static double StepSeconds() { assert(IsSet()); return IsSet() ? static_cast<double>(1) / sps : 0; }
 
 	// a period: steps between two visits, at least 1 (something "every 0 s" runs every step)
 	static int32_t Every(double seconds) { return std::max<int32_t>(1, Round(seconds)); }
@@ -38,7 +38,7 @@ public:
 	static int32_t Steps(double seconds) { return std::max<int32_t>(0, Round(seconds)); }
 
 	// steps back to seconds, for logs and for config written back out
-	static double Seconds(int32_t steps) { assert(IsSet()); return IsSet() ? static_cast<double>(steps) / sps : 0.0; }
+	static double Seconds(int32_t steps) { assert(IsSet()); return IsSet() ? static_cast<double>(steps) / sps : 0; }
 
 private:
 	static int32_t Round(double seconds) {

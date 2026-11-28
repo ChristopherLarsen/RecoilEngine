@@ -317,6 +317,19 @@ static void TestDetMath() {
 	CHECK(std::fabs(hp - 90.0) < 1e-9, "rate-agnostic decay");
 }
 
+// the engine builds with -fsingle-precision-constant: a bare literal is a float. These fail if a Core helper's maths
+// were done through a float literal (the old Rate::StepSeconds `1.0 / sps` was a float division under that flag).
+static void TestDoubleConstants() {
+	const double one = 1, ten = 10, three = 3;
+	CHECK(0.1 != one / ten, "the tests build with the engine's float-constant flag");
+	CHECK(Rate::StepSeconds() == one / Rate::StepsPerSecond(), "StepSeconds is a double division");
+	CHECK(Rate::Seconds(1) == one / Rate::StepsPerSecond(), "Seconds is a double division");
+	CHECK(DetMath::HALF == one / 2, "HALF");
+	const double third = one / three;   // not a float value
+	CHECK(DetMath::RoundHalfUp(third) == 0 && DetMath::RoundHalfUp(one - third) == 1, "RoundHalfUp in double");
+	CHECK(DetMath::Lerp(0, three, third) == third * three, "Lerp in double");
+}
+
 // ---- FixedPool ------------------------------------------------------------------------------------------------------
 struct Shot { int32_t owner = -1; double x = 0.0; };
 
@@ -375,6 +388,7 @@ int main() {
 		TestDueWheelCancel();
 		TestDueWheelPeriodic();
 		TestDetMath();
+		TestDoubleConstants();
 		TestFixedPool();
 	}
 	std::printf("KT1 Core/Common: %d checks, %d failed (30 and 10 steps per second)\n", checks, fails);
