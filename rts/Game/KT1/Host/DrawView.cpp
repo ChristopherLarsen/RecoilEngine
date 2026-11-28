@@ -6,6 +6,7 @@
 #include "Game/Camera.h"
 #include "Game/GlobalUnsynced.h"
 #include "Game/TraceRay.h"
+#include "Game/KT1/Host/Fakes.h"
 #include "Rendering/GlobalRendering.h"
 #include "Sim/Features/Feature.h"
 #include "Sim/Misc/GlobalSynced.h"
@@ -14,6 +15,19 @@
 #include "Sim/Units/UnitHandler.h"
 
 namespace KT1 {
+namespace {
+
+// A fake contact whose type the local view can tell: its own ally team's, the full view, or LuaUtils::IsUnitTyped's rule.
+// The unit lists leave it out, as LuaUI's do (gamedata/fake_units.lua); an enemy's unidentified fake stays, like a real one.
+bool KnownFake(const CUnit* u) {   // KT1 hot
+	if (!Fakes::Is(u)) return false;
+	if (gu->spectatingFullView || u->allyteam == gu->myAllyTeam) return true;
+	const auto los = u->losStatus[gu->myAllyTeam];
+	const int typed = LOS_PREVLOS | LOS_CONTRADAR;
+	return (los & LOS_INLOS) != 0 || (los & typed) == typed;
+}
+
+} // namespace
 
 void DrawView::BeginFrame(uint32_t drawFrame) { frame = drawFrame; }
 
@@ -54,7 +68,9 @@ const std::vector<int>& DrawView::UnitIds() const {
 			unitIds.reserve(UnitCapacity());
 		}
 		idBits.Clear();
-		for (const CUnit* u : unitHandler.GetActiveUnits()) idBits.Set(u->id);
+		for (const CUnit* u : unitHandler.GetActiveUnits()) {
+			if (!KnownFake(u)) idBits.Set(u->id);
+		}
 		unitIds.clear();
 		idBits.AppendTo(unitIds);
 		idsFrame = frame;
