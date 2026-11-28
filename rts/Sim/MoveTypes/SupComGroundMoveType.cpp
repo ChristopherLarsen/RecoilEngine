@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include "Sim/MoveTypes/SupComMoveTimers.h"
 #include "SupComGroundMoveType.h"
 #include "System/SupComSimSwitch.h"
 #include "Sim/Units/UnitHandler.h"
@@ -2060,6 +2061,7 @@ bool CSupComGroundMoveType::Update()
 
 	// MOV-009 R8: Land -> Seabed at the switch depth, back to Land as the depth falls to zero
 	if (seabedSwitchDepth > 0.0f) {
+		SupComMoveTimers::Section st(SupComMoveTimers::GSeabed);
 		const float depth = -CGround::GetHeightReal(owner->pos.x, owner->pos.z);
 
 		if (!onSeabed && depth >= seabedSwitchDepth)
@@ -2079,13 +2081,17 @@ bool CSupComGroundMoveType::Update()
 			LOG("[SupComYield] f=%d unit %d done making way at (%.0f, %.0f)", gs->frameNum, owner->id, owner->pos.x, owner->pos.z);
 	}
 
+	{
+	SupComMoveTimers::Section st(SupComMoveTimers::GGapQueue);
 	UpdateGapQueue();
+	}
 	// held behind a queue that moves (a stuck unit ahead is passed over): not idle, so the engine neither re-plans nor
 	// fails the order (it failed units waiting their turn after eight seconds, PTH-002-B)
 	if (gqHeld && gqAhead) {
 		numIdlingUpdates = 0;
 		numIdlingSlowUpdates = 0;
 	}
+	SupComMoveTimers::Section st(SupComMoveTimers::GYield);
 	CheckYield();
 	if (yieldMover >= 0)
 		UpdateYieldReturn();

@@ -39,6 +39,7 @@
 #include "System/FastMath.h"
 #include "System/SpringMath.h"
 #include "System/TimeProfiler.h"
+#include "Sim/MoveTypes/SupComMoveTimers.h"
 #include "System/type2.h"
 #include "System/Sound/ISoundChannels.h"
 #include "System/SpringHash.h"
@@ -652,11 +653,16 @@ void CGroundMoveType::UpdatePreCollisions()
  	ASSERT_SYNCED(currWayPoint);
  	ASSERT_SYNCED(nextWayPoint);
 
+	{
+	SupComMoveTimers::Section st(SupComMoveTimers::GPreMove);
 	if (resultantForces.SqLength() > 0.f)
 		owner->Move(resultantForces, true);
 
 	SyncWaypoints();
+	}
 
+	{
+	SupComMoveTimers::Section st(SupComMoveTimers::GPrePath);
 	// The mt section may have noticed the new path was ready and switched over to it. If so then
 	// delete the old path, which has to be done in an ST section.
 	if (deletePathId != 0) {
@@ -675,9 +681,12 @@ void CGroundMoveType::UpdatePreCollisions()
  	}
 
 	pathManager->UpdatePath(owner, pathID);
+	}
 
 	if (owner->GetTransporter() != nullptr) return;
 
+	{
+	SupComMoveTimers::Section st(SupComMoveTimers::GPreSlope);
 	owner->UpdatePhysicalStateBit(CSolidObject::PSTATE_BIT_SKIDDING, owner->IsSkidding() || OnSlope(1.0f));
 
 	if (owner->IsSkidding()) {
@@ -690,7 +699,9 @@ void CGroundMoveType::UpdatePreCollisions()
 		UpdateControlledDrop();
 		return;
 	}
+	}
 
+	SupComMoveTimers::Section st(SupComMoveTimers::GPreSpeed);
 	reversing = UpdateOwnerSpeed(math::fabs(oldSpeed), math::fabs(newSpeed), newSpeed);
 	oldSpeed = newSpeed = 0.f;
 }
@@ -769,24 +780,37 @@ bool CGroundMoveType::Update()
 	}
 
 	// Collisions can change waypoint states (y); though they won't move them (xz).
+	{
+	SupComMoveTimers::Section st(SupComMoveTimers::GBaseSync);
 	SyncWaypoints();
+	}
 
 	// do nothing at all if we are inside a transport
 	if (owner->GetTransporter() != nullptr) return false;
 	if (owner->IsSkidding()) return false;
 	if (owner->IsFalling()) return false;
 
+	{
+	SupComMoveTimers::Section st(SupComMoveTimers::GBaseMove);
 	if (resultantForces.SqLength() > 0.f)
 		owner->Move(resultantForces, true);
+	}
 
+	{
+	SupComMoveTimers::Section st(SupComMoveTimers::GBaseKeepInside);
 	KeepInsideMap();
+	}
+	{
+	SupComMoveTimers::Section st(SupComMoveTimers::GBaseWaterLine);
 	AdjustPosToWaterLine();
+	}
 
 	ASSERT_SANE_OWNER_SPEED(owner->speed);
 
 	// <dif> is normally equal to owner->speed (if no collisions)
 	// we need more precision (less tolerance) in the y-dimension
 	// for all-terrain units that are slowed down a lot on cliffs
+	SupComMoveTimers::Section st(SupComMoveTimers::GBaseOwnerMoved);
 	return (OwnerMoved(owner->heading, owner->pos - oldPos, float3(float3::cmp_eps(), float3::cmp_eps() * 1e-2f, float3::cmp_eps())));
 }
 
