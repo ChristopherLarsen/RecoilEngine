@@ -15,6 +15,8 @@
 #include "Check.h"
 #include "Config.h"
 
+class LuaParser;
+
 namespace KT1 {
 	class Rule;
 }
@@ -22,6 +24,11 @@ namespace KT1 {
 namespace KT1::Data {
 
 Strictness GameStrictness();
+
+// Call on every parser that reads a gamedata/kt1 config, before Execute: gives it Spring.GetModOptions, so a config
+// that includes the game's data tables gets the values the Lua gadgets get (mod option data=design and the fixtures
+// the tables read from options).
+void AddModOptions(LuaParser& parser);
 
 // The text of the system's config file; false when the game archive has none.
 bool ReadText(const std::string& system, std::string& text);

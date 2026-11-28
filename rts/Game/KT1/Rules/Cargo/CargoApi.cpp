@@ -10,6 +10,7 @@
 #include "Game/KT1/Core/Cargo/CargoRoom.h"
 #include "Game/KT1/Core/Common/Rate.h"
 #include "Game/KT1/Host/Check.h"
+#include "Game/KT1/Data/DataEngine.h"
 #include "Lua/LuaParser.h"
 #include "Lua/LuaRulesParams.h"
 #include "Sim/Units/Unit.h"
@@ -71,6 +72,7 @@ bool Known(const CUnit* u) { return u != nullptr && u->unitDef->id >= 0 && stati
 
 void Init() {
 	LuaParser parser(CONFIG, SPRING_VFS_MOD_BASE, SPRING_VFS_ZIP, {true}, {true});
+	KT1::Data::AddModOptions(parser);
 	parser.Execute();
 	const LuaTable root = parser.GetRoot();
 	model = CC::RoomModel{};
