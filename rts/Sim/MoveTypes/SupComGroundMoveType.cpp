@@ -1312,8 +1312,26 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 				if (log21 && resultantForces.SqLength2D() > 0.0f && FootprintBlocked(nx) && (deeper || more))
 					LOG("[SupComNoDeeper] f=%d unit %d free step (%.2f, %.2f) at (%.2f, %.2f) cells: depth %.2f -> %.2f, area %.1f -> %.1f", gs->frameNum, owner->id,
 						resultantForces.x, resultantForces.z, owner->pos.x / SQUARE_SIZE, owner->pos.z / SQUARE_SIZE, d0, d1, a0, a1);
-				if (on21 && resultantForces.SqLength2D() > 0.0f && FootprintBlocked(nx) && (deeper || (!depthOnly && more)))
+				if (on21 && resultantForces.SqLength2D() > 0.0f && FootprintBlocked(nx) && (deeper || (!depthOnly && more))) {
+					// L12032 (PTH-003-C): the stock step of a unit touching a wall (depth 0) slides along it with a 0.06 elmo inward
+					// part; dropping the whole step held the unit there for good. Switch SupComNoDeeperFreeAxis (default 1): the step's
+					// x or z part alone is kept when it does not go deeper or add overlap (x first, then z); else the step is dropped
+					static const bool axis21 = SupComSimSwitch::Get("SupComNoDeeperFreeAxis", true);
+					const float3 full = resultantForces;
 					resultantForces = ZeroVector;
+					if (axis21) {
+						const float3 parts[2] = {float3(full.x, 0.0f, 0.0f), float3(0.0f, 0.0f, full.z)};
+						for (const float3& part: parts) {
+							if (part.SqLength2D() <= 0.0f)
+								continue;
+							const float3 px = owner->pos + part;
+							if (!FootprintBlocked(px) || (FootprintDepth(px) <= d0 + 1e-3f && (depthOnly || FootprintOverlapArea(px) <= a0 + 1e-3f))) {
+								resultantForces = part;
+								break;
+							}
+						}
+					}
+				}
 			} // pathing fix 21: switch SupComNoDeeperFree, default 1
 
 			scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
