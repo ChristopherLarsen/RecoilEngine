@@ -9,7 +9,7 @@
 //   sys=<timer>:<mean ms per step>,...  a fixed list of engine profiler timers (SIM_TIMERS), names verbatim
 //   draw=<timer>:<mean ms per drawn frame>,...  a fixed list (DRAW_TIMERS)
 //   new_n, new_kb=mean/p95/max        C++ operator new calls and KiB per drawn frame (all threads; includes Lua pool misses)
-//   lua_n=mean/p95/max                Lua allocator calls per drawn frame (all handles)
+//   lua_n=mean/p95/max                Lua allocator calls per drawn frame (all handles); frames where the engine clears the count are left out
 // The counters force the engine profiler to record (as SupComProfiler=1) so sys= and draw= have data.
 
 #include "KT1FrameCount.h"
@@ -196,7 +196,8 @@ void DrawFrame() {
 		st.frameSteps.push_back(uint8_t(std::min(st.stepsSinceDraw, 255)));
 		st.allocN.push_back(uint32_t(n - st.prevN));
 		st.allocKB.push_back(uint32_t((bytes - st.prevB) >> 10));
-		st.luaN.push_back(uint32_t(lua - st.prevLua));
+		// the global Lua count is cleared now and then (spring_lua_alloc_update_stats); skip the frame it drops
+		if (lua >= st.prevLua) st.luaN.push_back(uint32_t(lua - st.prevLua));
 	}
 	st.prevN = n; st.prevB = bytes; st.prevLua = lua;
 	st.stepsSinceDraw = 0;
