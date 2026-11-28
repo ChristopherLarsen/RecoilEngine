@@ -37,7 +37,7 @@ public:
 	static constexpr int ZOOM_UNKNOWN = -1;
 
 	const CameraFacts& Camera() const { return camFacts; }
-	int ZoomLevel() const { return zoomLevel; }              // 0 (closest) .. 7 (SupComZoomLevel); ZOOM_UNKNOWN without it
+	int ZoomLevel() const { return zoomLevel; }              // 0 (closest) .. 7 (SupComZoomLevel); ZOOM_UNKNOWN before the first read
 	float ZoomDist() const { return zoomDist; }              // camera zoom distance, elmos; -1 when unknown
 	int Step() const { return step; }                        // sim step number
 	float StepFraction() const { return stepFraction; }      // how far past that step the drawn frame is, in steps

@@ -8,8 +8,6 @@
 
 #include "DisplaySink.h"
 
-#if __has_include("Game/KT1/Host/DisplayEvents.h")
-
 #include "Game/Game.h"
 #include "Game/InMapDrawModel.h"
 #include "Game/KT1/Core/Common/Rate.h"
@@ -53,21 +51,7 @@ void Play(const DisplayEvent& e) {
 
 } // namespace
 
-bool Present() { return true; }
 void Replay() { DisplayEvents::Replay(&Play); }
 
 } // namespace DisplaySink
 } // namespace KT1
-
-#else
-
-namespace KT1 {
-namespace DisplaySink {
-
-bool Present() { return false; }
-void Replay() {}
-
-} // namespace DisplaySink
-} // namespace KT1
-
-#endif

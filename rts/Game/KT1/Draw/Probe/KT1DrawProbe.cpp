@@ -15,12 +15,15 @@
 //                                              selected = {ids}, selectionChanges, visible = {ids} }
 //   Spring.KT1.DrawProbe.SetPointer(x, y)   read the pointer there instead of the mouse; no arguments: the mouse again
 //   Spring.KT1.DrawProbe.Stats()            -> { frames, instances, visible, uploaded, ranges, differences }
+//   Spring.KT1.DrawProbe.Audit(on)          the host's audit of itself (Host/HostAudit.h) on (counts at 0) or off
+//   Spring.KT1.DrawProbe.Audit()            -> { read, idle = { calls, primitives, stateChanges, uncounted }, busy = {...} }
 
 #include <algorithm>
 #include <cstdint>
 
 #include "Game/KT1/Draw/Common/InstanceBatch.h"
 #include "Game/KT1/Host/DrawPhases.h"
+#include "Game/KT1/Host/HostAudit.h"
 #include "Game/KT1/KT1Register.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
@@ -163,6 +166,7 @@ public:
 	static int LuaFacts(lua_State* L);
 	static int LuaSetPointer(lua_State* L);
 	static int LuaStats(lua_State* L);
+	static int LuaAudit(lua_State* L);
 
 private:
 	bool InitGL(int unitCapacity) {
@@ -251,11 +255,35 @@ int DrawProbe::LuaStats(lua_State* L) {
 	return 1;
 }
 
+void PushCounts(lua_State* L, const char* key, const HostAuditCounts& c) {
+	lua_pushstring(L, key);
+	lua_createtable(L, 0, 4);
+	LuaPushNamedNumber(L, "calls", c.calls);
+	LuaPushNamedNumber(L, "primitives", c.primitives);
+	LuaPushNamedNumber(L, "stateChanges", c.stateChanges);
+	LuaPushNamedNumber(L, "uncounted", c.uncounted);
+	lua_rawset(L, -3);
+}
+
+int DrawProbe::LuaAudit(lua_State* L) {
+	if (CLuaHandle::GetHandleSynced(L)) return 0;
+	if (!lua_isnoneornil(L, 1)) {
+		HostAudit::Set(lua_toboolean(L, 1) != 0);
+		return 0;
+	}
+	lua_createtable(L, 0, 3);
+	LuaPushNamedBool(L, "read", HostAudit::CanRead());
+	PushCounts(L, "idle", HostAudit::Counts(false));
+	PushCounts(L, "busy", HostAudit::Counts(true));
+	return 1;
+}
+
 void DrawProbe::PushLua(lua_State* L) {
 	probe = this;
 	LuaPushRawNamedCFunc(L, "Facts", LuaFacts);
 	LuaPushRawNamedCFunc(L, "SetPointer", LuaSetPointer);
 	LuaPushRawNamedCFunc(L, "Stats", LuaStats);
+	LuaPushRawNamedCFunc(L, "Audit", LuaAudit);
 }
 
 } // namespace

@@ -9,10 +9,7 @@
 #include "Game/UI/MiniMap.h"
 #include "Game/UI/MouseHandler.h"
 #include "Rendering/GlobalRendering.h"
-#if __has_include("Rendering/SupComZoomLevel.h")
 #include "Rendering/SupComZoomLevel.h"
-#define KT1_HAS_ZOOM_LEVEL
-#endif
 
 namespace KT1 {
 
@@ -61,16 +58,10 @@ void FrameFacts::ReadCamera() {
 	camFacts.viewH = globalRendering->viewSizeY;
 }
 
-// The one place that knows the zoom level. SupComZoomLevel (fork branch drawzoom2) is not in the wave 0 base: until the
-// engine has it the level reads unknown, and it is picked up by the next build that does.
+// The one place that knows the zoom level.
 void FrameFacts::ReadZoom() {
-#ifdef KT1_HAS_ZOOM_LEVEL
 	zoomLevel = SupComZoomLevel::Get();
 	zoomDist = SupComZoomLevel::Dist();
-#else
-	zoomLevel = ZOOM_UNKNOWN;
-	zoomDist = -1.0f;
-#endif
 }
 
 void FrameFacts::ReadPointer(const DrawView& view) {
