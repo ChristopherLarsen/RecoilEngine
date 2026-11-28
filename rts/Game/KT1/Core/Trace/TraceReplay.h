@@ -5,6 +5,8 @@
 // the outputs Core computed. They are compared with the rows recorded for that step, column by column:
 //   an ordered column    row by row, in the order given
 //   any other column     as a set keyed by the row's key (rows of one key in the order given)
+// A system may compare only some columns (Compares): one name can carry the check answers of several parts, of which
+// the replay computes one. The columns left out are listed in the result (skipped), never silently dropped.
 // Values are compared bit for bit. A recorded row Core did not give, and a row Core gave that was not recorded, are
 // differences; the columns marked "not compared" are skipped. Inputs of a step are all given before its EndStep.
 // For a system that feeds back into its own inputs only the first differing step is evidence.
@@ -51,6 +53,8 @@ public:
 	virtual void Begin(const Header&) {}
 	virtual void Input(std::string_view column, ByteReader& bytes, int32_t step) = 0;
 	virtual void EndStep(int32_t step, Outputs& out) = 0;
+	// false: this replay does not compute the column; its recorded rows are not compared
+	virtual bool Compares(std::string_view) const { return true; }
 };
 
 struct ReplayResult {
@@ -61,6 +65,7 @@ struct ReplayResult {
 	int32_t firstDiffStep = -1;
 	std::vector<std::string> described;
 	std::string error;              // the trace itself is bad
+	std::vector<std::string> skipped;   // recorded columns the system does not compare, in the trace's order
 
 	bool Clean() const { return error.empty() && differences == 0 && compared > 0; }
 };
@@ -121,7 +126,7 @@ inline void CloseStep(ReplayResult& r, Step& s, const std::vector<Column>& colum
 	system.EndStep(s.step, out);
 	++r.steps;
 	for (const Column& c : columns) {
-		if (c.IsInput() || !c.Compared()) continue;
+		if (c.IsInput() || !c.Compared() || !system.Compares(c.name)) continue;
 		std::vector<Value>& recorded = s.recorded[c.name];
 		std::vector<Value>& computed = out.Rows()[c.name];
 		CompareColumn(r, s.step, c.name, c.Ordered(), recorded, computed);
@@ -176,6 +181,8 @@ inline ReplayResult Replay(std::span<const uint8_t> trace, ReplaySystem& system)
 	Detail::CloseStep(r, step, reader.Columns(), system, out);
 	if (!reader.Error().empty()) r.error = reader.Error();
 	else if (!reader.Complete()) r.error = "the trace is cut short";
+	for (const Column& c : reader.Columns())
+		if (!c.IsInput() && c.Compared() && !system.Compares(c.name)) r.skipped.push_back(c.name);
 	return r;
 }
 
