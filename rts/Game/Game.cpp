@@ -6,6 +6,8 @@
 #include <RmlUi/Core.h>
 #include "Game.h"
 #include "Game/KT1/KT1Registry.h" // KT1 hook: registry
+#include "Game/KT1/Host/DisplayEvents.h" // KT1 hook: SimHost
+#include "Game/KT1/Host/Phases.h" // KT1 hook: SimHost
 #include "Lua/SupComUnitQuery.h"
 #include "Camera.h"
 #include "CameraHandler.h"
@@ -1784,8 +1786,10 @@ void CGame::SimFrame() {
 
 			SupComUnitQuery::OnUnitsUpdated(); // supcom: change lists for Spring.GetUnitChanges
 			SupComTargeting::Update(gs->frameNum); // supcom: CMB-004 target choice (unitpass_target), before the Lua GameFrame
+			KT1::Phases::Run(KT1::SimHost::Phase::FrameStart, gs->frameNum); // KT1 hook: SimHost
 			KT1::Registry::GameFrame(gs->frameNum); // KT1 hook: registry (engine rules, before the Lua GameFrame)
 			eventHandler.GameFrame(gs->frameNum);
+			KT1::Phases::Run(KT1::SimHost::Phase::AfterCommands, gs->frameNum); // KT1 hook: SimHost
 		}
 
 		helper->Update();
@@ -1794,6 +1798,7 @@ void CGame::SimFrame() {
 		mapDamage->Update();
 		unitHandler.Update();
 		pathManager->Update();
+		KT1::Phases::Run(KT1::SimHost::Phase::AfterMove, gs->frameNum); // KT1 hook: SimHost
 		projectileHandler.Update();
 		NanoParticles::system.Update();
 		featureHandler.Update();
@@ -1818,11 +1823,13 @@ void CGame::SimFrame() {
 		// should probably be split from drawer
 		CUnitDrawer::UpdateGhostedBuildings();
 		interceptHandler.Update(false);
+		KT1::Phases::Run(KT1::SimHost::Phase::AfterWeapons, gs->frameNum); // KT1 hook: SimHost
 
 		teamHandler.GameFrame(gs->frameNum);
 		playerHandler.GameFrame(gs->frameNum);
 		SupComCib::FrameEnd(); // supcom: hand queued fight call-ins to Lua before the frame ends
 		eventHandler.GameFramePost(gs->frameNum);
+		KT1::Phases::Run(KT1::SimHost::Phase::FrameEnd, gs->frameNum); // KT1 hook: SimHost
 	}
 
 	lastSimFrameTime = spring_gettime();
@@ -1849,6 +1856,8 @@ void CGame::SimFrame() {
 	// useful for desync-debugging (enter instead of -1 start & end frame of the range you want to debug)
 	// supcom: period -1 keeps the one /dumpstate set (1 reset it every frame, so every frame of the range was dumped)
 	DumpState(-1, -1, -1, std::nullopt);
+
+	KT1::DisplayEvents::Replay(skipping); // KT1 hook: SimHost
 
 	ASSERT_SYNCED(gsRNG.GetGenState());
 	LEAVE_SYNCED_CODE();
