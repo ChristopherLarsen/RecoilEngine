@@ -31,7 +31,7 @@ void Put(lua_State* L, int& n, float v) {
 int LTake(lua_State* L) {
 	SimProbeRule* p = Self(L);
 	if (p == nullptr) return 0;
-	constexpr int STRIDE = 12;
+	constexpr int STRIDE = 12;   // DESIGN: numbers per record, as the header line above
 	lua_createtable(L, static_cast<int>(p->stream.size()) * STRIDE, 0);
 	int n = 0;
 	for (const Core::SimHost::Event& e : p->stream) {

@@ -10,8 +10,8 @@
 
 #include "Game/GameHelper.h"
 #include "Game/InMapDrawModel.h"
+#include "Game/KT1/Core/Common/Rate.h"
 #include "Sim/Misc/GeometricObjects.h"
-#include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Projectiles/ExplosionGenerator.h"
 #include "Sim/Units/UnitHandler.h"
 #include "System/Log/ILog.h"
@@ -46,8 +46,7 @@ void Play(const DisplayEvent& e, bool skipping) {
 			LOG("%s", e.text);
 		} break;
 		case DisplayKind::DebugLine: {
-			const int steps = static_cast<int>(e.value * GAME_SPEED + 0.5f);
-			geometricObjects->AddLine(ToFloat3(e.a), ToFloat3(e.b), e.size, 0, steps);
+			geometricObjects->AddLine(ToFloat3(e.a), ToFloat3(e.b), e.size, 0, Core::Rate::Every(e.value));
 		} break;
 		case DisplayKind::Ping: {
 			if (!skipping) inMapDrawerModel->AddPoint(ToFloat3(e.a), e.text, e.unit);

@@ -110,6 +110,6 @@ void SimProbeRule::Report(int frame) {
 
 } // namespace SimProbe
 
-KT1_REGISTER_SYSTEM(SimProbe, 2000, SimProbe::SimProbeRule)
+KT1_REGISTER_SYSTEM(SimProbe, 9100, SimProbe::SimProbeRule)
 
 } // namespace KT1
