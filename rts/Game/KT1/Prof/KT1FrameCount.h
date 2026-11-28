@@ -5,7 +5,8 @@
 // Switches (springsettings, so a broker manifest sets them in "config"):
 //   KT1FrameCount=1             count (0, the default: nothing is counted and nothing is printed)
 //   KT1FrameCountFrames=a-b     count from game frame a to game frame b, then print (empty: from the first frame to the end)
-// Lua (any handle): Spring.KT1.FrameCount.Start() restarts the window now; .Stop() prints it now; .IsOn().
+// Lua (any handle): Spring.KT1.FrameCount.Start([tag]) prints any open window and opens a new one now, tagged (default "lua"; the
+// config window is "cfg"); .Stop() prints the open window now; .IsOn(). Start does nothing while KT1FrameCount=0.
 // Output: exactly one "[FRAMECOUNT] ..." infolog line per window (at b, at Stop, or at game end if neither came).
 
 #ifndef KT1_FRAMECOUNT_H
