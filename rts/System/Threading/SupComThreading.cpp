@@ -21,6 +21,17 @@ namespace SupComThreading {
 		return (on != 0);
 	}
 
+	bool PathLanes()
+	{
+		static int on = -1;
+		if (on < 0) {
+			if (configHandler == nullptr)
+				return false;
+			on = SupComSimSwitch::Get("PathLanes", true) ? 1 : 0;
+		}
+		return (on != 0);
+	}
+
 	bool PathCacheMainThreadOnly()
 	{
 		// every thread reads the same value, so the race on the first read is benign
