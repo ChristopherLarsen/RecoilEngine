@@ -88,6 +88,7 @@ public:
 	void Clear() {
 		open.clear();
 		scoped.clear();
+		serial = 0;
 	}
 
 private:

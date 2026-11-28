@@ -3,6 +3,7 @@
 
 #include "../KT1Test.h"
 
+#include "Game/KT1/Core/Common/DueWheel.h"
 #include "Game/KT1/Core/SimHost/CheckPairs.h"
 #include "Game/KT1/Core/SimHost/CheckTally.h"
 #include "Game/KT1/Core/SimHost/DisplayQueue.h"
@@ -377,6 +378,80 @@ KT1_CASE("SIMHOST-GATE", "check mode is compute-only: its writes are skipped and
 	std::string out;
 	tally.Totals([&](const std::string& s) { out += s; });
 	KT1_CHECK_EQ(out, std::string("[KT1CHECK] S total n=0 diffs=0 unmatched=0 writes_skipped=3 cumulative"));
+}
+
+namespace {
+	// The host's state, as Host/HostReset.cpp clears it, with the per-system state a rule rebuilds at game setup.
+	struct MiniHost {
+		EventLog events;
+		DisplayQueue display;
+		CheckTally tally;
+		CheckPairs pairs{tally};
+		Chain<std::function<bool()>> chain;
+		KT1::Core::SimProbe::State probe;
+		KT1::Core::DueWheel wheel;
+
+		// One game: setup, then `steps` steps. Returns everything a step shows.
+		std::string Run(int steps) {
+			std::string out;
+			const int reader = events.AddReader(ALL_EVENTS);
+			probe.Init(64);
+			wheel.Init(8, 4, 4);
+			chain.Add(0, "S", {"S", false, []() { return true; }});
+			for (int step = 0; step < steps; ++step) {
+				Event e;
+				e.type = EventType::UnitCreated;
+				e.id = step + 1;
+				events.Push(e);
+				const EventBatch batch = events.Take(reader);
+				batch.ForEachRaised([&](const Event& r) {
+					probe.Apply(r);
+					out += std::to_string(r.id) + "#" + std::to_string(r.seq) + " ";
+				});
+				wheel.Schedule(step + 1, step + 1);
+				for (const int32_t id : wheel.Take()) out += "due" + std::to_string(id) + " ";
+				pairs.Native(CheckKey{"S", "w", {step, 0, 0}}, CheckValue{}, [](auto&&...) {});
+				DisplayEvent d;
+				d.id = step;
+				display.Emit(d);
+				pairs.CloseStep([](auto&&...) {});
+				tally.CloseStep(step, [&](const std::string& s) { out += s; });
+				tally.Totals([&](const std::string& s) { out += s; });
+				events.Compact();
+				display.Publish(step);
+				out += "units=" + std::to_string(probe.units.index.Size()) + " shown=" + std::to_string(display.Pending()) +
+					" links=" + std::to_string(chain.Size()) + ";";
+			}
+			events.Push(Event{});   // left over at shutdown
+			display.Emit(DisplayEvent{});
+			pairs.Lua(CheckKey{"S", "w", {99, 0, 0}}, CheckValue{}, [](auto&&...) {});
+			return out;
+		}
+
+		void Shutdown() {
+			display.Clear();
+			pairs.Clear();
+			tally.Clear();
+			chain.Clear();
+			events.Clear();
+		}
+	};
+}
+
+KT1_CASE("SIMHOST-RESTART", "after a shutdown the host's buffers and counters are empty and a second game starts as a first") {
+	MiniHost fresh;
+	const std::string first = fresh.Run(1), five = MiniHost().Run(5);
+	MiniHost host;
+	host.Run(5);
+	host.Shutdown();
+	KT1_CHECK_EQ(host.events.Wanted(), static_cast<EventMask>(0));
+	KT1_CHECK_EQ(host.events.Held(EventType::UnitCreated), static_cast<size_t>(0));
+	KT1_CHECK_EQ(host.display.Pending(), static_cast<size_t>(0));
+	KT1_CHECK_EQ(host.display.Dropped(), static_cast<uint64_t>(0));
+	KT1_CHECK(host.tally.Empty() && host.pairs.Empty() && host.chain.Empty());
+	KT1_CHECK_EQ(host.Run(1), first);
+	host.Shutdown();
+	KT1_CHECK_EQ(host.Run(5), five);
 }
 
 KT1_CASE("SIMPROBE-STATE", "units are tracked from creation to death, and a reused id starts blank") {
