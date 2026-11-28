@@ -14,8 +14,8 @@
 //                       JSON an unsynced rule's file may be read again while it runs (Data/DataEngine.h), then ConfigReloaded.
 //                       A new rule needs only ReadConfig and a .json file.
 //   3. Start            unit defs are loaded; read per-def data here (KT1UnitData.h). A synced rule: at game setup,
-//                       before LuaRules and any unit (Registry::Setup). An unsynced rule: at the first drawn frame
-//                       (never in a headless engine).
+//                       before LuaRules and any unit (Registry::Setup). An unsynced rule: at the first sim step or
+//                       drawn frame, whichever comes first.
 //   4. GameFrame(f)     every synced frame, before the Lua GameFrame, under the profiler timer "KT1::<Name>".
 //   4b. DrawWorld       unsynced rules that draw: once per drawn frame, in the world's alpha pass (after the engine's own particles),
 //                       under the timer "KT1::<Name>". Never changes sim state. Not called in a headless engine (no draw).

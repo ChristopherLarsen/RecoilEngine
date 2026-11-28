@@ -3,8 +3,8 @@
 //
 // Synced rules start once, at game setup: the same moment on every machine, before any unit exists and before any
 // validator can be asked, so per-def data is there. (A path that never ran game setup starts them at its first sim step.)
-// Unsynced rules start once, at the first drawn frame, which differs between machines; nothing synced may depend on it,
-// and an engine that draws nothing never starts them.
+// Unsynced rules start once, at the first sim step or drawn frame, whichever comes first (a headless engine draws
+// nothing); which that is differs between machines, so nothing synced may depend on it.
 // A rule here is a pointer-like to something with Enabled(), Info().synced and Start().
 
 #ifndef KT1_START_GATE_H
@@ -16,7 +16,7 @@ class StartGate {
 public:
 	// game setup, and each sim step for a path without one; true when this call started the synced rules
 	template<class Rules> bool SetupIfNeeded(Rules& rules) { return Start(rules, true, syncedDone); }
-	// each drawn frame: never a synced rule
+	// each sim step and each drawn frame: never a synced rule
 	template<class Rules> void Unsynced(Rules& rules) { Start(rules, false, unsyncedDone); }
 	void Reset() { syncedDone = unsyncedDone = false; }
 

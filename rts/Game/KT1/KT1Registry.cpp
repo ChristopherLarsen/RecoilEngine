@@ -154,10 +154,16 @@ bool Registry::StartSynced() {
 	return inited && starts.SetupIfNeeded(rules);
 }
 
+void Registry::StartUnsynced() {
+	EnsureInit();
+	if (inited) starts.Unsynced(rules);
+}
+
 void Registry::GameFrame(int frame) {
 	Registry& reg = Get();
 	// Setup did it; a path that never ran CGame::Load (or a lost hook line) starts them here, the same on every machine
 	if (reg.StartSynced()) LOG_L(L_WARNING, "[KT1] Setup was not called: synced rules start at the first frame");
+	reg.StartUnsynced();   // a headless engine draws nothing
 	for (auto& r : reg.rules) {
 		if (!r->enabled || !r->info.synced) continue;
 		ScopedTimer t(hashString(r->timer.c_str()));
@@ -168,8 +174,7 @@ void Registry::GameFrame(int frame) {
 void Registry::DrawWorld(bool drawAboveWater) {
 	if (!drawAboveWater) return;   // the below-water call of a water pass: the rules draw once, in the last (above-water) pass
 	Registry& reg = Get();
-	reg.EnsureInit();
-	if (reg.inited) reg.starts.Unsynced(reg.rules);
+	reg.StartUnsynced();
 	for (auto& r : reg.rules) {
 		if (!r->enabled || r->info.synced) continue;
 		ScopedTimer t(hashString(r->timer.c_str()));
