@@ -1937,6 +1937,12 @@ float3 CSupComGroundMoveType::MotionDir() const
 	return d.SafeNormalize2D();
 }
 
+bool CSupComGroundMoveType::SetHeadingFree(bool on)
+{
+	static const unsigned int HEADING_FREE_HASH = spring::LiteHash("supcomHeadingFree", sizeof("supcomHeadingFree") - 1, 0);
+	return SetMemberValue(HEADING_FREE_HASH, &on);
+}
+
 bool CSupComGroundMoveType::SetMemberValue(unsigned int memberHash, void* memberValue)
 {
 	static const unsigned int SUBMERGED_HASH = spring::LiteHash("submerged", sizeof("submerged") - 1, 0);
