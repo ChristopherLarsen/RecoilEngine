@@ -9,7 +9,20 @@
 // The build generates one file (kt1_systems.gen.cpp, from every fragment) that calls each system's registrar, so a
 // static library cannot drop a system's object file. The registry then runs the systems in ascending run order; two
 // systems with one order, or one name twice, stop the engine at start (a build error in all but name).
-// Run order: the frame order of docs/engine/rules/INDEX.md, in steps of 100 so a new system fits between two.
+// Run order (Order): synced systems run in ascending Order in GameFrame, unsynced ones in ascending Order in DrawWorld;
+// the two lists are separate, so only the order among synced systems is part of sync (changing it changes NETHASH).
+// A new system takes the next free multiple of 100 in its kind's range (or of 10 inside a phase); a clash stops the
+// engine at start with both names, so pick from this table, not by feel:
+//     1 -    99   host and tooling that must run before every rule (F05 phases, F07 proof hooks)
+//   100 -  1999   the rules before LUA-FREE (Census 100 .. UnitAnim 1500, synced and unsynced mixed): fixed, take none
+//  2000 -  2999   synced rules, phase "before move" (orders, intents)
+//  3000 -  3999   synced rules, phase "move and contact" (movement, passes, plants)
+//  4000 -  4999   synced rules, phase "after move" (combat, economy, intel, animation)
+//  5000 -  5999   meters and dev counters (F08 LuaLeft 5000)
+//  6000 -  7999   draw systems (Draw/)
+//  8000 -  8499   interface (UI/)
+//  8500 -  8999   audio
+//  9000 -  9999   probes and test systems (F06 Draw/Probe 9000)
 
 #ifndef KT1_REGISTER_H
 #define KT1_REGISTER_H
