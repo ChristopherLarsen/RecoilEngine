@@ -2,6 +2,7 @@
 // KT1 host: calling the draw systems (see DrawPhases.h).
 
 #include "DrawPhases.h"
+#include "DisplaySink.h"
 
 #include <deque>
 #include <memory>
@@ -95,6 +96,15 @@ void SyncSwitches() {
 	}
 }
 
+void AddClients() {
+	HostState& s = State();
+	if (s.client != nullptr) return;
+	s.client = std::make_unique<PhaseClient>();
+	s.lastClient = std::make_unique<LastUpdateClient>();
+	eventHandler.AddClient(s.client.get());
+	eventHandler.AddClient(s.lastClient.get());
+}
+
 void CallSystems(DrawContext& ctx) {
 	State().systems.ForPhase(ctx.phase, [&ctx](const PhaseList<DrawSystem>::Entry& e) {
 		ScopedTimer timer(hashString(TimerName(e.name.c_str())));
@@ -119,6 +129,7 @@ void CallMiniMapSystems(DrawContext& ctx) {
 void RunPhase(DrawPhase phase) {
 	HostState& s = State();
 	s.view.BeginFrame(globalRendering->drawFrame);
+	if (phase == DrawPhase::Update) DisplaySink::Replay();   // the steps since the last frame, before any system
 	if (phase == DrawPhase::PreDraw) SyncSwitches();
 	// Genesis is where the frame's camera and positions are settled: the facts are made there for every later phase
 	if (phase == DrawPhase::Genesis && s.systems.AnyEnabled()) RefreshFacts();
@@ -132,21 +143,20 @@ void RunPhase(DrawPhase phase) {
 }
 } // namespace
 
+void DrawPhases::Init() {
+	if (DisplaySink::Present()) AddClients();   // the sim's display events are played with or without a draw system
+}
+
 void DrawPhases::Add(DrawSystem* system) {
 	HostState& s = State();
 	if (system == nullptr || !s.systems.Add(system, system->Name(), system->Order(), system->Phases())) return;
 	TimerName(system->Name());
-	if (s.client == nullptr) {
-		s.client = std::make_unique<PhaseClient>();
-		s.lastClient = std::make_unique<LastUpdateClient>();
-		eventHandler.AddClient(s.client.get());
-		eventHandler.AddClient(s.lastClient.get());
-	}
+	AddClients();
 	LOG("[KT1] draw system %s added", system->Name());
 }
 
 void DrawPhases::Run(DrawPhase phase) {
-	if (State().client == nullptr) return;   // no draw system in this game
+	if (State().client == nullptr) return;   // no draw system and no display events in this game
 	RunPhase(phase);
 }
 
