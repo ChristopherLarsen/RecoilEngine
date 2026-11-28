@@ -226,7 +226,7 @@ private:
 		U.px = x; U.py = y; U.pz = z; U.hd = hd;
 		if (!U.ghSet || dx != 0 || dz != 0) { U.gh = (float)CGround::GetHeightReal((float)x, (float)z, true); U.ghSet = true; }
 		U.agl = y - U.gh;
-		U.inAir = U.air && U.agl > 3;                // anim.lua Sense: canFly and agl > 3 is "air", else gh >= 0 is "land"; DESIGN: air threshold of scripts/pm/anim.lua Sense
+		U.inAir = U.air && U.agl > 3;                // anim.lua Sense: canFly and agl > 3 is "air", else gh >= 0 is "land"; PLACEHOLDER: air threshold of scripts/pm/anim.lua Sense (no label there)
 		U.land = !U.inAir && U.gh >= 0;
 	}
 

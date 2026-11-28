@@ -30,7 +30,7 @@
 // Draw:       one pool per (texture, base); a ring of segment instances on the GPU (only written slots are uploaded) and a head
 //             buffer rewritten each drawn frame; one instanced draw per buffer, the follower's GLSL (cfx_ribbons_gl4.lua RIBBON_VS/FS).
 
-// KT1 lint: allow-file file-size vfx-pilot (D05) splits Ribbons
+// KT1 lint: allow-file file-size owner vfx-pilot, no work package card names a split yet
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -57,12 +57,12 @@
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 #include "Rendering/Textures/Bitmap.h"
-#include "Sim/Misc/GlobalSynced.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
-#include "Sim/Projectiles/Projectile.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
-#include "Sim/Projectiles/ProjectileHandler.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
-#include "Sim/Projectiles/WeaponProjectiles/WeaponProjectile.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
-#include "Sim/Weapons/WeaponDef.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
-#include "Sim/Weapons/WeaponDefHandler.h"   // KT1 lint: allow draw-sim-include D05 (vfx-pilot) moves Ribbons onto DrawView
+#include "Sim/Misc/GlobalSynced.h"   // KT1 lint: allow draw-sim-include reads live projectiles; owner vfx-pilot, no work package card names the move yet
+#include "Sim/Projectiles/Projectile.h"   // KT1 lint: allow draw-sim-include reads live projectiles; owner vfx-pilot, no work package card names the move yet
+#include "Sim/Projectiles/ProjectileHandler.h"   // KT1 lint: allow draw-sim-include reads live projectiles; owner vfx-pilot, no work package card names the move yet
+#include "Sim/Projectiles/WeaponProjectiles/WeaponProjectile.h"   // KT1 lint: allow draw-sim-include reads live projectiles; owner vfx-pilot, no work package card names the move yet
+#include "Sim/Weapons/WeaponDef.h"   // KT1 lint: allow draw-sim-include reads live projectiles; owner vfx-pilot, no work package card names the move yet
+#include "Sim/Weapons/WeaponDefHandler.h"   // KT1 lint: allow draw-sim-include reads live projectiles; owner vfx-pilot, no work package card names the move yet
 #include "System/Config/ConfigHandler.h"
 #include "System/Log/ILog.h"
 #include "System/Misc/SpringTime.h"
@@ -380,7 +380,7 @@ private:
 	// ---- the plan of one game frame (gfx_shots.lua GameFrame)
 	struct Shot { int id; Emitter* e; const CProjectile* p; float d2; int band; int prio; bool want; };
 
-	// KT1 lint: allow function-size vfx-pilot (D05) splits Ribbons' plan
+	// KT1 lint: allow function-size one ported block, the follower plan; owner vfx-pilot, no card names a split yet
 	void Plan(int f) {
 		if (f % settingsEvery == 0) ReadSettings();
 		const float now = f / FPS;
