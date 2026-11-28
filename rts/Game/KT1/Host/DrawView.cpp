@@ -1,5 +1,6 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 host: DrawView over the live engine (see DrawView.h). The draw host's only file that reads sim objects.
+// KT1 host: DrawView over the live engine (see DrawView.h): the frame, the drawn units and the screen ray. The draw
+// host reads sim objects only in DrawView*.cpp, DrawWrites.cpp and DrawFeed.cpp.
 
 #include "DrawView.h"
 

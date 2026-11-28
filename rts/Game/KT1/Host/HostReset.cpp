@@ -9,6 +9,7 @@
 #include "DisplayEvents.h"
 #include "Fakes.h"
 #include "Game/KT1/Draw/Common/DisplayListen.h"
+#include "Game/KT1/Draw/Common/DrawFeed.h"
 #include "Phases.h"
 #include "SimEvents.h"
 #include "SyncState.h"
@@ -19,6 +20,7 @@ namespace KT1 {
 void ResetSimHost() {
 	DisplayEvents::Reset();
 	DisplaySink::ResetListeners();
+	DrawFeed::Reset();
 	Check::Reset();
 	SyncState::Reset();
 	AllowChain::Reset();

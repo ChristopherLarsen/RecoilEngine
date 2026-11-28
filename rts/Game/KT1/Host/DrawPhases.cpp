@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 
+#include "Game/KT1/Draw/Common/DrawFeed.h"
 #include "Game/UI/MiniMap.h"
 #include "Rendering/GL/myGL.h"
 #include "Rendering/GlobalRendering.h"
@@ -133,6 +134,7 @@ void RunPhase(DrawPhase phase) {
 	s.view.BeginFrame(globalRendering->drawFrame);
 	const HostAudit::Scope audit(s.systems.AnyEnabled());
 	if (phase == DrawPhase::Update) DisplaySink::Replay();   // the steps since the last frame, before any system
+	if (phase == DrawPhase::Update) DrawFeed::Deliver();     // the same for the unit and feature events
 	if (phase == DrawPhase::PreDraw) SyncSwitches();
 	// Genesis is where the frame's camera and positions are settled: the facts are made there for every later phase
 	if (phase == DrawPhase::Genesis && s.systems.AnyEnabled()) RefreshFacts();
@@ -179,6 +181,7 @@ void DrawPhases::Kill() {
 	HostState& s = State();
 	for (const auto& e : s.systems.Entries()) e.system->Kill();
 	s.systems.Clear();
+	DrawFeed::Reset();      // its listeners point into the systems
 	s.client.reset();       // ~CEventClient removes it from the event handler
 	s.lastClient.reset();
 	s.facts.Reset();
