@@ -12,7 +12,7 @@
 #include <cstring>
 #include <type_traits>
 
-namespace KT1::SimHost {
+namespace KT1::Core::SimHost {
 
 class StateHash {
 public:
@@ -32,6 +32,6 @@ private:
 	uint64_t h = BASIS;
 };
 
-} // namespace KT1::SimHost
+} // namespace KT1::Core::SimHost
 
 #endif

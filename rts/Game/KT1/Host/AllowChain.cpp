@@ -8,8 +8,8 @@
 namespace KT1 {
 namespace {
 
-using SimHost::AllAllow;
-using SimHost::Ordered;
+using Core::SimHost::AllAllow;
+using Core::SimHost::Ordered;
 
 struct Chains {
 	Ordered<AllowChain::CommandFn> command;

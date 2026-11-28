@@ -14,7 +14,7 @@ namespace KT1 {
 
 class DisplayEvents {
 public:
-	static void Emit(const SimHost::DisplayEvent& e);
+	static void Emit(const Core::SimHost::DisplayEvent& e);
 
 	static void Sound(int soundId, const float3& pos, float volume);
 	static void Effect(int generatorId, const float3& pos, const float3& dir, float damage, float radius, int ownerId);

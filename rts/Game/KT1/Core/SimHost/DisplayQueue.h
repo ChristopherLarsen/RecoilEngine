@@ -14,7 +14,7 @@
 #include <cstring>
 #include <vector>
 
-namespace KT1::SimHost {
+namespace KT1::Core::SimHost {
 
 enum class DisplayKind : uint8_t {
 	Sound,      // id = sound id; a = position; value = volume
@@ -71,6 +71,6 @@ private:
 	std::vector<DisplayEvent> ready;
 };
 
-} // namespace KT1::SimHost
+} // namespace KT1::Core::SimHost
 
 #endif

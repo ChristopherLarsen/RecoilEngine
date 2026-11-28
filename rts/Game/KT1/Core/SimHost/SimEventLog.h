@@ -17,7 +17,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace KT1::SimHost {
+namespace KT1::Core::SimHost {
 
 // What each type fills in Event (unlisted fields are -1 or 0).
 enum class EventType : uint8_t {
@@ -193,6 +193,6 @@ template<class F> void EventBatch::ForEachRaised(F&& fn) const {
 	}
 }
 
-} // namespace KT1::SimHost
+} // namespace KT1::Core::SimHost
 
 #endif

@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-namespace KT1::SimHost {
+namespace KT1::Core::SimHost {
 
 template<class T> class Ordered {
 public:
@@ -52,6 +52,6 @@ template<class Fn, class... A> bool AllAllow(const Ordered<Fn>& chain, A&&... ar
 	return true;
 }
 
-} // namespace KT1::SimHost
+} // namespace KT1::Core::SimHost
 
 #endif

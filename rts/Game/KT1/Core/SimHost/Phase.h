@@ -15,7 +15,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace KT1::SimHost {
+namespace KT1::Core::SimHost {
 
 enum class Phase : uint8_t { FrameStart, AfterCommands, AfterMove, AfterWeapons, FrameEnd, Count };
 
@@ -36,6 +36,6 @@ struct IdRange {
 	constexpr bool Contains(int32_t id) const { return id >= begin && id < end; }
 };
 
-} // namespace KT1::SimHost
+} // namespace KT1::Core::SimHost
 
 #endif

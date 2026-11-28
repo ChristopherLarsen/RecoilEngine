@@ -16,7 +16,7 @@ struct Column {
 	uint32_t hash = 0;
 };
 
-SimHost::Ordered<Column> columns;
+Core::SimHost::Ordered<Column> columns;
 
 } // namespace
 
@@ -26,7 +26,7 @@ void SyncState::Add(const char* system, const char* column, Writer writer) {
 
 void SyncState::Close() {
 	for (auto& item : columns) {
-		SimHost::StateHash h;
+		Core::SimHost::StateHash h;
 		item.value.writer(h);
 		item.value.hash = h.Get();
 #ifdef SYNCCHECK

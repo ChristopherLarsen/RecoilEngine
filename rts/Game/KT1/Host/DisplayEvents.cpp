@@ -20,10 +20,10 @@
 namespace KT1 {
 namespace {
 
-using SimHost::DisplayEvent;
-using SimHost::DisplayKind;
+using Core::SimHost::DisplayEvent;
+using Core::SimHost::DisplayKind;
 
-SimHost::DisplayQueue queue;
+Core::SimHost::DisplayQueue queue;
 
 float3 ToFloat3(const float (&v)[3]) { return float3(v[0], v[1], v[2]); }
 

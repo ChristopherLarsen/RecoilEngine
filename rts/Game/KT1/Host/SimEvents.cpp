@@ -19,19 +19,19 @@
 namespace KT1 {
 namespace {
 
-using SimHost::Event;
-using SimHost::EventType;
+using Core::SimHost::Event;
+using Core::SimHost::EventType;
 
 constexpr int CLIENT_ORDER = -1000000;   // DESIGN: ahead of every Lua handle (LUA_HANDLE_ORDER_RULES is 100)
 
 // The engine's call-in name of each event type, in EventType order.
-constexpr const char* CALLINS[SimHost::EVENT_TYPES] = {
+constexpr const char* CALLINS[Core::SimHost::EVENT_TYPES] = {
 	"UnitCreated", "UnitFinished", "UnitFromFactory", "UnitDestroyed", "UnitGiven", "UnitTaken", "UnitDamaged",
 	"UnitLoaded", "UnitUnloaded", "UnitCmdDone", "UnitIdle", "ProjectileCreated", "ProjectileDestroyed", "Explosion",
 	"FeatureCreated", "FeatureDestroyed"
 };
 
-SimHost::EventLog eventLog;
+Core::SimHost::EventLog eventLog;
 
 void SetPos(Event& e, const float3& p) {
 	e.pos[0] = p.x;
@@ -81,8 +81,8 @@ public:
 	Client() : CEventClient("[KT1SimEvents]", CLIENT_ORDER, true) {}
 
 	bool WantsEvent(const std::string& name) override {
-		for (size_t t = 0; t < SimHost::EVENT_TYPES; ++t)
-			if (name == CALLINS[t]) return (eventLog.Wanted() & (SimHost::EventMask(1) << t)) != 0;
+		for (size_t t = 0; t < Core::SimHost::EVENT_TYPES; ++t)
+			if (name == CALLINS[t]) return (eventLog.Wanted() & (Core::SimHost::EventMask(1) << t)) != 0;
 		return false;
 	}
 	int GetReadAllyTeam() const override { return AllAccessTeam; }
@@ -162,7 +162,7 @@ Client* client = nullptr;
 
 } // namespace
 
-int SimEvents::Subscribe(SimHost::EventMask mask) {
+int SimEvents::Subscribe(Core::SimHost::EventMask mask) {
 	const int reader = eventLog.AddReader(mask);
 	if (client == nullptr) client = new Client();
 	else eventHandler.RemoveClient(client);   // re-link: the wanted events have changed
@@ -170,7 +170,7 @@ int SimEvents::Subscribe(SimHost::EventMask mask) {
 	return reader;
 }
 
-SimHost::EventBatch SimEvents::Take(int reader) { return eventLog.Take(reader); }
+Core::SimHost::EventBatch SimEvents::Take(int reader) { return eventLog.Take(reader); }
 
 void SimEvents::Compact() { eventLog.Compact(); }
 
