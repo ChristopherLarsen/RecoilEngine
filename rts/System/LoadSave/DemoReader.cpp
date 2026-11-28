@@ -22,6 +22,7 @@ CONFIG(bool, DisableDemoVersionCheck).defaultValue(false).description("Allow to 
 #include <climits>
 #include <stdexcept>
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
 
 
@@ -40,6 +41,15 @@ static bool CheckDemoHeader(const DemoFileHeader& fileHeader)
 		return false;
 	if (fileHeader.teamStatElemSize != sizeof(TeamStatistics))
 		return false;
+
+	// KT1 SIM-10HZ-PLAN stage 0: a demo records its sim rate in the sync version (" gs<N>", none at 30); refuse a demo of
+	// another rate in every build, since its frames are not ours
+	{
+		const char* gs = strstr(fileHeader.versionString, " gs");
+		const int demoRate = (gs != nullptr)? atoi(gs + 3): 30;
+		if (demoRate != GAME_SPEED)
+			return false;
+	}
 
 	// do not compare Spring version in debug mode: we do not want to make
 	// debugging dev-version demos impossible (because the version differs

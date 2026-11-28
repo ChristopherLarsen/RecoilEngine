@@ -36,6 +36,7 @@
 #include "Game/KT1/KT1Register.h"
 #include "Lua/LuaHandle.h"
 #include "Lua/LuaParser.h"
+#include "Game/KT1/KT1Config.h"
 #include "Lua/LuaUtils.h"
 #include "Map/Ground.h"
 #include "Sim/Features/Feature.h"
@@ -55,12 +56,12 @@ public:
 	Plants() : Rule({"Plants", 1, true, "LuaRules/Gadgets/mov_trees.lua, map_plants.lua (contact search)", false}) {}
 
 	void LoadConfig(const LuaTable& cfg) override {
-		treesEvery = std::max(1, cfg.GetInt("trees_every", 3));
+		treesEvery = KT1::ConfigFrames(cfg, "trees_every_s", "trees_every", 3);
 		treesReach = cfg.GetFloat("trees_reach", 0.6f);
-		treesMin = cfg.GetFloat("trees_min_speed", 0.01f);
-		plantsEvery = std::max(1, cfg.GetInt("plants_every", 3));
+		treesMin = KT1::ConfigPerFrame30(cfg, "trees_min_speed", 0.01f);
+		plantsEvery = KT1::ConfigFrames(cfg, "plants_every_s", "plants_every", 3);
 		plantsMargin = cfg.GetFloat("plants_margin", 4.0f);
-		plantsMin = cfg.GetFloat("plants_min_speed", 0.05f);
+		plantsMin = KT1::ConfigPerFrame30(cfg, "plants_min_speed", 0.05f);
 	}
 
 	void Start() override {

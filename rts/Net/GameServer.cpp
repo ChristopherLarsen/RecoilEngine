@@ -68,8 +68,12 @@ using netcode::RawPacket;
 
 CONFIG(int, AutohostPort).defaultValue(0).description("Which port should the engine listen on for Autohost interfact connections.");
 CONFIG(int, ServerSleepTime).defaultValue(5).description("Number of milliseconds to sleep per tick for the server thread. Lower values have marginally higher CPU load, while high values can introduce additional latency.");
-CONFIG(int, SpeedControl).defaultValue(1).minimumValue(1).maximumValue(2)
-	.description("Sets how server adjusts speed according to player's load (CPU), 1: use average, 2: use highest");
+CONFIG(int, SpeedControl).defaultValue(1).minimumValue(1).maximumValue(3)
+	.description("Sets how server adjusts speed according to player's load (CPU), 1: use average, 2: use highest, 3: KT1 pace from the largest client frame lag");
+// KT1 pace rule (SpeedControl 3). Times in seconds.
+CONFIG(float, PaceLagLowS).defaultValue(0.25f).minimumValue(0.05f).description("KT1 pace: client lag above its network baseline, in seconds, at which the server starts to slow the game");
+CONFIG(float, PaceLagCapS).defaultValue(1.0f).minimumValue(0.1f).description("KT1 pace: client lag above its baseline, in seconds, at which the server makes no new frames");
+CONFIG(float, PaceHeadroom).defaultValue(0.95f).minimumValue(0.5f).maximumValue(1.0f).description("KT1 pace: share of the slowest client's measured step rate that the server targets");
 CONFIG(bool, AllowSpectatorJoin).defaultValue(true).dedicatedValue(false).description("allow any unauthenticated clients to join as spectator with any name, name will be prefixed with ~");
 CONFIG(bool, WhiteListAdditionalPlayers).defaultValue(true);
 CONFIG(bool, ServerRecordDemos).defaultValue(false).dedicatedValue(true);
@@ -90,16 +94,18 @@ LOG_REGISTER_SECTION_GLOBAL(LOG_SECTION_GAMESERVER)
 
 
 /// frames until a synccheck will time out and a warning is given out
-static constexpr unsigned SYNCCHECK_TIMEOUT = 300;
+static constexpr unsigned SYNCCHECK_TIMEOUT = 10 * GAME_SPEED; // 10 s (300 frames at 30 Hz)
 
 /// used to prevent msg spam
-static constexpr unsigned SYNCCHECK_MSG_TIMEOUT = 400;
+static constexpr unsigned SYNCCHECK_MSG_TIMEOUT = (40 * GAME_SPEED) / 3; // 13.3 s (400 frames at 30 Hz)
 
 /// The time interval in msec for sending player statistics to each client
 static const spring_time playerInfoTime = spring_secs(2);
+// KT1 pace: a client's network baseline (lowest lag seen) rises by this much per second, so it follows a worse link.
+static constexpr float PACE_BASELINE_RISE_S_PER_S = 0.02f;
 
 /// every n'th frame will be a keyframe (and contain the server's framenumber)
-static constexpr unsigned serverKeyframeInterval = 16;
+static constexpr unsigned serverKeyframeInterval = (((16 * GAME_SPEED + 29) / 30) > 1)? ((16 * GAME_SPEED + 29) / 30): 1; // 0.53 s: 16 frames at 30 Hz, 6 at 10
 
 /// players incoming bandwidth new allowance every X milliseconds
 static constexpr unsigned playerBandwidthInterval = 100;
@@ -159,6 +165,9 @@ void CGameServer::Initialize()
 {
 	// configs
 	curSpeedCtrl = configHandler->GetInt("SpeedControl");
+	paceLagLowS = configHandler->GetFloat("PaceLagLowS");
+	paceLagCapS = std::max(configHandler->GetFloat("PaceLagCapS"), paceLagLowS + 0.05f);
+	paceHeadroom = configHandler->GetFloat("PaceHeadroom");
 	allowSpecJoin = configHandler->GetBool("AllowSpectatorJoin") || myGameSetup->onlyLocal; ///!!! mantis #4418
 	whiteListAdditionalPlayers = configHandler->GetBool("WhiteListAdditionalPlayers");
 	logInfoMessages = configHandler->GetBool("ServerLogInfoMessages");
@@ -915,6 +924,11 @@ void CGameServer::LagProtection()
 		}
 	}
 
+	if (curSpeedCtrl == 3) {
+		PaceFromFrameLag();
+		return;
+	}
+
 	// calculate median values
 	medianCpu = 0.0f;
 	medianPing = 0;
@@ -971,6 +985,92 @@ void CGameServer::LagProtection()
 		if (newSpeed != internalSpeed)
 			InternalSpeedChange(newSpeed);
 	}
+}
+
+
+bool CGameServer::PaceCountsPlayer(const GameParticipant& p) const
+{
+	if (p.myState != GameParticipant::INGAME || p.isReconn)
+		return false;
+	return (p.isLocal || (demoReader ? !p.isFromDemo : !p.spectator));
+}
+
+float CGameServer::PaceWorstExcessLagS() const
+{
+	float worst = 0.0f;
+	for (const GameParticipant& p: players) {
+		if (!PaceCountsPlayer(p))
+			continue;
+		const float lagS = (serverFrameNum - p.lastFrameResponse) / float(GAME_SPEED);
+		worst = std::max(worst, lagS - std::min(p.paceBaselineLagS, lagS));
+	}
+	return worst;
+}
+
+// KT1 pace rule (SpeedControl 3; NEW-ENGINE-PLAN Phase 2 item 3). Game speed follows the client furthest behind:
+// - a counted client's lag is serverFrameNum - lastFrameResponse, in seconds, less its network baseline (the lowest lag
+//   seen, rising slowly so a worse link becomes the new baseline);
+// - each client's achieved step rate over the last interval is measured from its frame responses;
+// - when a client's excess lag is above PaceLagLowS, the target is the slowest such client's rate times PaceHeadroom, less
+//   a term that drains its backlog over one interval; otherwise the target is the user's speed;
+// - the existing averaging with the current speed (one LagProtection interval, 2 s) smooths the change.
+// Lost time is never repaid (SIM-RATE-002 v4 R3, R8): CreateNewFrame keeps its 200 ms elapsed cap and makes no frame while a
+// client is PaceLagCapS behind, so after a hold a capped burst runs (R4).
+void CGameServer::PaceFromFrameLag()
+{
+	const spring_time now = spring_gettime();
+	const float dtS = (paceLastTick == spring_notime)? 0.0f: (now - paceLastTick).toSecsf();
+	paceLastTick = now;
+
+	float worstExcessS = 0.0f;
+	float slowRate = userSpeedFactor; // game-speed units: 1.0 = GAME_SPEED steps per wall second
+	int worstId = -1;
+
+	for (GameParticipant& p: players) {
+		const int resp = p.lastFrameResponse;
+		const int prevResp = p.pacePrevResponse;
+		p.pacePrevResponse = resp;
+
+		if (!PaceCountsPlayer(p))
+			continue;
+
+		const float lagS = (serverFrameNum - resp) / float(GAME_SPEED);
+		p.paceBaselineLagS = std::min(lagS, p.paceBaselineLagS + PACE_BASELINE_RISE_S_PER_S * dtS);
+		const float excessS = std::max(0.0f, lagS - p.paceBaselineLagS);
+
+		if (excessS <= paceLagLowS)
+			continue;
+
+		if (excessS > worstExcessS) {
+			worstExcessS = excessS;
+			worstId = p.id;
+		}
+		if (dtS > 0.0f && prevResp > 0) {
+			const float rate = (resp - prevResp) / (dtS * GAME_SPEED);
+			const float drain = (excessS - paceLagLowS) / std::max(dtS, 0.5f);
+			slowRate = std::min(slowRate, rate * paceHeadroom - drain);
+		}
+	}
+
+	if (isPaused)
+		return;
+
+	float newSpeed = (worstId < 0)? userSpeedFactor: slowRate;
+	newSpeed = std::clamp(newSpeed, 0.1f, userSpeedFactor);
+	newSpeed = (newSpeed + internalSpeed) * 0.5f;
+
+#ifndef DEDICATED
+	// the host's own cap, as in the CPU modes
+	const float invSimDrawFract = 1.0f - globalConfig.minSimDrawBalance;
+	const float maxSimFrameRate = (1000.0f / gu->avgSimFrameTime) * invSimDrawFract;
+	const float maxNewSpeed = std::max(0.1f, ((maxSimFrameRate / GAME_SPEED) + internalSpeed) * 0.5f);
+	newSpeed = std::clamp(newSpeed, 0.1f, maxNewSpeed);
+#endif
+
+	LOG("[GameServer::%s] worstExcessLag=%.3fs player=%d slowRate=%.3f speed %.3f -> %.3f", __func__, worstExcessS, worstId, slowRate, internalSpeed, newSpeed);
+
+	if (newSpeed != internalSpeed)
+		InternalSpeedChange(newSpeed);
 }
 
 
@@ -2718,6 +2818,18 @@ void CGameServer::CreateNewFrame(bool fromServerThread, bool fixedFrameTime)
 			}
 		}
 		#endif
+
+		// KT1 pace (SpeedControl 3): a lead limit for every counted client, not only the host. Fewer frames as the worst
+		// excess lag rises from PaceLagLowS, none at PaceLagCapS; frames not made are not repaid.
+		if (curSpeedCtrl == 3 && serverFrameNum >= 0) {
+			const float excessS = PaceWorstExcessLagS();
+			const float ratio = std::clamp((excessS - paceLagLowS) / (paceLagCapS - paceLagLowS), 0.0f, 1.0f);
+			const unsigned int capFrames = (ratio >= 1.0f)? 0u: (unsigned int)math::ceil(GAME_SPEED * paceLagCapS * (1.0f - ratio));
+			if (numNewFrames > capFrames) {
+				numNewFrames = capFrames;
+				frameTimeLeft = std::min(frameTimeLeft, 0.0f);
+			}
+		}
 	}
 
 	if (normalFrame || videoFrame || singleStep) {
@@ -2767,6 +2879,8 @@ std::string CGameServer::SpeedControlToString(int speedCtrl)
 		desc = "Maximum CPU";
 	} else if (speedCtrl == 1) {
 		desc = "Average CPU";
+	} else if (speedCtrl == 3) {
+		desc = "KT1 frame lag";
 	}
 	return desc;
 }

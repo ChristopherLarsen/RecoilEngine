@@ -166,6 +166,9 @@ private:
 	void ServerReadNet();
 
 	void LagProtection();
+	void PaceFromFrameLag();
+	bool PaceCountsPlayer(const GameParticipant& p) const;
+	float PaceWorstExcessLagS() const;
 
 	/** @brief Generate a unique game identifier and send it to all clients. */
 	void GenerateAndSendGameID();
@@ -252,6 +255,10 @@ private:
 	float medianCpu = 0.0f;
 	int medianPing = 0;
 	int curSpeedCtrl = 0;
+	float paceLagLowS = 0.25f;
+	float paceLagCapS = 1.0f;
+	float paceHeadroom = 0.95f;
+	spring_time paceLastTick = spring_notime;
 	int loopSleepTime = 0;
 
 
