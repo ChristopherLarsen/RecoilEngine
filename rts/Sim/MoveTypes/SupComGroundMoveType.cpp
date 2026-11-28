@@ -1300,7 +1300,21 @@ void CSupComGroundMoveType::UpdateUnitPosition()
 		if (FootprintBlocked(owner->pos) && progressState == Active) {
 			CGroundMoveType::UpdateUnitPosition();
 			// pathing fix 21 (PTH-004-E): the stock step that is to free the footprint may not take it deeper or add overlap
-			{ static const bool on21 = SupComSimSwitch::Get("SupComNoDeeperFree", true); if (on21) ClipCollisionForce(resultantForces); } // switch SupComNoDeeperFree, default 1
+			{
+				// SupComNoDeeperFreeDepthOnly (default 0, test): only a step that goes deeper is dropped, added overlap is allowed;
+				// SupComNoDeeperLog (default 0) logs each free step that would add depth or overlap
+				static const bool on21 = SupComSimSwitch::Get("SupComNoDeeperFree", true);
+				static const bool depthOnly = SupComSimSwitch::Get("SupComNoDeeperFreeDepthOnly", false);
+				static const bool log21 = SupComSimSwitch::Get("SupComNoDeeperLog", false);
+				const float3 nx = owner->pos + resultantForces;
+				const float d0 = FootprintDepth(owner->pos), d1 = FootprintDepth(nx), a0 = FootprintOverlapArea(owner->pos), a1 = FootprintOverlapArea(nx);
+				const bool deeper = (d1 > d0 + 1e-3f), more = (a1 > a0 + 1e-3f);
+				if (log21 && resultantForces.SqLength2D() > 0.0f && FootprintBlocked(nx) && (deeper || more))
+					LOG("[SupComNoDeeper] f=%d unit %d free step (%.2f, %.2f) at (%.2f, %.2f) cells: depth %.2f -> %.2f, area %.1f -> %.1f", gs->frameNum, owner->id,
+						resultantForces.x, resultantForces.z, owner->pos.x / SQUARE_SIZE, owner->pos.z / SQUARE_SIZE, d0, d1, a0, a1);
+				if (on21 && resultantForces.SqLength2D() > 0.0f && FootprintBlocked(nx) && (deeper || (!depthOnly && more)))
+					resultantForces = ZeroVector;
+			} // pathing fix 21: switch SupComNoDeeperFree, default 1
 
 			scSpeed = math::fabs(owner->speed.dot(flatFrontDir));
 			scPhase = PHASE_DRIVE;
