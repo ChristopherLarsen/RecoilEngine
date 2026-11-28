@@ -100,20 +100,31 @@ KT1_CASE("SIMHOST-START", "a validator asked at GameStart sees per-def data; set
 	FakeRule synced(true), draw(false), off(true, false);
 	std::vector<FakeRule*> rules{&synced, &draw, &off};
 	StartGate gate;
-	gate.Synced(rules);                             // game load, before LuaRules
+	KT1_CHECK(gate.SetupIfNeeded(rules));          // game load, before LuaRules
 	KT1_CHECK(synced.Ask(2));                       // GameStart creates units: the validator is asked before any step
 	KT1_CHECK_EQ(draw.starts, 0);                   // an engine that never draws never starts it
-	gate.Synced(rules);                             // each sim step
+	KT1_CHECK(!gate.SetupIfNeeded(rules));         // each sim step: nothing left to start
 	gate.Unsynced(rules);                           // each drawn frame
 	gate.Unsynced(rules);
 	KT1_CHECK_EQ(synced.starts, 1);
 	KT1_CHECK_EQ(draw.starts, 1);
 	KT1_CHECK_EQ(off.starts, 0);
+}
+
+KT1_CASE("SIMHOST-START-NOSETUP", "a sim step without setup starts synced rules once; a drawn frame never does") {
+	FakeRule synced(true), draw(false);
+	std::vector<FakeRule*> rules{&synced, &draw};
+	StartGate gate;
+	gate.SetupIfNeeded(rules);
 	gate.Reset();                                   // the next game, one that never ran setup
+	synced.starts = 0;
 	gate.Unsynced(rules);
-	KT1_CHECK_EQ(synced.starts, 1);                 // a draw never starts a synced rule
-	gate.Synced(rules);                             // its first step does
-	KT1_CHECK_EQ(synced.starts, 2);
+	KT1_CHECK_EQ(synced.starts, 0);
+	KT1_CHECK(gate.SetupIfNeeded(rules));           // its first step: the registry logs this
+	KT1_CHECK(!gate.SetupIfNeeded(rules));
+	gate.Unsynced(rules);
+	KT1_CHECK_EQ(synced.starts, 1);
+	KT1_CHECK_EQ(draw.starts, 1);
 }
 
 KT1_CASE("SIMHOST-ORDER", "a batch: one type by ascending id, across types as the engine raised them") {

@@ -149,14 +149,15 @@ void Registry::Setup() {
 	LEAVE_SYNCED_CODE();
 }
 
-void Registry::StartSynced() {
+bool Registry::StartSynced() {
 	EnsureInit();
-	if (inited) starts.Synced(rules);
+	return inited && starts.SetupIfNeeded(rules);
 }
 
 void Registry::GameFrame(int frame) {
 	Registry& reg = Get();
-	reg.StartSynced();   // Setup did it; only a path that never ran CGame::Load starts them here
+	// Setup did it; a path that never ran CGame::Load (or a lost hook line) starts them here, the same on every machine
+	if (reg.StartSynced()) LOG_L(L_WARNING, "[KT1] Setup was not called: synced rules start at the first frame");
 	for (auto& r : reg.rules) {
 		if (!r->enabled || !r->info.synced) continue;
 		ScopedTimer t(hashString(r->timer.c_str()));

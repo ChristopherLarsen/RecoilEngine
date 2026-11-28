@@ -39,7 +39,8 @@ namespace KT1 {
 
 	private:
 		void EnsureInit();     // switches and configs, once a game is set up
-		void StartSynced();    // once: every enabled synced rule's Start (Setup; a step only when Setup never ran)
+		// once: every enabled synced rule's Start (Setup; a step only when Setup never ran); true when this call did it
+		bool StartSynced();
 
 		std::vector<std::unique_ptr<Rule>> rules;
 		bool built = false, inited = false;
