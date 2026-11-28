@@ -14,8 +14,10 @@
 // Config:     data/kt1/templaterule.json (TemplateRuleConfig.h has the keys, defaults and labels). ReadConfig only sets
 //             the struct: the loader may call it for a rule that is off. A system that replaces a .lua config adds
 //             LoadConfig, which also only sets values (KT1Rule.h)
-// Setup:      Start(), the first sim step, enabled rules only: state, phases, sync columns, and the units that exist
-//             already (they raise no event). Nothing is set up in a config reader
+// Setup:      Start(), enabled rules only: state, phases, sync columns, and the units that exist already (they raise no
+//             event). Nothing is set up in a config reader. Start runs before the first sim step, or earlier from the first
+//             drawn frame (Registry::DrawWorld), so on some clients and not others: a synced Start must give the same state
+//             either way
 // Unit data:  kt1 = { templaterule = { <key> = ... } } in a unit def, read per def in Start (KT1UnitData.h); none here
 // Phases:     FrameStart  tracks units from the events
 //             AfterUnits  visits the units due this step
@@ -79,7 +81,7 @@ public:
 		v.Add("cap", config.cap);
 	}
 
-	// before this step's FrameStart: make the sim units from the config, size the state, register phases and synced columns
+	// before the first FrameStart: make the sim units from the config, size the state, register phases and synced columns
 	void Start() override {
 		params = {Core::Rate::Every(config.periodS), config.gain, config.cap};
 		state.Init(MAX_UNITS, params);
@@ -94,12 +96,12 @@ public:
 	void PushLua(lua_State* L) override { LuaPushRawNamedCFunc(L, "Charge", LCharge); }
 
 private:
-	// units made before this rule subscribed (start units, a loaded game) raise no event: take the finished ones, id
-	// ascending
+	// units made before this rule subscribed (start units, a loaded game) raise no event: take the finished living ones,
+	// id ascending. A dead unit's UnitDestroyed may have passed already: adopted, it would never be removed
 	void AdoptUnits() {
 		for (int id = 0; id < static_cast<int>(unitHandler.MaxUnits()); ++id) {
 			const CUnit* u = unitHandler.GetUnit(id);
-			if (u != nullptr && !u->beingBuilt) state.Add(id, params);
+			if (u != nullptr && !u->beingBuilt && !u->isDead) state.Add(id, params);
 		}
 	}
 
