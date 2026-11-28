@@ -142,6 +142,7 @@ public:
 		table.state.Init(MAX_UNITS);
 		RegisterValidators();
 		RegisterFrameWork(table);
+		RegisterTransportOrders();
 		LOG("[KT1] %s: %d rows", NAME, static_cast<int>(table.compiled.size()));
 	}
 

@@ -1,14 +1,22 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 OrderRules: the rows of the build and feature steps and of the transport gates.
 
+#include <string>
+#include <vector>
+
 #include "OrderRulesAdapter.h"
 #include "Game/KT1/Core/Common/Rate.h"
+#include "Game/KT1/Core/Orders/QueueHandling.h"
+#include "Game/KT1/Host/Fakes.h"
 #include "Game/KT1/Rules/Orders/OrdersInternal.h"
 #include "Sim/Misc/GlobalConstants.h"
+#include "Sim/Misc/GlobalSynced.h"
 #include "Sim/Units/CommandAI/Command.h"
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
+#include "System/EventClient.h"
+#include "System/EventHandler.h"
 #include "System/float3.h"
 
 namespace KT1::OrderRules {
@@ -45,7 +53,41 @@ bool InPickupReach(const Table& table, const CUnit& transporter, const CUnit& ca
 	return transporter.pos.distance2D(cargo.pos) <= reach;
 }
 
+// ord_orders.lua UnitCommand: when a transport's load or unload order was given, which its gate counts from
+void NoteTransportCommand(const CUnit& u, const ::Command& c) {
+	Core::Orders::State* state = Internal::State();
+	if (state == nullptr) return;
+	const int id = c.GetID();
+	const bool pickup = id == Core::Orders::CUSTOM_PICKUP;
+	const bool load = pickup || id == CMD_LOAD_UNITS || id == CMD_LOAD_ONTO;
+	if (!load && id != CMD_UNLOAD_UNITS && id != CMD_UNLOAD_UNIT) return;
+	std::vector<Core::Orders::OrderView> queue;
+	Internal::ReadQueue(u.id, 1, queue);
+	const bool behind = (c.GetOpts() & SHIFT_KEY) != 0 && !queue.empty();
+	const auto slot = state->Track(u.id, u.unitDef->id);
+	Core::Orders::NoteTransportOrder(state->orderClock[slot],
+		load ? Core::Orders::ClockKind::Load : Core::Orders::ClockKind::Unload, gs->frameNum, pickup, behind);
+}
+
+class TransportOrders final : public CEventClient {
+public:
+	TransportOrders() : CEventClient("[KT1OrderRules]", CLIENT_ORDER, true) {}
+	bool WantsEvent(const std::string& name) override { return name == "UnitCommand"; }
+	int GetReadAllyTeam() const override { return AllAccessTeam; }
+	void UnitCommand(const CUnit* u, const ::Command& c, int, bool, bool) override {
+		if (!Fakes::Is(u)) NoteTransportCommand(*u, c);   // a fake's call-ins never reach ord_orders.lua
+	}
+};
+
 } // namespace
+
+void RegisterTransportOrders() {
+	// not a static object: CEventClient's destructor calls the event handler, which may be gone by process exit
+	static TransportOrders* client = nullptr;
+	if (client == nullptr) client = new TransportOrders();
+	else eventHandler.RemoveClient(client);
+	eventHandler.AddClient(client);
+}
 
 bool AskStepRow(Table& table, const CompiledRow& row, const CUnit& builder, const CUnit* target, float part, int frame) {
 	if (part >= 0) return true;   // building and repairing pass every row

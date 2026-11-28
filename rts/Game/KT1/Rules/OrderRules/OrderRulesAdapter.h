@@ -79,6 +79,8 @@ bool AskTransportRow(const Table& table, const Rows::CompiledRow& row, const CUn
 void Reissue(Table& table, const Rows::CompiledRow& row, int unit, int commandID, std::span<const float> params,
              std::uint8_t options);
 
+// hears the transports' load and unload orders for their gates (OrderRulesSteps.cpp)
+void RegisterTransportOrders();
 // the work between orders: phases, events and sync columns (OrderRulesFrame.cpp)
 void RegisterFrameWork(Table& table);
 
