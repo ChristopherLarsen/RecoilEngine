@@ -1,0 +1,96 @@
+/* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
+// KT1 draw: filling FrameFacts (see FrameFacts.h). Units only through DrawView.
+
+#include "FrameFacts.h"
+
+#include "Game/Camera.h"
+#include "Game/GlobalUnsynced.h"
+#include "Game/SelectedUnitsHandler.h"
+#include "Game/UI/MiniMap.h"
+#include "Game/UI/MouseHandler.h"
+#include "Rendering/GlobalRendering.h"
+#if __has_include("Rendering/SupComZoomLevel.h")
+#include "Rendering/SupComZoomLevel.h"
+#define KT1_HAS_ZOOM_LEVEL
+#endif
+
+namespace KT1 {
+
+void FrameFacts::Reset() {
+	selection.Init(0);
+	visibleBits.Init(0);
+	visible.clear();
+	pointer = PointerFacts{};
+	camera = CameraFacts{};
+	zoomLevel = ZOOM_UNKNOWN;
+	zoomDist = -1.0f;
+	stepFraction = 0.0f;
+	step = 0;
+	frame = 0;
+	valid = false;
+	forced = false;
+}
+
+void FrameFacts::Refresh(uint32_t drawFrame, const DrawView& view) {
+	if (valid && frame == drawFrame) return;
+	const int capacity = view.UnitCapacity();
+	if (visibleBits.Capacity() != capacity) {   // the first frame of a game
+		selection.Init(capacity);
+		visibleBits.Init(capacity);
+		visible.reserve(capacity);
+	}
+	frame = drawFrame;
+	valid = true;
+
+	ReadCamera();
+	ReadZoom();
+	step = view.Step();
+	stepFraction = globalRendering->timeOffset;
+	ReadPointer(view);
+	selection.Update(selectedUnitsHandler.selectedUnits);
+	ReadVisible(view);
+}
+
+void FrameFacts::ReadCamera() {
+	camera.pos = ::camera->GetPos();
+	camera.forward = ::camera->GetDir();
+	camera.right = ::camera->GetRight();
+	camera.up = ::camera->GetUp();
+	camera.viewProj = ::camera->GetViewProjectionMatrix();
+	camera.viewW = globalRendering->viewSizeX;
+	camera.viewH = globalRendering->viewSizeY;
+}
+
+// The one place that knows the zoom level. SupComZoomLevel (fork branch drawzoom2) is not in the wave 0 base: until the
+// engine has it the level reads unknown, and it is picked up by the next build that does.
+void FrameFacts::ReadZoom() {
+#ifdef KT1_HAS_ZOOM_LEVEL
+	zoomLevel = SupComZoomLevel::Get();
+	zoomDist = SupComZoomLevel::Dist();
+#else
+	zoomLevel = ZOOM_UNKNOWN;
+	zoomDist = -1.0f;
+#endif
+}
+
+void FrameFacts::ReadPointer(const DrawView& view) {
+	pointer.x = forced ? forcedX : (mouse->lastx - globalRendering->viewPosX);
+	pointer.y = forced ? forcedY : (globalRendering->viewSizeY - mouse->lasty - 1);
+	const int wx = pointer.x + globalRendering->viewPosX;
+	const int wy = globalRendering->viewSizeY - 1 - pointer.y;
+	pointer.overMiniMap = minimap != nullptr && !minimap->GetMinimized() && minimap->IsInside(wx, wy);
+	pointer.hit = view.Trace(pointer.x, pointer.y);
+}
+
+void FrameFacts::ReadVisible(const DrawView& view) {   // KT1 hot
+	visibleBits.Clear();
+	UnitView u;
+	for (const int id : view.UnitIds()) {
+		if (!view.Unit(id, u) || u.hidden || !u.inLos) continue;
+		if (::camera->InView(u.drawMidPos, u.drawRadius)) visibleBits.Set(id);
+	}
+	visible.clear();
+	visibleBits.AppendTo(visible);
+}
+
+} // namespace KT1

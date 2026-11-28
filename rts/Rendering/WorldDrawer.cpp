@@ -3,6 +3,7 @@
 #include "Rendering/GL/myGL.h"
 
 #include "WorldDrawer.h"
+#include "Game/KT1/Host/DrawPhases.h" // KT1 hook: DrawPhases
 #include "Game/KT1/KT1Registry.h" // KT1 hook: registry
 #include "Game/KT1/UI/FarView/KT1FarView.h" // KT1 hook: FarView
 #include "SupComZoomLevel.h"
@@ -177,6 +178,7 @@ void CWorldDrawer::InitPost() const
 
 void CWorldDrawer::Kill()
 {
+	KT1::DrawPhases::Kill(); // KT1 hook: DrawPhases (draw systems release their GL objects)
 	infoTextureHandler = nullptr;
 
 	IWater::KillWater();
@@ -336,6 +338,7 @@ void CWorldDrawer::Draw() const
 	{
 		SCOPED_TIMER("Draw::World::DrawWorld");
 		SCOPED_GL_DEBUGGROUP("Draw::World::DrawWorld");
+		KT1::DrawPhases::Run(KT1::DrawPhase::World); // KT1 hook: DrawPhases
 		eventHandler.DrawWorld();
 	}
 
@@ -384,6 +387,7 @@ void CWorldDrawer::DrawOpaqueObjects() const
 		SCOPED_GL_DEBUGGROUP("Draw::World::SelectedUnits");
 		selectedUnitsHandler.Draw();
 	}
+	KT1::DrawPhases::Run(KT1::DrawPhase::WorldPreUnit); // KT1 hook: DrawPhases
 	eventHandler.DrawWorldPreUnit();
 
 	{
@@ -439,6 +443,7 @@ void CWorldDrawer::DrawAlphaObjects() const
 		if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawAlpha(!hasWaterRendering, true, false, false);
 		if (!SupComZoomLevel::Skip(SupComZoomLevel::Particles)) NanoParticles::Draw(!hasWaterRendering, true, false, false);
 		KT1::Registry::DrawWorld(!hasWaterRendering); // KT1 hook: registry (unsynced rules draw: Ribbons)
+		KT1::DrawPhases::WorldAlpha(!hasWaterRendering); // KT1 hook: DrawPhases
 
 		if (hasWaterRendering)
 			glDisable(GL_CLIP_PLANE3);
@@ -480,6 +485,7 @@ void CWorldDrawer::DrawAlphaObjects() const
 		if (!SupComZoomLevel::Skip(SupComZoomLevel::Projectiles)) projectileDrawer->DrawAlpha(true, false, false, false);
 		if (!SupComZoomLevel::Skip(SupComZoomLevel::Particles)) NanoParticles::Draw(true, false, false, false);
 		KT1::Registry::DrawWorld(true); // KT1 hook: registry (unsynced rules draw: Ribbons)
+		KT1::DrawPhases::WorldAlpha(true); // KT1 hook: DrawPhases
 
 		glDisable(GL_CLIP_PLANE3);
 	}
