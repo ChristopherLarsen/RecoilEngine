@@ -59,6 +59,10 @@ void SetMoveGoal(int unit, float x, float y, float z, float radius);
 // S12 (KT1OrdersFallback.cpp; approved by S05/S10 2026-11-28): the waypoint fallback, the cut point and the step
 // insertion. Orders LoadConfig calls it at game setup.
 void RegisterQueueHandling();
+// S12 (KT1OrdersFerry.cpp; approved by S05/S10 2026-11-28): Orders PHASE_PRE_TURN calls them in the Lua order: dropped
+// reclaims, RunSelfDestructs, move tracking, RunFerries
+void RunSelfDestructs(const SimContext& c);
+void RunFerries(const SimContext& c);
 
 // ord_refuse.lua: rules params cmb_refused and cmb_refused_frame (the HUD shows the refusal once)
 void Refuse(int unit, const char* reason, int frame);
