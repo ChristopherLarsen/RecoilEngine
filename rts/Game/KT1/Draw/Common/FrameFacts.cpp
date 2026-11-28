@@ -21,7 +21,7 @@ void FrameFacts::Reset() {
 	visibleBits.Init(0);
 	visible.clear();
 	pointer = PointerFacts{};
-	camera = CameraFacts{};
+	camFacts = CameraFacts{};
 	zoomLevel = ZOOM_UNKNOWN;
 	zoomDist = -1.0f;
 	stepFraction = 0.0f;
@@ -52,13 +52,13 @@ void FrameFacts::Refresh(uint32_t drawFrame, const DrawView& view) {
 }
 
 void FrameFacts::ReadCamera() {
-	camera.pos = ::camera->GetPos();
-	camera.forward = ::camera->GetDir();
-	camera.right = ::camera->GetRight();
-	camera.up = ::camera->GetUp();
-	camera.viewProj = ::camera->GetViewProjectionMatrix();
-	camera.viewW = globalRendering->viewSizeX;
-	camera.viewH = globalRendering->viewSizeY;
+	camFacts.pos = CCamera::GetActive()->GetPos();
+	camFacts.forward = CCamera::GetActive()->GetDir();
+	camFacts.right = CCamera::GetActive()->GetRight();
+	camFacts.up = CCamera::GetActive()->GetUp();
+	camFacts.viewProj = CCamera::GetActive()->GetViewProjectionMatrix();
+	camFacts.viewW = globalRendering->viewSizeX;
+	camFacts.viewH = globalRendering->viewSizeY;
 }
 
 // The one place that knows the zoom level. SupComZoomLevel (fork branch drawzoom2) is not in the wave 0 base: until the
@@ -87,7 +87,7 @@ void FrameFacts::ReadVisible(const DrawView& view) {   // KT1 hot
 	UnitView u;
 	for (const int id : view.UnitIds()) {
 		if (!view.Unit(id, u) || u.hidden || !u.inLos) continue;
-		if (::camera->InView(u.drawMidPos, u.drawRadius)) visibleBits.Set(id);
+		if (CCamera::GetActive()->InView(u.drawMidPos, u.drawRadius)) visibleBits.Set(id);
 	}
 	visible.clear();
 	visibleBits.AppendTo(visible);

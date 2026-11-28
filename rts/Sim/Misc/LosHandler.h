@@ -79,6 +79,13 @@ public:
 	bool isCached;
 	bool isQueuedForUpdate;
 	bool isQueuedForTerraform;
+
+	// KT1 LosCut (B): a moved unit's new instance remembers the one it left; when both change in the same update the
+	// map takes their difference in one pass (same counts as remove-all then add-all). Working data of one Update only.
+	SLosInstance* kt1From = nullptr;   // set at creation (UpdateUnit), consumed in the next Update
+	SLosInstance* kt1Pair = nullptr;   // the left instance this one takes the difference from (Update only)
+	int kt1Final = 0;                  // this update's resolved status (Update only)
+	bool kt1Paired = false;            // this left instance is taken by a pair: no separate remove (Update only)
 };
 
 
@@ -129,6 +136,12 @@ public:
 
 public:
 	void Update();
+
+	// KT1 LosCut (D): set once any unit has had a radius of this type; until then the unit walk is skipped (every call would
+	// return at radius <= 0 with no instance). Written by the radius writers (unit init, Lua SetUnitSensorRadius, unit scripts).
+	bool kt1Used = false;
+	bool kt1Cut = false;   // mod option kt1_loscut=1 (default off: the engine's own path)
+	size_t kt1Pairs = 0, kt1Frames = 0;   // pairs taken (logged at Kill)
 	void UpdateHeightMapSynced(SRectangle rect);
 	void RemoveUnit(CUnit* unit, bool delayed = false);
 	void UpdateUnit(CUnit* unit, bool ignore = false);
@@ -301,6 +314,9 @@ public:
 
 public:
 	void Update() override;
+	// KT1 LosCut (D): mark the sensor types this unit carries (call after any radius write)
+	void KT1MarkSensors(const CUnit* unit);
+	bool kt1Scanned = false;
 	void UpdateHeightMapSynced(SRectangle rect);
 
 public:

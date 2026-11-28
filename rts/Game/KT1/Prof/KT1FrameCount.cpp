@@ -22,7 +22,7 @@
 #include <vector>
 
 #include "Lua/LuaAllocState.h"
-#include "Lua/LuaInclude.h"
+#include "lib/lua/include/LuaInclude.h"
 #include "Lua/LuaUtils.h"
 #include "lib/lua/include/LuaUser.h"
 #include "Sim/Misc/GlobalSynced.h"
@@ -102,8 +102,7 @@ namespace {
 		st.cfgRead = true; st.on = on; st.autoDone = autoDone; st.from = from; st.to = to;
 		st.active = true; st.firstFrame = f; st.lastFrame = f;
 		st.tag = (tag != nullptr && tag[0] != 0)? tag: "cfg";
-		for (char& c: st.tag) if (c == ' ' || c == '	' || c == '
-' || c == '') c = '_';
+		for (char& c: st.tag) if (c == ' ' || c == '\t' || c == '\n' || c == '\r') c = '_';
 		SupComProfiler::state = 1;   // sys= needs the profiler recording; timers do not touch the simulation
 		KT1FrameCountAlloc::on.store(true, std::memory_order_relaxed);
 		st.t0 = spring_gettime();

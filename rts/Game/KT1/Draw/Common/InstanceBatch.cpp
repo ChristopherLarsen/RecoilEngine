@@ -95,6 +95,10 @@ void InstanceBuffer::Upload(const void* data, const std::vector<SlotRange>& rang
 }
 
 int InstanceBuffer::Differences(const void* data, int count) {
+#ifdef HEADLESS
+	(void)data; (void)count;
+	return 0;   // no GPU buffer to compare with, and the headless GL stubs have no glGetBufferSubData
+#else
 	const size_t bytes = count * stride;
 	readBack.resize(bytes);
 	stream->Bind();
@@ -104,6 +108,7 @@ int InstanceBuffer::Differences(const void* data, int count) {
 	for (int i = 0; i < count; i++)
 		differing += std::memcmp(readBack.data() + i * stride, static_cast<const uint8_t*>(data) + i * stride, stride) != 0;
 	return differing;
+#endif
 }
 
 void InstanceBuffer::Draw(int count) {

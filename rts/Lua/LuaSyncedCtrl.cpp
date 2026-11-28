@@ -3930,19 +3930,19 @@ int LuaSyncedCtrl::SetUnitSensorRadius(lua_State* L)
 			lua_pushnumber(L, unit->airLosRadius);
 		} break;
 		case hashString("radar"): {
-			lua_pushnumber(L, unit->radarRadius = radius);
+			lua_pushnumber(L, unit->radarRadius = radius); losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
 		} break;
 		case hashString("sonar"): {
-			lua_pushnumber(L, unit->sonarRadius = radius);
+			lua_pushnumber(L, unit->sonarRadius = radius); losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
 		} break;
 		case hashString("seismic"): {
-			lua_pushnumber(L, unit->seismicRadius = radius);
+			lua_pushnumber(L, unit->seismicRadius = radius); losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
 		} break;
 		case hashString("radarJammer"): {
-			lua_pushnumber(L, unit->jammerRadius = radius);
+			lua_pushnumber(L, unit->jammerRadius = radius); losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
 		} break;
 		case hashString("sonarJammer"): {
-			lua_pushnumber(L, unit->sonarJamRadius = radius);
+			lua_pushnumber(L, unit->sonarJamRadius = radius); losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
 		} break;
 		default: {
 			luaL_error(L, "Unknown sensor type to SetUnitSensorRadius()");

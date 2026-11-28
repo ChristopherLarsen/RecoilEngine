@@ -39,6 +39,9 @@ public:
 
 	/// arbitrary area, for losMap, non-circular radar maps, ...
 	void AddRaycast(SLosInstance* instance, int amount);
+	// KT1 LosCut (B): this map takes `to` and loses `from` in one pass over their runs (counts as remove-then-add;
+	// a raycast pair informs ReadMap of squares that enter LOS, as AddRaycast does)
+	void AddDelta(const SLosInstance* from, const SLosInstance* to, bool raycast);
 
 	/// arbitrary area, for losMap, non-circular radar maps, ...
 	void PrepareRaycast(SLosInstance* instance) const;
