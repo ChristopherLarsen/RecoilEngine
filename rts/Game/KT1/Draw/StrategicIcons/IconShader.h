@@ -49,6 +49,7 @@ in vec2 lp;
 flat in vec4 vshape;
 flat in vec2 vbox;
 out vec4 frag;
+@DECL@
 // signed distance (px, < 0 inside) of the body shape about its centre
 float body(vec2 p, int sh, vec2 b) {
 	vec2 h = b * 0.5;
@@ -62,6 +63,7 @@ float body(vec2 p, int sh, vec2 b) {
 }
 void main() {
 	float o = 1.0 - vfade;                           // premultiplied: scale all four
+@BRANCH@
 	float sc = vshape.w;
 	int sh = int(vshape.x + 0.5);
 	int tier = int(vshape.y + 0.5);

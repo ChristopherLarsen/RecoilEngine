@@ -101,7 +101,6 @@ struct IconViewConfig {
 	float flicker_colour[3] = {1.0f, 0.18f, 0.12f};   // DESIGN
 	float contact_air_above = 40.0f;          // DESIGN: a contact this far above ground or water reads as air, elmos
 	float contact_sub_below = -8.0f;          // DESIGN: a contact below this height reads as submerged
-	int contact_spread_frames = 4;            // DESIGN: drawn frames over which every contact's shape is read once
 	float heading_ahead = 64.0f;              // DESIGN: elmos ahead of a unit for its screen heading (rotate only)
 	float hover_pad_px = 48.0f;               // DESIGN: reach of the near hover search beyond the largest box
 	int hover_frames = 10;                    // DESIGN: drawn frames between hover reads under a still cursor
@@ -121,7 +120,6 @@ struct IconViewConfig {
 		s.Field("flicker_colour", flicker_colour);
 		s.Field("contact_air_above", contact_air_above);
 		s.Field("contact_sub_below", contact_sub_below);
-		s.Field("contact_spread_frames", contact_spread_frames);
 		s.Field("heading_ahead", heading_ahead);
 		s.Field("hover_pad_px", hover_pad_px);
 		s.Field("hover_frames", hover_frames);
@@ -139,12 +137,10 @@ struct IconViewConfig {
 struct IconMinimapConfig {
 	float size_px = 6.0f;                // REQ ICO-011: a unit's minimap icon
 	float big_px = 11.0f;                // REQ ICO-011: commanders and experimentals
-	int contact_spread_frames = 4;       // DESIGN: drawn frames over which every contact is read once
 	int refresh_hz = 5;                  // DESIGN (owner 2026-11-21): MiniMapRefreshRate this session; 0: the engine's choice
 	template<class S> void Describe(S& s) {
 		s.Field("size_px", size_px);
 		s.Field("big_px", big_px);
-		s.Field("contact_spread_frames", contact_spread_frames);
 		s.Field("refresh_hz", refresh_hz);
 	}
 };

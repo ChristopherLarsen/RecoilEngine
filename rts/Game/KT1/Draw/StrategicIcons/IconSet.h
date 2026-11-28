@@ -15,6 +15,7 @@
 #include "Game/KT1/Core/IconLexicon/HudOptions.h"
 #include "Game/KT1/Core/IconLexicon/IconHud.h"
 #include "Game/KT1/Core/IconLexicon/IconState.h"
+#include "Game/KT1/Host/DrawView.h"
 
 namespace KT1::Icons {
 
@@ -41,6 +42,11 @@ bool FlickerTest(int unitId);                              // start the damage f
 // team below 0: the viewer's
 std::string Markup(int defId, int px, int team, const Core::IconLexicon::Badges& badges);
 std::string UnitMarkup(int unitId, int px);               // with the unit's live badges
+// for the minimap layer, which reads the units itself: false while the set's system does not run or cannot draw
+bool Running();
+// what the set reads of one unit (`selected` left false); false: dead or not seen
+bool ReadUnit(const DrawView& view, const ViewerView& who, int id, Core::IconLexicon::IconUnitFacts& out);
+Core::IconLexicon::Paint TeamPaint(const DrawView& view, const ViewerView& who, int team, bool minimap);
 const std::string* EngineIconType(int defId);             // the def's engine icon type before the swap; null: not swapped
 const char* Kind(int unitId);                             // "full", "contact", or null: no icon
 int KindCount();

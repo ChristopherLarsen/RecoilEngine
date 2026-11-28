@@ -1,7 +1,9 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
 // KT1 core: the minimap's unit layer, made from the icon set (LUA-FREE H01, UNITDRAW §4.4; replaces icon_minimap).
 // No engine include. Same units, same draw order and colours as the world set (relation mode "minimap" or "everywhere"
-// applies); a unit is its atlas silhouette, a radar contact the grey shape of the world icon.
+// applies); a unit is its atlas silhouette, a radar contact the grey shape of the world icon, upright. It shows what the
+// world set shows past the switch, at any zoom. The engine redraws the minimap a few times a second, and the layer is
+// made anew each time: no events of its own, only the world set's creation numbers.
 // Check column "instances".
 
 #ifndef KT1_CORE_ICON_MINIMAP_STATE_H
@@ -35,22 +37,25 @@ struct MinimapState {
 	std::vector<int32_t> order;                 // unit ids in draw order
 	std::vector<MinimapInstance> instances;     // parallel to order
 	std::vector<int32_t> contacts;              // places that are radar contacts, ascending
-	std::vector<SlotRange> dirty;
-	uint32_t seenChanges = 0;                   // IconState::changes at the last build
-	uint32_t frame = 0;                         // drawn frames, for the contact spread
-	bool built = false;
 
 	void Init(int32_t maxInstances);
 };
 
-// the instance of one unit; false: no atlas cell at this size
+// the world's size and the minimap's, px
+struct MinimapView {
+	float mapX = 1.0f, mapZ = 1.0f;
+	float w = 0.0f, h = 0.0f;
+};
+
+// the instance of one unit (a contact's point is the caller's to set); false: nothing shows, or no atlas cell
 bool MakeMinimapInstance(const IconConfig& config, const IconClass* cls, const IconUnitFacts& unit, const Paint& paint,
                          IconKind kind, MinimapInstance& out);
-// a world position on a minimap of w x h px, y up from the bottom (world +z is down)
-void MinimapPoint(const float (&pos)[3], float mapX, float mapZ, float w, float h, float& outX, float& outY);
+// a world position on the minimap, px, y up from the bottom (world +z is down)
+void MinimapPoint(const float (&pos)[3], const MinimapView& view, float& outX, float& outY);
+// the layer from the facts of every seen unit, in the world set's creation order, later on top; past the set's limit the
+// oldest keep their icons
 void BuildMinimap(MinimapState& state, const IconConfig& config, const IconState& icons, std::span<const IconUnitFacts> facts,
-                  std::span<const IconClass> classes, std::span<const Paint> paints);
-bool ContactDue(const MinimapState& state, const IconMinimapConfig& config, int32_t unit);   // this frame's share
+                  std::span<const IconClass> classes, std::span<const Paint> paints, const MinimapView& view);
 
 } // namespace KT1::Core::IconLexicon
 

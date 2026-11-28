@@ -84,7 +84,7 @@ IL::Rgb Runtime::TeamFill(const DrawView& from, int team) const {
 }
 
 // KT1 hot
-bool Runtime::ReadUnit(const DrawView& from, int id, IL::IconUnitFacts& out) const {
+bool Runtime::ReadUnit(const DrawView& from, const ViewerView& who, int id, IL::IconUnitFacts& out) const {
 	out = IL::IconUnitFacts{};
 	out.id = id;
 	UnitStatus s;
@@ -92,8 +92,8 @@ bool Runtime::ReadUnit(const DrawView& from, int id, IL::IconUnitFacts& out) con
 	out.defId = s.defId > 0 ? s.defId : -1;
 	out.team = s.team;
 	out.unitSlot = s.uniformSlot;
-	out.relation = RelationOf(from, viewer, s.team);
-	out.fullView = viewer.spectating || viewer.fullView;
+	out.relation = RelationOf(from, who, s.team);
+	out.fullView = who.spectating || who.fullView;
 	out.inLos = s.inLos;
 	out.inRadar = s.inRadar;
 	out.seenBefore = s.seenBefore;
@@ -157,7 +157,7 @@ void Runtime::Hover(const FrameFacts& frame) {
 
 bool Runtime::ApplyUnit(const DrawContext& ctx, int id) {
 	IL::IconUnitFacts unit;
-	if (ReadUnit(ctx.view, id, unit)) unit.selected = ctx.facts.IsSelected(id);
+	if (ReadUnit(ctx.view, viewer, id, unit)) unit.selected = ctx.facts.IsSelected(id);
 	const bool team = unit.team >= 0 && unit.team < static_cast<int>(paints.size());
 	return IL::ApplyIcon(state, config, params, unit, Class(unit.defId), team ? paints[unit.team] : IL::Paint{});
 }
@@ -182,7 +182,7 @@ void Runtime::Rebuild(const DrawContext& ctx) {
 	facts.clear();
 	IL::IconUnitFacts unit;
 	for (const int id : ctx.view.UnitIds()) {
-		if (!ReadUnit(ctx.view, id, unit)) continue;
+		if (!ReadUnit(ctx.view, viewer, id, unit)) continue;
 		unit.selected = ctx.facts.IsSelected(id);
 		facts.push_back(unit);
 	}

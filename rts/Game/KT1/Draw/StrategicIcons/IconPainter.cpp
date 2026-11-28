@@ -4,18 +4,13 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <cstdio>
-
 #include "IconPainter.h"
 #include "IconShader.h"
-
-#include "System/creg/creg_cond.h"
+#include "IconShaderText.h"
 
 #include "Game/Camera.h"
-#include "Game/KT1/Core/IconLexicon/IconClass.h"
 #include "Game/KT1/Draw/Common/FrameFacts.h"
 #include "Rendering/GL/SubState.h"
-#include "Rendering/Models/ModelsMemStorageDefs.h"   // after creg_cond: it declares a creg struct
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 
@@ -26,62 +21,6 @@ namespace IL = Core::IconLexicon;
 namespace {
 
 constexpr const char* NAME = "Icons";
-constexpr float HALF = 0.5f;   // DESIGN: a half size
-constexpr int NUMBER = 32;     // DESIGN: room for one number's text
-
-// a GLSL float literal
-std::string Literal(float value) {
-	char text[NUMBER];
-	std::snprintf(text, sizeof(text), "%.6f", value);
-	return text;
-}
-
-void Replace(std::string& source, const std::string& mark, const std::string& with) {
-	for (size_t at = source.find(mark); at != std::string::npos; at = source.find(mark, at + with.size()))
-		source.replace(at, mark.size(), with);
-}
-
-std::string Body(IL::Shape shape, const IL::IconConfig& config) {
-	float body[2] = {0.0f, 0.0f};
-	IL::BodyOf(shape, config, body);
-	return "vec2(" + Literal(body[0]) + ", " + Literal(body[1]) + ")";
-}
-
-// the body size by shape number, the diamond last (icon_lex ShaderText)
-std::string BodyChain(const IL::IconConfig& config) {
-	std::string chain;
-	for (const IL::Shape shape: {IL::Shape::Square, IL::Shape::Rect, IL::Shape::Circle, IL::Shape::Triangle})
-		chain += "sh == " + std::to_string(static_cast<int>(shape)) + " ? " + Body(shape, config) + " : ";
-	return chain + Body(IL::Shape::Diamond, config);
-}
-
-// the engine's per-unit uniform block as an array: its members become a struct (LuaUI/Include/gl4_units.lua); empty:
-// the engine's definition is not the expected one
-std::string UnitBlock() {
-	const std::string& def = ModelUniformData::GetGLSLDefinition();
-	const size_t buffer = def.find("buffer");
-	const size_t open = buffer == std::string::npos ? buffer : def.find('{', buffer);
-	const size_t close = def.rfind('}');
-	if (open == std::string::npos || close == std::string::npos || close < open) return {};
-	const std::string members = def.substr(open, close - open + 1);
-	if (members.find("drawPos") == std::string::npos) return {};
-	return "struct UnitUniforms " + members
-	       + ";\nlayout (std140, binding = 1) readonly buffer UnitUniformsBuffer { UnitUniforms uni[]; };\n";
-}
-
-std::string FragmentSource(const IL::IconConfig& config) {
-	const IL::IconStyleConfig& style = config.style;
-	std::string source = ICON_FS;
-	Replace(source, "@BODY@", BodyChain(config));
-	Replace(source, "@RIM@", Literal(config.sizes.selected_rim_px));
-	Replace(source, "@HOVER@", Literal(style.hover_lighten));
-	Replace(source, "@MARK@", Literal(style.mark_radius));
-	Replace(source, "@BARS@", std::to_string(style.bars));
-	Replace(source, "@PITCH@", Literal(style.bar_pitch));
-	Replace(source, "@BAR_HALF_W@", Literal(style.bar_size[0] * HALF));
-	Replace(source, "@BAR_HALF_H@", Literal(style.bar_size[1] * HALF));
-	return source;
-}
 
 } // namespace
 
@@ -98,7 +37,7 @@ bool IconPainter::Init(const IL::IconConfig& config) {
 	std::string vertex = ICON_VS;
 	Replace(vertex, "@UNITS@", units);
 	Replace(vertex, "@HALO@", Literal(config.style.halo_px));
-	const std::string fragment = FragmentSource(config);
+	const std::string fragment = FragmentSource(config, "", "");
 	shader = shaderHandler->CreateProgramObject("[KT1]", NAME);
 	shader->AttachShaderObject(shaderHandler->CreateShaderObject(vertex, "", GL_VERTEX_SHADER));
 	shader->AttachShaderObject(shaderHandler->CreateShaderObject(fragment, "", GL_FRAGMENT_SHADER));

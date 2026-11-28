@@ -113,6 +113,18 @@ bool FlickerTest(int unitId) {
 	return true;
 }
 
+bool Running() { return current != nullptr && !current->failed; }
+
+bool ReadUnit(const DrawView& view, const ViewerView& who, int id, IL::IconUnitFacts& out) {
+	return current != nullptr && current->ReadUnit(view, who, id, out);
+}
+
+IL::Paint TeamPaint(const DrawView& view, const ViewerView& who, int team, bool minimap) {
+	if (current == nullptr) return {};
+	const Runtime& r = *current;
+	return IL::PaintFor(r.config, r.options.relation, minimap, r.RelationOf(view, who, team), r.TeamFill(view, team));
+}
+
 std::string Markup(int defId, int px, int team, const IL::Badges& badges) {
 	if (current == nullptr) return {};
 	const Runtime& r = *current;
@@ -120,9 +132,7 @@ std::string Markup(int defId, int px, int team, const IL::Badges& badges) {
 	if (cls == nullptr || px <= 0) return {};
 	const ViewerView who = r.view.Viewer();
 	const int of = team >= 0 ? team : who.team;
-	const IL::Paint paint =
-		IL::PaintFor(r.config, r.options.relation, false, r.RelationOf(r.view, who, of), r.TeamFill(r.view, of));
-	return IL::HudRml(r.config, *cls, px, paint, badges);
+	return IL::HudRml(r.config, *cls, px, TeamPaint(r.view, who, of, false), badges);
 }
 
 std::string UnitMarkup(int unitId, int px) {

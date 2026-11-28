@@ -56,7 +56,7 @@ struct Runtime {
 	float Seconds() const { return (spring_gettime() - epoch).toSecsf(); }
 
 	// what the set reads of one unit; false: dead or not seen (out then names the unit only, and it shows nothing)
-	bool ReadUnit(const DrawView& from, int id, IL::IconUnitFacts& out) const;
+	bool ReadUnit(const DrawView& from, const ViewerView& who, int id, IL::IconUnitFacts& out) const;
 	IL::Relation RelationOf(const DrawView& from, const ViewerView& who, int team) const;
 	IL::Rgb TeamFill(const DrawView& from, int team) const;
 	const IL::IconClass* Class(int defId) const;
