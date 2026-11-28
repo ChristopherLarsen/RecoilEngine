@@ -150,7 +150,7 @@ private:
 	static constexpr size_t MAX_EVENTS = 4 * 4096;   // DESIGN: dust beyond this between pulls is dropped (look only)
 
 	static constexpr int FRAME_MS = 1000 / GAME_SPEED;   // base unit_script.lua Sleep: floor(1000 / gameSpeed), 33 at 30 Hz
-	static constexpr double FRAME_LEN = 1000.0 / GAME_SPEED;   // the true frame length (anim.lua stagger: 1000 / Game.gameSpeed)
+	static constexpr double FRAME_LEN = double(int(1000000.0 / GAME_SPEED)) / 1000.0;   // the stagger frame length, ms to 3 decimals: 33.333 at 30 Hz (the old literal), 100 at 10 (anim.lua: floor(1000000 / Game.gameSpeed) / 1000)
 	static int SleepFrames(float ms) { return std::max(1, (int)math::floor(ms / float(FRAME_MS))); }   // base unit_script.lua Sleep
 
 	// ---- the tick (anim.lua Loop body) ----------------------------------------------------------------------------------------
