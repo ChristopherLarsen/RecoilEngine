@@ -4,14 +4,15 @@
 // reclaims, RunSelfDestructs, move tracking, RunFerries (then the waypoint insert at PHASE_PRE_TURN + 10).
 // Core: Core/Orders/QueueHandling.cpp. The route set-up and EndFerry are ORDERS C's (OrdersRowActions.cpp).
 //
-// Open (cross-family): the Lua asks GLUE's spc_cargo.lua (GG.SpcCargo.SelectLoad, Full, NoteRefused) when it is loaded.
-// Native code cannot call it yet, so this pass takes the Lua's own fallback (one unit at a time, never "full", no note)
-// until GLUE gives a native call. With spc_cargo loaded the ferry therefore differs from the Lua: see orders-s12-requirements.md.
+// The load plan, the full test and the left-behind note are GLUE's room rules, pulled forward as native calls
+// (Rules/Cargo/CargoApi.h; plan ruling 2026-11-28).
 
 #include <algorithm>
 #include <vector>
 
 #include "OrdersInternal.h"
+
+#include "Game/KT1/Rules/Cargo/CargoApi.h"
 
 #include "Game/KT1/Core/Orders/QueueHandling.h"
 #include "Game/KT1/Host/Fakes.h"
@@ -103,13 +104,19 @@ void Ferry(CO::State& s, int t, CO::FerryRoute& fr, int f, const CO::FerryParams
 		case CO::TripState::NotOnTrip: break;
 	}
 	if (!q.empty() && q.front().GetID() == CMD_LOAD_UNITS) return;
-	// the Lua's fallback without spc_cargo: one waiting unit, when the hold is empty
-	if (carried.empty() && !fr.waiting.empty()) {
-		const float u[] = {static_cast<float>(fr.waiting.front())};
-		FerryOrder(s, t, CMD_LOAD_UNITS, u, 0);
+	// Lua: taken, left = GG.SpcCargo.SelectLoad(t, fr.waiting); one load order each, queued
+	std::vector<int32_t> taken, left;
+	Cargo::SelectLoad(t, fr.waiting, taken, left);
+	if (!taken.empty()) {
+		for (size_t i = 0; i < taken.size(); ++i) {
+			const float u[] = {static_cast<float>(taken[i])};
+			FerryOrder(s, t, CMD_LOAD_UNITS, u, i > 0 ? SHIFT_KEY : 0);
+		}
 		return;
 	}
-	if (!carried.empty() && CO::LeaveDue(fr, static_cast<int32_t>(carried.size()), false, f, p)) {
+	if (!carried.empty() && CO::LeaveDue(fr, static_cast<int32_t>(carried.size()), Cargo::Full(t), f, p)) {
+		// Lua Leave: the note for the units left behind, the trip, the set-down
+		if (!left.empty()) Cargo::NoteRefused(t, static_cast<int32_t>(left.size()), false, f);
 		CO::BeginTrip(fr, carried, f);
 		Unload(s, t, fr, carried.size(), p);
 		return;
