@@ -1,5 +1,5 @@
 /* This file is part of the Recoil engine (GPL v2 or later), see LICENSE.html */
-// KT1 rule IntelFacts: Lua table helpers of its adapter (KT1IntelFacts.cpp only).
+// KT1 rule IntelFacts: helpers of its adapter (KT1IntelFacts.cpp only): Lua tables, a unit's batch flags and layer.
 
 #ifndef KT1_INTEL_FACTS_LUA_H
 #define KT1_INTEL_FACTS_LUA_H
@@ -7,7 +7,11 @@
 #include <cstdint>
 #include <vector>
 
+#include <string>
+
 #include "Lua/LuaUtils.h"
+#include "Sim/MoveTypes/SupComGroundMoveType.h"
+#include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDefHandler.h"
 
 namespace KT1::IntelFactsLua {
@@ -43,6 +47,30 @@ inline void Push2(lua_State* L, int t, int& n, float a, float b) {   // DESIGN: 
 	n += 1;
 	lua_pushnumber(L, a); lua_rawseti(L, t, 2 * n - 1);   // DESIGN: pair
 	lua_pushnumber(L, b); lua_rawseti(L, t, 2 * n);   // DESIGN: pair
+}
+
+// DESIGN: the batch flags fl (SupComIntFactsRun's fin and Lua's F.SrcLua read them): carried, active, being built, cloaked, sub
+constexpr int FL_CARRIED = 1, FL_ACTIVE = 2, FL_BUILDING = 4, FL_CLOAKED = 8, FL_SUB = 16;   // DESIGN
+
+inline int Flags(const CUnit* u) {
+	int fl = 0;
+	if (u->GetTransporter() != nullptr) fl |= FL_CARRIED;
+	if (u->activated) fl |= FL_ACTIVE;
+	if (u->beingBuilt) fl |= FL_BUILDING;
+	if (u->isCloaked) fl |= FL_CLOAKED;
+	if (const auto* gm = dynamic_cast<const CSupComGroundMoveType*>(u->moveType))
+		if (std::string(gm->GetLayerName()) == "sub") fl |= FL_SUB;
+	return fl;
+}
+
+inline bool Submerged(const CUnit* unit, float y, int fl) {   // int_coverage's facts loop
+	if (y < 0.0f && (fl & FL_SUB)) return true;
+	if (!(y < 0.0f)) return false;
+	const auto* gm = dynamic_cast<const CSupComGroundMoveType*>(unit->moveType);
+	const std::string l = gm != nullptr ? gm->GetLayerName() : "";
+	if (l == "sub") return true;
+	if (l == "water") return false;
+	return y + unit->height < 0.0f;
 }
 
 } // namespace KT1::IntelFactsLua

@@ -14,7 +14,7 @@
 // Timer:      KT1::IntelFacts (each Run call).
 // Lua (synced only), Spring.KT1.IntelFacts (each call in full: game-build docs/engine/rules/intel-facts.md):
 //   Init(cfg) -> ok, Source(u, vr, wr, nv, sensors), UnitAnswers(u, upkeepOff, scale), Reset(), Slot(j, u), Fresh(u, on),
-//   Unsettle(u), Run(cand, cn, part, f, stamp, all0, shadow, fin, drop, ev) -> nRead, nStill, nShot, nFin, nDrop, nEv,
+//   Unsettle(u), Run(cand, cn, part, f, stamp, all0, shadow, fin, drop, ev, F, lean) -> nRead, nStill, nShot, nFin, nDrop, nEv,
 //   Fact(u) -> def, owner, sub, landed, px, pz, fcx, fcz, ccx, ccz; Fact(u, "dr", kind) -> dr, stamps; Fact(u, "built"),
 //   Circle(u), SensorCircle(u, kind) (check mode and cases).
 // Determinism: units in the order Lua gives them (ascending slot), per-def and per-unit vectors, no hash order; float maths in
@@ -55,8 +55,6 @@ const char* const SENS_NAME[NSENS] = { "radar", "sonar", "omni", "water_vision" 
 constexpr bool SENS_SWITCHED[NSENS] = { true, true, true, false };          // DESIGN: int_coverage SWITCHED (on/off-able)
 constexpr bool SENS_POWER[NSENS] = { true, true, false, false };            // DESIGN: int_coverage POWER_FIELD (ECO-003 v7 R5)
 constexpr int RADAR = 0, WATER_VISION = 3;                                  // DESIGN: indices of SENS_NAME
-// DESIGN: the batch flags fl (SupComIntFactsRun's fin and Lua's F.SrcLua read them): carried, active, being built, cloaked, sub
-constexpr int FL_CARRIED = 1, FL_ACTIVE = 2, FL_BUILDING = 4, FL_CLOAKED = 8, FL_SUB = 16;   // DESIGN
 constexpr float EV_LANDED = 1.0f, EV_UNDER = 2.0f;                          // DESIGN: event codes of ev (int_landed, under water)
 
 struct Placed {                       // a circle placed in a kind's index (VI.PutK's "same" test)
@@ -103,12 +101,19 @@ struct SlotRec {                      // per slot (int_coverage's F.slots index)
 // DESIGN: cfg.sensors, int_coverage's unitpass_intel_sensors: Lua does the sensor kinds, this pass does them, or shadow
 constexpr int SENS_LUA = 0, SENS_ON = 1, SENS_SHADOW = 2;   // DESIGN
 
+// The columns Run still writes into int_coverage's F (lean, SIM-CUTS-RANKED §9): the wide five for every unit read, the rest only
+// for the units Lua finishes and the full-record defs (cloakers, jammers, fake contacts), or for every unit when lean is off.
+enum Col { C_PX, C_PZ, C_PY, C_PDEF, C_POWN, C_PCLOAK, C_FCX, C_FCZ, C_CCX, C_CCZ, C_VX, C_VZ, C_VKEY, C_SKEY, C_FK, C_CK, C_FB,
+	C_CB, C_PSUB, C_PLAND, C_N };
+const char* const COL_NAME[C_N] = { "px", "pz", "py", "pdef", "pown", "pcloak", "fcx", "fcz", "ccx", "ccz", "vx", "vz", "vkey", "skey",
+	"fk", "ck", "fb", "cb", "psub", "pland" };
+
 struct Cfg {
 	C::Rules rules;
 	int sensors = SENS_LUA;
 	bool waterSeesSub = false, unfinished = false, ok = false;
 	float sensCell[NSENS] = {0, 0, 0, 0};
-	std::vector<uint8_t> air, lua, cloak, onoff;   // per def
+	std::vector<uint8_t> air, lua, cloak, onoff, full;   // per def
 };
 
 class IntelFacts : public Rule {
@@ -168,27 +173,6 @@ private:
 
 	// ---- the pass ----
 	struct Read { const CUnit* unit = nullptr; float x = 0, y = 0, z = 0, gh = 0; int fl = 0; };
-
-	static int Flags(const CUnit* u) {
-		int fl = 0;
-		if (u->GetTransporter() != nullptr) fl |= FL_CARRIED;
-		if (u->activated) fl |= FL_ACTIVE;
-		if (u->beingBuilt) fl |= FL_BUILDING;
-		if (u->isCloaked) fl |= FL_CLOAKED;
-		if (const auto* gm = dynamic_cast<const CSupComGroundMoveType*>(u->moveType))
-			if (std::string(gm->GetLayerName()) == "sub") fl |= FL_SUB;
-		return fl;
-	}
-
-	bool Submerged(const CUnit* unit, float y, int fl) const {   // int_coverage's facts loop
-		if (y < 0.0f && (fl & FL_SUB)) return true;
-		if (!(y < 0.0f)) return false;
-		const auto* gm = dynamic_cast<const CSupComGroundMoveType*>(unit->moveType);
-		const std::string l = gm != nullptr ? gm->GetLayerName() : "";
-		if (l == "sub") return true;
-		if (l == "water") return false;
-		return y + unit->height < 0.0f;
-	}
 
 	// the sensor kinds of one source (F.SrcLua's loop for the four kinds), before vision
 	void SensorKinds(Src& s, int u, int d, int a, float x, float z, bool built, bool carried, bool landed, int fl,
@@ -275,6 +259,18 @@ private:
 
 	struct Counts { int rd = 0, st = 0, sh = 0, fin = 0, drop = 0, ev = 0; };
 
+	// the row back into F (not in shadow): the wide five always, the rest when whole
+	void WriteRow(lua_State* L, int i, const C::Row& o, bool luaDef, bool whole) const {
+		auto N = [&](Col c, float v) { lua_pushnumber(L, v); lua_rawseti(L, col[c], i); };
+		auto B = [&](Col c, bool v) { lua_pushboolean(L, v); lua_rawseti(L, col[c], i); };
+		N(C_PX, o.px); N(C_PZ, o.pz); N(C_PY, o.py); N(C_PDEF, (float)o.def); N(C_POWN, (float)o.own);
+		if (!luaDef) B(C_PCLOAK, false);                                     // Lua answers the units it finishes
+		if (!whole) return;
+		N(C_FCX, o.fcx); N(C_FCZ, o.fcz); N(C_CCX, o.ccx); N(C_CCZ, o.ccz); N(C_VX, o.px); N(C_VZ, o.pz);
+		N(C_VKEY, o.vkey); N(C_SKEY, o.skey); N(C_FK, o.fk); N(C_CK, o.ck); N(C_FB, o.fb); N(C_CB, o.cb);
+		B(C_PSUB, o.sub); B(C_PLAND, o.landed);
+	}
+
 	// one candidate slot (the body of SupComIntFactsRun's loop)
 	void Candidate(int i, float f, float FG, float ff, int stamp, bool all0, bool shadow, lua_State* L, Counts& n) {
 		constexpr int FIN = 8, DROP = 9, EV = 10;                          // DESIGN: Run's argument slots (LRun)
@@ -311,6 +307,7 @@ private:
 		const bool luaDef = Flag(cfg.lua, row.def);
 		const bool sensOn = cfg.sensors == SENS_ON;
 		const bool luaFin = luaDef || (s.present && (s.nv || (!s.hasV && !(sensOn && s.anySens))));
+		if (!shadow) WriteRow(L, i, row, luaDef, !lean || luaFin || Flag(cfg.full, row.def));
 		if (luaFin) Push2(L, FIN, n.fin, (float)i, (float)fl);
 		if (!s.present || (!s.hasV && !(cfg.sensors != SENS_LUA && s.anySens))) return;
 		SourceOf(s, u, row, fl, air, f, stamp, all0, shadow, L, EV, n);
@@ -364,6 +361,8 @@ private:
 	std::vector<Src> srcs;                // per unit id
 	std::vector<SlotRec> slots;           // per slot, 1-based as Lua's (slot 0 unused)
 	bool lastShadow = false;
+	bool lean = false;                    // this Run's lean flag
+	int col[C_N] = {};                    // this Run's stack index of each F column
 };
 
 int IntelFacts::LInit(lua_State* L) {
@@ -389,7 +388,7 @@ int IntelFacts::LInit(lua_State* L) {
 	c.unfinished = Bool(L, 1, "unfinished"); c.waterSeesSub = Bool(L, 1, "waterSeesSub");
 	c.sensors = (int)Num(L, 1, "sensors", 0);
 	for (int k = 0; k < NSENS; ++k) c.sensCell[k] = Num(L, 1, (std::string("cell_") + SENS_NAME[k]).c_str(), 0);
-	DefFlags(L, 1, "air", c.air); DefFlags(L, 1, "lua", c.lua); DefFlags(L, 1, "cloak", c.cloak); DefFlags(L, 1, "onoff", c.onoff);
+	DefFlags(L, 1, "air", c.air); DefFlags(L, 1, "lua", c.lua); DefFlags(L, 1, "cloak", c.cloak); DefFlags(L, 1, "onoff", c.onoff); DefFlags(L, 1, "full", c.full);
 	const bool noHeight = Num(L, 1, "hk", 0) == 0.0f;                    // the production rule has no height term
 	c.ok = g.fe > 0.0f && g.ce > 0.0f && c.rules.cell > 0.0f && noHeight;
 	if (c.sensors != SENS_LUA) for (int k = 0; k < NSENS; ++k) if (!(c.sensCell[k] > 0.0f)) c.ok = false;
@@ -490,7 +489,15 @@ int IntelFacts::LRun(lua_State* L) {
 	const bool all0 = lua_toboolean(L, 6);
 	const bool shadow = lua_toboolean(L, 7);
 	luaL_checktype(L, 8, LUA_TTABLE); luaL_checktype(L, 9, LUA_TTABLE); luaL_checktype(L, 10, LUA_TTABLE);
-	lua_settop(L, 10);
+	luaL_checktype(L, 11, LUA_TTABLE);
+	r->lean = lua_toboolean(L, 12);
+	lua_settop(L, 11);
+	if (!lua_checkstack(L, C_N + 8)) return luaL_error(L, "KT1.IntelFacts.Run: stack");
+	for (int c = 0; c < C_N; ++c) {                                    // F[name], made when absent (as SupComIntFactsRun's Field)
+		lua_getfield(L, 11, COL_NAME[c]);
+		if (!lua_istable(L, -1)) { lua_pop(L, 1); lua_newtable(L); lua_pushvalue(L, -1); lua_setfield(L, 11, COL_NAME[c]); }
+		r->col[c] = lua_gettop(L);
+	}
 	if (!r->cfg.ok) return luaL_error(L, "KT1.IntelFacts.Run: Init first");
 	ScopedTimer t(hashString("KT1::IntelFacts"));
 	r->lastShadow = shadow;
