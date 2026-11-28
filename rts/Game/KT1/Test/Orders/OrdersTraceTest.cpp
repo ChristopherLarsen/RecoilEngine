@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "../KT1Test.h"
+#include "../KT1TraceCase.h"
 
 #include "Game/KT1/Core/Common/Rate.h"
 #include "Game/KT1/Core/Orders/OrdersConfig.h"
@@ -223,3 +224,6 @@ KT1_RATE_CASE("ORD-TRACE-REPLAY", "a recorded trace replays clean, and a differe
 	const Trace::ReplayResult d = Trace::Replay(SmallTrace(testCase.StepsPerSecond(), 1), spoiled);
 	KT1_CHECK(d.differences == 1 && d.firstDiffStep == 2);
 }
+
+// the recorded runs (core_tests.py --traces <dir>): LUA-FREE H02's trial
+KT1_TRACE_CASE(Orders, "Orders.kt1t") { return std::make_unique<TurnReplay>(); }
