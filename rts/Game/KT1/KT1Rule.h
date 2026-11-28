@@ -35,6 +35,8 @@ namespace KT1 {
 		bool defaultOn;          // the mod option's value when the game does not set it
 		// the rule honours the check-mode contract (KT1Register.h); kt1_<key>=check on a rule without it stops the engine
 		bool checkSafe = false;
+		// the sim host shows this system intel's fake units too (Host/Fakes.h); false: it sees real units only, as Lua gadgets do
+		bool seesFakes = false;
 	};
 
 	class Rule {

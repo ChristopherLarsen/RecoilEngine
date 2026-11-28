@@ -6,6 +6,7 @@
 #include <RmlUi/Core.h>
 #include "Game.h"
 #include "Game/KT1/KT1Registry.h" // KT1 hook: registry
+#include "Game/KT1/Host/Phases.h" // KT1 hook: SimHost
 #include "Lua/SupComUnitQuery.h"
 #include "Camera.h"
 #include "CameraHandler.h"
@@ -243,6 +244,8 @@ CGame::CGame(const std::string& mapFileName, const std::string& modFileName, ILo
 
 	, saveFileHandler(saveFile)
 {
+	KT1::Registry::Reset(); // KT1 hook: registry
+
 	game = this;
 
 	memset(gameID, 0, sizeof(gameID));
@@ -1788,6 +1791,7 @@ void CGame::SimFrame() {
 			SupComUnitQuery::OnUnitsUpdated(); // supcom: change lists for Spring.GetUnitChanges
 			SupComTargeting::Update(gs->frameNum); // supcom: CMB-004 target choice (unitpass_target), before the Lua GameFrame
 			KT1::Registry::GameFrame(gs->frameNum); // KT1 hook: registry (engine rules, before the Lua GameFrame)
+			KT1::Phases::Run(KT1::Core::SimHost::Phase::FrameStart, gs->frameNum); // KT1 hook: SimHost
 			eventHandler.GameFrame(gs->frameNum);
 		}
 
@@ -1796,6 +1800,7 @@ void CGame::SimFrame() {
 		smoothGround.UpdateSmoothMesh();
 		mapDamage->Update();
 		unitHandler.Update();
+		KT1::Phases::Run(KT1::Core::SimHost::Phase::AfterUnits, gs->frameNum); // KT1 hook: SimHost
 		pathManager->Update();
 		projectileHandler.Update();
 		NanoParticles::system.Update();
@@ -1826,6 +1831,7 @@ void CGame::SimFrame() {
 		playerHandler.GameFrame(gs->frameNum);
 		SupComCib::FrameEnd(); // supcom: hand queued fight call-ins to Lua before the frame ends
 		eventHandler.GameFramePost(gs->frameNum);
+		KT1::Phases::Run(KT1::Core::SimHost::Phase::FrameEnd, gs->frameNum); // KT1 hook: SimHost
 	}
 
 	lastSimFrameTime = spring_gettime();
