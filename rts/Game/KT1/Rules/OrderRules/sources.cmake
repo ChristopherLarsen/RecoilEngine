@@ -2,3 +2,6 @@
 list(APPEND KT1_SOURCES
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/OrderRules/GuardLogic.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/../../Core/OrderRules/OrderRuleRow.cpp")
+# >>> kt1_scaffold orderrules
+kt1_system(NAMES OrderRules FAMILY orders SOURCES KT1OrderRules.cpp OrderRulesCheck.cpp)
+# <<< kt1_scaffold orderrules
