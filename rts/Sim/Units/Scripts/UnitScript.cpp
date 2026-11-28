@@ -1694,23 +1694,23 @@ void CUnitScript::SetUnitVal(int val, int param)
 		} break;
 
 		case RADAR_RADIUS: {
-			unit->radarRadius = param; losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
+			unit->radarRadius = param;
 		} break;
 
 		case JAMMER_RADIUS: {
-			unit->jammerRadius = param; losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
+			unit->jammerRadius = param;
 		} break;
 
 		case SONAR_RADIUS: {
-			unit->sonarRadius = param; losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
+			unit->sonarRadius = param;
 		} break;
 
 		case SONAR_JAM_RADIUS: {
-			unit->sonarJamRadius = param; losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
+			unit->sonarJamRadius = param;
 		} break;
 
 		case SEISMIC_RADIUS: {
-			unit->seismicRadius = param; losHandler->KT1MarkSensors(unit); /* KT1 LosCut (D) */
+			unit->seismicRadius = param;
 		} break;
 
 		case CURRENT_FUEL: { // deprecated

@@ -7,7 +7,6 @@
 #include "Sim/Units/UnitHandler.h"
 #include "Sim/Misc/TeamHandler.h"
 #include "Sim/Misc/ModInfo.h"
-#include "Game/GameSetup.h"
 #include "Map/ReadMap.h"
 #include "System/Log/ILog.h"
 #include "System/SpringHash.h"
@@ -65,10 +64,6 @@ inline void SLosInstance::Init(int radius, int allyteam, int2 basePos, float bas
 	this->isCached = false;
 	this->isQueuedForUpdate = false;
 	this->isQueuedForTerraform = false;
-	this->kt1From = nullptr;
-	this->kt1Pair = nullptr;
-	this->kt1Final = NONE;
-	this->kt1Paired = false;
 }
 
 
@@ -110,11 +105,6 @@ void ILosType::Init(const int mipLevel_, LosType type_)
 void ILosType::Kill()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (kt1Frames > 0)
-		LOG("[KT1-LOSCUT] type=%d used=%d frames=%u pairs/frame=%.2f", int(type), int(kt1Used), unsigned(kt1Frames), double(kt1Pairs) / kt1Frames);
-	kt1Used = false;
-	kt1Pairs = 0;
-	kt1Frames = 0;
 	// iterated in UpdateHeightMapSynced
 	spring::clear_unordered_map(instanceHashes);
 
@@ -242,12 +232,9 @@ inline void ILosType::UpdateUnit(CUnit* unit, bool ignore)
 	if (CanRefInstance(uli))
 		return;
 
-	SLosInstance* kt1Left = nullptr;   // KT1 LosCut (B): the instance this unit leaves, if it was its last user
 	if (uli != nullptr) {
 		unit->los[type] = nullptr;
 		UnrefInstance(uli);
-		if (uli->refCount == 0)
-			kt1Left = uli;
 	}
 
 	const int hash = GetHashNum(unit->allyteam, baseLos, radius);
@@ -270,7 +257,6 @@ inline void ILosType::UpdateUnit(CUnit* unit, bool ignore)
 	cacheFails += (algoType == LOS_ALGO_RAYCAST);
 	SLosInstance* li = CreateInstance();
 	li->Init(radius, allyteam, baseLos, height, hash);
-	li->kt1From = kt1Left;
 	li->refCount++;
 	unit->los[type] = li;
 	instanceHashes[hash].push_back(li);
@@ -550,7 +536,6 @@ void ILosType::Update()
 	for (SLosInstance* li: losUpdate) {
 		const auto status = OptimizeInstanceUpdate(li);
 		li->isQueuedForUpdate = false;
-		li->kt1Final = status;
 
 		switch (status) {
 			case SLosInstance::TLosStatus::NEW: {
@@ -583,27 +568,9 @@ void ILosType::Update()
 		}
 	}
 
-	// KT1 LosCut (B): a new instance whose unit left an instance that is removed in this same update, on the same ally
-	// team's map, takes their difference instead of a full remove and a full add (the counts end the same)
-	for (SLosInstance* li: losAdd) {
-		SLosInstance* d = li->kt1From;
-		li->kt1From = nullptr;
-		li->kt1Pair = nullptr;
-		if (!kt1Cut || d == nullptr || li->kt1Final != SLosInstance::TLosStatus::NEW)
-			continue;
-		if (d->kt1Final != SLosInstance::TLosStatus::REMOVE || d->kt1Paired || d->allyteam != li->allyteam)
-			continue;
-		d->kt1Paired = true;
-		li->kt1Pair = d;
-		++kt1Pairs;
-	}
-	++kt1Frames;
-
 	// remove sight
 	//FIXME multithread?
 	for (SLosInstance* li: losRemove) {
-		if (li->kt1Paired)
-			continue;
 		LosRemove(li);
 	}
 
@@ -620,19 +587,7 @@ void ILosType::Update()
 	// add sight
 	for (SLosInstance* li: losAdd) {
 		assert(li->refCount > 0);
-		if (li->kt1Pair != nullptr) {
-			losMaps[li->allyteam].AddDelta(li->kt1Pair, li, algoType == LOS_ALGO_RAYCAST);
-			li->kt1Pair = nullptr;
-			continue;
-		}
 		LosAdd(li);
-	}
-	for (SLosInstance* li: losRemove) {
-		li->kt1Paired = false;
-		li->kt1Final = SLosInstance::TLosStatus::NONE;
-	}
-	for (SLosInstance* li: losAdd) {
-		li->kt1Final = SLosInstance::TLosStatus::NONE;
 	}
 
 	// delete / move to cache unused instances
@@ -879,26 +834,8 @@ void CLosHandler::Update()
 	const size_t maxUnitIndex = minUnitIndex + losBatchSize + (activeUnits.size() % losBatchRate) * (losBatchMult == (losBatchRate - 1));
 	#endif
 
-	// KT1 LosCut (D): the first update marks the types any existing unit carries (covers a loaded game); afterwards the
-	// radius writers mark them (CLosHandler::KT1MarkSensors)
-	if (!kt1Scanned) {
-		kt1Scanned = true;
-		const auto& opts = CGameSetup::GetModOptions();
-		const auto it = opts.find("kt1_loscut");
-		const bool cut = (it != opts.end() && it->second == "1");
-		for (ILosType* lt: losTypes)
-			lt->kt1Cut = cut;
-		LOG("[KT1-LOSCUT] %s", cut ? "on (delta update, unused sensor types skipped)" : "off");
-		for (CUnit* u: activeUnits)
-			KT1MarkSensors(u);
-	}
-
 	for_mt(0, losTypes.size(), [&](const int idx) {
 		ILosType* lt = losTypes[idx];
-		if (lt->kt1Cut && !lt->kt1Used) {   // no unit has ever had this radius: every UpdateUnit call would be a no-op
-			lt->Update();
-			return;
-		}
 
 		#if (USE_STAGGERED_UPDATES == 1)
 		// staggered
@@ -917,23 +854,6 @@ void CLosHandler::Update()
 
 		lt->Update();
 	});
-}
-
-
-void CLosHandler::KT1MarkSensors(const CUnit* unit)
-{
-	int radii[LOS_TYPE_COUNT] = {};   // indexed by LosType (the enum order: jammer before seismic)
-	radii[LOS_TYPE_LOS]          = unit->losRadius;
-	radii[LOS_TYPE_AIRLOS]       = unit->airLosRadius;
-	radii[LOS_TYPE_RADAR]        = unit->radarRadius;
-	radii[LOS_TYPE_SONAR]        = unit->sonarRadius;
-	radii[LOS_TYPE_JAMMER]       = unit->jammerRadius;
-	radii[LOS_TYPE_SEISMIC]      = unit->seismicRadius;
-	radii[LOS_TYPE_SONAR_JAMMER] = unit->sonarJamRadius;
-	for (ILosType* lt: losTypes) {
-		if (radii[lt->type] > 0)
-			lt->kt1Used = true;
-	}
 }
 
 
