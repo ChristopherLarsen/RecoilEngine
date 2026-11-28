@@ -51,6 +51,34 @@ namespace {
 	}
 }
 
+KT1_CASE("SIMHOST-FAKES", "a fake and a real unit in one step: a normal reader sees the real one, an opted-in reader both, in order") {
+	SplitEventLog log;
+	const int normal = log.AddReader(ALL_EVENTS, false), intel = log.AddReader(ALL_EVENTS, true);
+	for (const EventType t : {EventType::UnitCreated, EventType::UnitDamaged, EventType::UnitDestroyed}) {
+		log.Push(Ev(t, 5), true);
+		log.Push(Ev(t, 8), false);
+	}
+	const std::string real = Tag(EventType::UnitCreated, 8) + Tag(EventType::UnitDamaged, 8) + Tag(EventType::UnitDestroyed, 8);
+	const std::string both = Tag(EventType::UnitCreated, 5) + Tag(EventType::UnitCreated, 8) + Tag(EventType::UnitDamaged, 5) +
+		Tag(EventType::UnitDamaged, 8) + Tag(EventType::UnitDestroyed, 5) + Tag(EventType::UnitDestroyed, 8);
+	KT1_CHECK_EQ(Raised(log.Take(normal)), real);
+	KT1_CHECK_EQ(Raised(log.Take(intel)), both);
+	log.Compact();
+	KT1_CHECK_EQ(log.Held(EventType::UnitCreated), static_cast<size_t>(0));
+	log.Push(Ev(EventType::UnitIdle, 5), true);
+	KT1_CHECK(log.Take(normal).Empty());
+	KT1_CHECK_EQ(Raised(log.Take(intel)), Tag(EventType::UnitIdle, 5));
+}
+
+KT1_CASE("SIMHOST-FAKES-NONE", "without a reader that sees fakes, a fake unit's events are not kept at all") {
+	SplitEventLog log;
+	log.AddReader(ALL_EVENTS, false);
+	log.Push(Ev(EventType::UnitCreated, 5), true);
+	KT1_CHECK_EQ(log.Held(EventType::UnitCreated), static_cast<size_t>(0));
+	log.Clear();
+	KT1_CHECK_EQ(log.Wanted(), static_cast<EventMask>(0));
+}
+
 KT1_CASE("SIMHOST-ORDER", "a batch: one type by ascending id, across types as the engine raised them") {
 	EventLog log;
 	const int r = log.AddReader(ALL_EVENTS);

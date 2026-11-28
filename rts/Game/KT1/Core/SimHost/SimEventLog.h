@@ -193,6 +193,29 @@ template<class F> void EventBatch::ForEachRaised(F&& fn) const {
 	}
 }
 
+// Real units only, and everything: an event about a fake unit goes to the second log alone. A reader picks its log when it
+// subscribes, so no reader tests events itself. Both logs keep the engine's raise order.
+class SplitEventLog {
+public:
+	// The handle for Take; seesFakes: this reader gets the events about fake units too.
+	int AddReader(EventMask mask, bool seesFakes) { return logs[seesFakes].AddReader(mask) * 2 + (seesFakes ? 1 : 0); }
+	EventMask Wanted() const { return logs[0].Wanted() | logs[1].Wanted(); }
+
+	// KT1 hot
+	void Push(const Event& e, bool fake) {
+		if (!fake) logs[0].Push(e);
+		logs[1].Push(e);   // drops it when no reader sees fakes and wants the type
+	}
+
+	EventBatch Take(int handle) { return logs[handle % 2].Take(handle / 2); }
+	void Compact() { for (EventLog& l : logs) l.Compact(); }
+	void Clear() { for (EventLog& l : logs) l.Clear(); }
+	size_t Held(EventType t) const { return logs[0].Held(t) + logs[1].Held(t); }
+
+private:
+	EventLog logs[2];   // [0] real units only, [1] every unit
+};
+
 } // namespace KT1::Core::SimHost
 
 #endif

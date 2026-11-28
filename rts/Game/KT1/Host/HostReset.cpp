@@ -6,6 +6,7 @@
 #include "AllowChain.h"
 #include "Check.h"
 #include "DisplayEvents.h"
+#include "Fakes.h"
 #include "Phases.h"
 #include "SimEvents.h"
 #include "SyncState.h"
@@ -20,6 +21,7 @@ void ResetSimHost() {
 	AllowChain::Reset();
 	SimEvents::Reset();
 	Phases::Reset();
+	Fakes::Reset();
 }
 
 } // namespace KT1

@@ -4,7 +4,8 @@
 // A system registers at game setup (orders can arrive before the first step), under its registered name:
 //   KT1::AllowChain::AddCommand("Orders", 0, [this](const CUnit* u, const Command& c, ...) {...});
 // Whether its validators are in check mode is the system's switch, asked of the registry.
-// Order within a chain: (order, system name).
+// Order within a chain: (order, system name). Intel's fake units (Fakes.h): UnitPreDamaged skips a validator whose system
+// does not see them; the other call-ins ask every validator, as Lua gadgets are asked.
 //
 // Live (switch on): in a veto chain the first "no" ends it and Lua is not asked, as when an earlier gadget says no. When
 // every validator says yes, Lua is asked exactly as before. With nothing registered every hook is the stock engine.

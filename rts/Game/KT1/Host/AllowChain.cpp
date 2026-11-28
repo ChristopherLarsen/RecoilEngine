@@ -4,6 +4,7 @@
 #include "AllowChain.h"
 
 #include "Check.h"
+#include "Fakes.h"
 #include "Game/KT1/Core/SimHost/Validators.h"
 #include "Lua/LuaConfig.h"
 #include "Sim/Features/Feature.h"
@@ -31,7 +32,7 @@ struct Chains {
 Chains chains;
 
 template<class Fn> void Add(Chain<Fn>& chain, const char* system, int order, Fn fn) {
-	chain.Add(order, system, {system, Check::InCheck(system), std::move(fn)});
+	chain.Add(order, system, {system, Check::InCheck(system), std::move(fn), Fakes::Sees(system)});
 }
 
 Check::Value Answer(float first) {
@@ -125,7 +126,9 @@ AllowChain::Damaged AllowChain::AskPreDamaged(const PreDamage& d, float& damage,
 	Damaged native;
 	if (chains.damage.Empty()) return native;
 	const float incoming = damage;
+	const bool fake = Fakes::Is(d.unit);
 	for (const auto& item : chains.damage) {
+		if (fake && !item.value.seesFakes) continue;   // Lua gadgets are not asked either
 		const Check::Running running(item.value.system.c_str(), item.value.check);
 		float own = item.value.check ? incoming : damage;
 		float impulse = 1.0f;

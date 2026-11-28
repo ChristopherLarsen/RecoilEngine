@@ -15,7 +15,8 @@ namespace KT1 {
 class SimEvents {
 public:
 	// A new reader of the types in `mask`. Recording starts here: subscribe at game setup, before the first unit exists.
-	static int Subscribe(Core::SimHost::EventMask mask);
+	// seesFakes: the batches include the unit events of intel's fake units (Fakes.h).
+	static int Subscribe(Core::SimHost::EventMask mask, bool seesFakes = false);
 	static Core::SimHost::EventBatch Take(int reader);
 	static void Compact();   // the step's end: no batch alive
 	static void Reset();     // game shutdown: the client leaves the event handler, every reader is forgotten
